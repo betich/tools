@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiArrowUpRight, FiLock, FiTrash2 } from "react-icons/fi";
+import { FiArrowUpRight, FiLink, FiLock, FiTrash2 } from "react-icons/fi";
 import { Empty, Field, IconButton, Input, Section, TextButton } from "@/components/ui";
 import { api, ApiError, type ProjectSummary } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { pad, stamp } from "@/lib/format";
 import { useToast } from "@/hooks/useToast";
+import { copyText, shareUrl } from "./ShareDialog";
 import { unlockFor } from "./unlocks";
 
 /**
@@ -115,11 +116,21 @@ export function ProjectsPanel({
                     aria-hidden
                   />
                 </span>
-                <span className="text-meta text-meta font-mono tabular-nums">
-                  {stamp(project.updatedAt)}
-                  {project.locked ? " · locked" : project.slug ? " · shared" : ""}
-                </span>
+                <span className="text-meta text-meta font-mono tabular-nums">{stamp(project.updatedAt)}</span>
               </button>
+
+              {project.slug ? (
+                <IconButton
+                  label="copy link"
+                  onClick={() => {
+                    const slug = project.slug!;
+                    void copyText(shareUrl(slug)).then((ok) => toast(ok ? "link copied" : "could not copy the link"));
+                  }}
+                  className="shrink-0"
+                >
+                  <FiLink className="size-3.5" />
+                </IconButton>
+              ) : null}
 
               <IconButton
                 label={armed === project.id ? "delete for good" : "delete"}

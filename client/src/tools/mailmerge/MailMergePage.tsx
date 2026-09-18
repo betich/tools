@@ -2,21 +2,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { emptyData, newDoc, type MergeDoc } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
-import { PageHead, Shell } from "@/components/Shell";
-import { Empty, Field, Input, NumberInput, Section, Segmented, TextButton } from "@/components/ui";
+import { Shell } from "@/components/Shell";
+import { FiDownload, FiLink, FiLock } from "react-icons/fi";
+import { Button, Field, Input, NumberInput, Section, Segmented, TextButton } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
 import { useToast } from "@/hooks/useToast";
-import { api, ApiError, assetUrl } from "@/lib/api";
+import { api, ApiError, assetUrl, type ShareState } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { download, loadImage, readAsDataUrl } from "@/lib/download";
-import { pad } from "@/lib/format";
 import { CanvasStage } from "./CanvasStage";
 import { ExportSheet } from "./ExportSheet";
 import { DataPanel, LayersPanel } from "./Panels";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { ensureDocFonts, loadGoogleFont } from "./fonts";
-import { PasswordGate, ShareMenu } from "./ShareMenu";
+import { PasswordGate } from "./ShareMenu";
+import { ShareDialog } from "./ShareDialog";
 import { forget, remember, unlockFor } from "./unlocks";
 import { parseSheet, sampleData } from "./sheet";
 import { useMerge } from "./useMerge";
@@ -43,6 +44,7 @@ export function MailMergePage() {
   // Bumped whenever the shelf changes, so the projects list re-reads itself.
   const [shelf, setShelf] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   // Below md the three columns become one, and one screen shows one job.
   const [pane, setPane] = useState<Pane>("setup");
   const editor = useRef<HTMLDivElement>(null);
@@ -174,8 +176,13 @@ export function MailMergePage() {
     }
   }, [data, doc, projectId, toast]);
 
-  const share = useCallback(
-    async (password: string) => {
+  /**
+   * Save the merge and mint or update its link. `undefined` leaves the lock as
+   * it is, `""` opens the link to anyone, anything else locks it. Resolves to
+   * the link, or `null` when the api said no.
+   */
+  const applyShare = useCallback(
+    async (password: string | undefined): Promise<ShareState | null> => {
       setBusy("sharing");
       try {
         let id = projectId;
@@ -188,19 +195,19 @@ export function MailMergePage() {
         }
         const result = await api.share(id, password, current);
         // The new password is now the one this tab holds; an unlock forgets it.
-        remember(id, password);
-        setShelf((n) => n + 1);
+        if (password !== undefined) remember(id, password);
         setShareSlug(result.slug);
         setShareProtected(result.protected);
-        const url = `${location.origin}/mail-merge/s/${result.slug}`;
-        await navigator.clipboard.writeText(url).catch(() => {});
-        toast(result.protected ? "locked share link copied" : "share link copied");
+        setShelf((n) => n + 1);
+        if (password !== undefined) toast(result.protected ? "link locked" : "anyone with the link can edit");
+        return result;
       } catch (error) {
         toast(
           error instanceof ApiError && error.status === 401
             ? "this merge is locked — reopen it with its password"
-            : "could not create a share link",
+            : "could not share — is the api running?",
         );
+        return null;
       } finally {
         setBusy(null);
       }
@@ -300,66 +307,88 @@ export function MailMergePage() {
   );
 
   return (
-    <Shell width="wide">
-      <PageHead
-        title="mail merge"
-        note={
-          shareSlug
-            ? "A shared merge. Saving updates it for everyone with the link."
-            : "A base image, text layers, and a spreadsheet. One image comes out per row."
-        }
-        actions={
-          <>
-            <TextButton onClick={() => setExporting(true)}>export</TextButton>
-            <TextButton onClick={() => void save()}>
-              save
-            </TextButton>
-            <ShareMenu currentSlug={shareSlug} isProtected={shareProtected} onShare={share} />
-          </>
-        }
-      />
+    <Shell width="workspace">
+      {/*
+       * The toolbar: what this is and which merge it is on the left, the three
+       * things you do to a merge on the right. Export is the one solid button
+       * in the room, because it is the reason the room exists.
+       */}
+      <header className="border-hairline-faint mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b pb-4 lg:mb-0 lg:shrink-0 lg:px-6 lg:py-2.5 xl:px-7">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="text-ink shrink-0 font-mono text-title font-bold uppercase">mail merge</h1>
+          <span className="text-meta font-mono text-label" aria-hidden>
+            /
+          </span>
+          <span className="text-label min-w-0 truncate font-mono text-label tracking-normal">{doc.name || "untitled"}</span>
+          {shareSlug ? (
+            <button
+              type="button"
+              onClick={() => setSharing(true)}
+              className="text-meta hover:text-indigo flex shrink-0 cursor-pointer items-center gap-1.5 self-center font-mono text-meta uppercase transition-colors duration-200"
+            >
+              {shareProtected ? <FiLock className="size-3" aria-hidden /> : <FiLink className="size-3" aria-hidden />}
+              {shareProtected ? "locked" : "shared"}
+            </button>
+          ) : null}
+        </div>
 
-      {busy ? <p className="text-indigo text-meta mb-5 font-mono uppercase">{busy}…</p> : null}
+        <div className="flex items-center gap-5">
+          {busy ? (
+            <span className="text-indigo font-mono text-meta uppercase" aria-live="polite">
+              {busy}…
+            </span>
+          ) : null}
+          <TextButton onClick={() => void save()} disabled={busy !== null}>
+            save
+          </TextButton>
+          <TextButton onClick={() => setSharing(true)}>share</TextButton>
+          <Button onClick={() => setExporting(true)}>
+            <FiDownload className="size-3.5" aria-hidden />
+            export
+          </Button>
+        </div>
+      </header>
 
       {gate ? (
-        <PasswordGate
-          error={gate.error}
-          onSubmit={(password) =>
-            void (gate.target.kind === "share" ? openShared(gate.target.slug, password) : openProject(gate.target.id, password))
-          }
-          onCancel={gate.target.kind === "project" ? () => setGate(null) : undefined}
-        />
-      ) : null}
-      {shareSlug ? (
-        <p className="text-meta text-meta mb-5 font-mono uppercase">
-          shared at /mail-merge/s/{shareSlug}
-          {shareProtected ? " · locked" : ""}
-        </p>
+        <div className="lg:px-6 lg:pt-6 xl:px-7">
+          <PasswordGate
+            error={gate.error}
+            onSubmit={(password) =>
+              void (gate.target.kind === "share" ? openShared(gate.target.slug, password) : openProject(gate.target.id, password))
+            }
+            onCancel={gate.target.kind === "project" ? () => setGate(null) : undefined}
+          />
+        </div>
       ) : null}
 
       {/*
-       * One column on a phone, two on a tablet in portrait with the stage across
-       * the top, three from a laptop or a tablet in landscape. The rails narrow
-       * before they disappear: 232px of controls beside the artwork beats a
-       * single column the moment there is room for both.
+       * One column on a phone, the stage across the top of two columns on a
+       * tablet, and from a laptop up a room: setup on the left, the poster in
+       * the middle taking every pixel it can, the selected layer on the right.
+       * The side panes scroll on their own; the poster never moves.
        */}
       <div
         ref={editor}
         className={cn(
           // A phone gets a plain column so the stage can stick to the top of it;
           // sticky inside a one-row grid has nowhere to travel.
-          "flex scroll-mt-16 flex-col gap-6 md:grid md:items-start",
-          "md:grid-cols-2",
-          "lg:grid-cols-[232px_minmax(0,1fr)_256px]",
-          "xl:grid-cols-[260px_minmax(0,1fr)_288px] xl:gap-8",
-          "2xl:grid-cols-[280px_minmax(0,1fr)_312px] 2xl:gap-10",
+          "flex scroll-mt-16 flex-col gap-6 md:grid md:grid-cols-2 md:items-start",
+          "lg:min-h-0 lg:flex-1 lg:grid-cols-[248px_minmax(0,1fr)_272px] lg:items-stretch lg:gap-0",
+          "xl:grid-cols-[296px_minmax(0,1fr)_320px]",
+          "2xl:grid-cols-[320px_minmax(0,1fr)_344px]",
         )}
         // A share link has nothing to show until it is unlocked; a locked
         // project picked from the shelf leaves the current one in place.
         hidden={gate?.target.kind === "share"}
       >
-        {/* left — document, layers, data */}
-        <div className={cn("flex flex-col gap-6 md:order-2 lg:order-1", pane === "setup" ? "flex" : "hidden md:flex")}>
+        {/* left — the merge: projects, document, artwork, layers, data */}
+        <div
+          className={cn(
+            "flex flex-col gap-8 md:order-2 lg:order-1",
+            "lg:border-hairline-faint lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:px-6 lg:py-6 xl:px-7",
+            pane === "setup" ? "flex" : "hidden md:flex",
+          )}
+        >
           <ProjectsPanel
             currentId={projectId}
             refreshKey={shelf}
@@ -465,12 +494,13 @@ export function MailMergePage() {
         </div>
 
         {/*
-         * The stage. On a phone this wrapper dissolves (`display: contents`) so
-         * the canvas becomes a child of the page column and can stay pinned
-         * under the top bar while the panes scroll beneath it.
+         * The stage, and nothing else. On a phone this wrapper dissolves
+         * (`display: contents`) so the canvas becomes a child of the page
+         * column and can stay pinned under the top bar while the panes scroll
+         * beneath it. From a laptop up it is the whole middle of the room.
          */}
-        <div className="contents md:order-1 md:col-span-2 md:flex md:min-w-0 md:flex-col md:gap-4 lg:order-2 lg:col-span-1">
-          <div className="bg-paper/92 sticky top-12 z-30 order-first -mx-5 px-5 pb-3 backdrop-blur-xl sm:-mx-8 sm:px-8 md:static md:mx-0 md:bg-transparent md:px-0 md:pb-0 md:backdrop-blur-none">
+        <div className="contents md:order-1 md:col-span-2 md:flex md:min-w-0 md:flex-col lg:order-2 lg:col-span-1 lg:min-h-0 lg:p-6 xl:p-8">
+          <div className="bg-paper/92 sticky top-12 z-30 order-first -mx-5 px-5 pb-3 backdrop-blur-xl sm:-mx-8 sm:px-8 md:static md:mx-0 md:bg-transparent md:px-0 md:pb-0 md:backdrop-blur-none lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             <CanvasStage
               doc={doc}
               row={merge.currentRow}
@@ -483,33 +513,16 @@ export function MailMergePage() {
 
             <PaneTabs value={pane} onChange={showPane} />
           </div>
-
-          <Section
-            className={cn("order-last md:order-none", pane === "output" ? "flex" : "hidden md:flex")}
-            title="output"
-            aside={
-              <span className="text-meta text-meta font-mono uppercase">
-                {rows.length > 0 ? `${pad(rows.length)} rows` : "no data"}
-              </span>
-            }
-          >
-            <Field label="file name" hint="tokens work here too">
-              <Input value={namePattern} onChange={(e) => setNamePattern(e.target.value)} spellCheck={false} />
-            </Field>
-            <div className="flex flex-wrap items-center gap-4">
-              <TextButton onClick={() => setExporting(true)} disabled={busy !== null}>
-                choose and export
-              </TextButton>
-              <TextButton onClick={() => void exportAllServer()} disabled={rows.length === 0 || busy !== null}>
-                render all on server
-              </TextButton>
-            </div>
-            {rows.length === 0 ? <Empty>load a sheet to render a set</Empty> : null}
-          </Section>
         </div>
 
-        {/* right — inspector */}
-        <div className={cn("md:order-3", pane === "layer" ? "block" : "hidden md:block")}>
+        {/* right — the selected layer */}
+        <div
+          className={cn(
+            "md:order-3",
+            "lg:border-hairline-faint lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:px-6 lg:py-6 xl:px-7",
+            pane === "layer" ? "block" : "hidden md:block",
+          )}
+        >
           <Inspector
             layer={selected}
             fields={data.fields}
@@ -528,7 +541,19 @@ export function MailMergePage() {
           base={base}
           namePattern={namePattern}
           onNamePattern={setNamePattern}
+          serverBusy={busy !== null}
+          onServerRender={() => void exportAllServer()}
           onClose={() => setExporting(false)}
+        />
+      ) : null}
+
+      {sharing ? (
+        <ShareDialog
+          name={doc.name}
+          share={shareSlug ? { slug: shareSlug, protected: shareProtected } : null}
+          busy={busy !== null}
+          onApply={applyShare}
+          onClose={() => setSharing(false)}
         />
       ) : null}
     </Shell>
@@ -542,19 +567,18 @@ export function MailMergePage() {
    arrangement, and the same language, as the rail across the floor of the
    screen. */
 
-type Pane = "setup" | "layer" | "output";
+type Pane = "setup" | "layer";
 
 type GateTarget = { kind: "share"; slug: string } | { kind: "project"; id: string };
 
 const PANES: { value: Pane; label: string }[] = [
   { value: "setup", label: "set up" },
   { value: "layer", label: "layer" },
-  { value: "output", label: "output" },
 ];
 
 function PaneTabs({ value, onChange }: { value: Pane; onChange: (pane: Pane) => void }) {
   return (
-    <nav className="border-wash mt-3 grid grid-cols-3 border-y md:hidden" aria-label="editor panes">
+    <nav className="border-wash mt-3 grid grid-cols-2 border-y md:hidden" aria-label="editor panes">
       {PANES.map((pane) => {
         const active = pane.value === value;
         return (

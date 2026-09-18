@@ -47,10 +47,19 @@ export function TopBar() {
   );
 }
 
-/** Three destinations, equal weight, pinned to the floor of the screen. */
-export function TabRail() {
+/**
+ * Three destinations, equal weight, pinned to the floor of the screen. `inFlow`
+ * lets a full-height workspace lay it out as its last row from a laptop up, so
+ * the room ends where the rail begins instead of running underneath it.
+ */
+export function TabRail({ inFlow = false }: { inFlow?: boolean }) {
   return (
-    <div className="border-wash bg-paper/85 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl">
+    <div
+      className={cn(
+        "border-wash bg-paper/85 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl",
+        inFlow && "lg:static lg:shrink-0",
+      )}
+    >
       <nav aria-label="tools" className="grid grid-cols-3">
         <RailTab to="/" end>
           index

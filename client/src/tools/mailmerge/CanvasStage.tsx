@@ -125,7 +125,7 @@ export function CanvasStage({
   return (
     // Pinned above the panes on a phone, so it is short there and generous
     // once there is a column of its own.
-    <div className="flex h-[min(38vh,300px)] flex-col gap-2 md:h-[min(54vh,540px)] xl:h-[min(68vh,640px)]">
+    <div className="flex h-[min(38vh,300px)] flex-col gap-2 md:h-[min(54vh,540px)] lg:h-full lg:min-h-0">
       <div ref={wrap} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
         <div
           className="border-hairline checkers relative rounded-sm border"

@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -29,6 +29,34 @@ export function TextButton({
       {props.children}
       {active ? <span className="bg-indigo absolute -bottom-1.5 left-0 h-px w-full" aria-hidden /> : null}
     </button>
+  );
+}
+
+/**
+ * A real button, for the one action a surface exists to perform — export, copy
+ * the link, download. `primary` is the only solid-ink shape in the chrome, so
+ * it can be found without reading; it arrives at periwinkle like everything
+ * else. `outline` is its quieter sibling for the second-best action.
+ */
+export function Button({
+  className,
+  variant = "primary",
+  ...props
+}: ComponentProps<"button"> & { variant?: "primary" | "outline" }) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={cn(
+        "inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xs px-4 font-mono text-meta whitespace-nowrap uppercase",
+        "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
+        "disabled:cursor-not-allowed disabled:opacity-35",
+        variant === "primary"
+          ? "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink"
+          : "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
+        className,
+      )}
+    />
   );
 }
 

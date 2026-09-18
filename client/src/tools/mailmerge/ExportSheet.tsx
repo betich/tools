@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { downloadZip } from "client-zip";
-import { FiX } from "react-icons/fi";
+import { FiDownload, FiServer, FiX } from "react-icons/fi";
 import { fileNameFor, type MergeData, type MergeDoc } from "@tools/shared";
-import { Field, Input, Segmented, Slider, TextButton } from "@/components/ui";
+import { Button, Field, Input, Segmented, Slider, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { pad } from "@/lib/format";
@@ -24,6 +24,8 @@ export function ExportSheet({
   base,
   namePattern,
   onNamePattern,
+  serverBusy,
+  onServerRender,
   onClose,
 }: {
   doc: MergeDoc;
@@ -31,6 +33,10 @@ export function ExportSheet({
   base: HTMLImageElement | null;
   namePattern: string;
   onNamePattern: (pattern: string) => void;
+  /** The page is already talking to the api — a save, a share, a server render. */
+  serverBusy: boolean;
+  /** Every row, rendered by the api into one zip. */
+  onServerRender: () => void;
   onClose: () => void;
 }) {
   // With no sheet loaded there is still exactly one thing to export: the
@@ -253,19 +259,27 @@ export function ExportSheet({
                   ? `one ${ext} · ${doc.canvas.width}×${doc.canvas.height}`
                   : `${selected.size} ${ext} files · one zip`}
             </p>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => void run()}
-                disabled={busy || selected.size === 0}
-                className={cn(
-                  "border-indigo text-indigo cursor-pointer rounded-xs border px-4 py-2 font-mono text-meta uppercase",
-                  "hover:bg-indigo hover:text-paper transition-colors duration-200",
-                  "disabled:cursor-not-allowed disabled:border-wash disabled:text-meta disabled:hover:bg-transparent",
-                )}
+            <Button onClick={() => void run()} disabled={busy || selected.size === 0} className="w-full">
+              <FiDownload className="size-3.5" aria-hidden />
+              {progress ? `rendering ${pad(progress.done)} / ${pad(progress.total)}` : `download ${pad(selected.size)}`}
+            </Button>
+
+            {/* The other way out: the api draws every row and hands back one zip. */}
+            <div className="border-hairline-faint mt-3 flex flex-col gap-3 border-t pt-5">
+              <p className="text-meta font-sans text-body leading-snug normal-case">
+                {data.rows.length > 0
+                  ? `Or have the server draw all ${data.rows.length} rows and send one zip — for a big set, or to keep this tab free.`
+                  : "Load a sheet to render a whole set on the server."}
+              </p>
+              <Button
+                variant="outline"
+                onClick={onServerRender}
+                disabled={busy || serverBusy || data.rows.length === 0}
+                className="w-full"
               >
-                {progress ? `rendering ${pad(progress.done)} / ${pad(progress.total)}` : `download ${pad(selected.size)}`}
-              </button>
+                <FiServer className="size-3.5" aria-hidden />
+                {serverBusy ? "rendering on server…" : "render all on server"}
+              </Button>
             </div>
           </div>
         </aside>

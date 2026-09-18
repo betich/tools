@@ -2,8 +2,38 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { TabRail, TopBar } from "./Chrome";
 
-/** Ground, one bloom of light, and the console chrome around the work. */
-export function Shell({ children, width = "default" }: { children: ReactNode; width?: "default" | "page" | "wide" }) {
+/**
+ * Ground, one bloom of light, and the console chrome around the work.
+ *
+ * `workspace` is for an editor: from a laptop up it takes exactly the viewport
+ * between the top bar and the rail, and the page itself never scrolls — the
+ * panes inside it do. Below that it is an ordinary scrolling page, because a
+ * phone editor is a column, not a room.
+ */
+export function Shell({
+  children,
+  width = "default",
+}: {
+  children: ReactNode;
+  width?: "default" | "page" | "wide" | "workspace";
+}) {
+  if (width === "workspace") {
+    return (
+      <div className="relative flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
+        <div className="bloom" aria-hidden />
+
+        <div className="relative z-10 flex min-h-dvh flex-col lg:h-full lg:min-h-0">
+          <TopBar />
+          <main className="flex-1 px-5 pt-5 pb-36 sm:px-8 lg:flex lg:min-h-0 lg:flex-col lg:px-0 lg:pt-0 lg:pb-0">
+            {children}
+          </main>
+          {/* In the room the rail is part of the floor plan, not laid over it. */}
+          <TabRail inFlow />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex min-h-dvh flex-col">
       <div className="bloom" aria-hidden />
