@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { emptyData, newDoc, type MergeDoc } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
@@ -7,6 +7,7 @@ import { Empty, Field, Input, NumberInput, Section, Segmented, TextButton } from
 import { useHotkey } from "@/hooks/useHotkey";
 import { useToast } from "@/hooks/useToast";
 import { api, ApiError, assetUrl } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { pad } from "@/lib/format";
 import { CanvasStage } from "./CanvasStage";
@@ -41,6 +42,17 @@ export function MailMergePage() {
   // Bumped whenever the shelf changes, so the projects list re-reads itself.
   const [shelf, setShelf] = useState(0);
   const [exporting, setExporting] = useState(false);
+  // Below md the three columns become one, and one screen shows one job.
+  const [pane, setPane] = useState<Pane>("setup");
+  const editor = useRef<HTMLDivElement>(null);
+
+  // Switching panes on a phone should land you at the top of the new one, not
+  // halfway down it because that is where the last pane was scrolled to.
+  const showPane = useCallback((next: Pane) => {
+    setPane(next);
+    if (window.matchMedia("(min-width: 768px)").matches) return;
+    editor.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, []);
 
   const { doc, setDoc, replaceDoc, data, setData, selected, selectedId, setSelectedId } = merge;
 
@@ -304,9 +316,27 @@ export function MailMergePage() {
         </p>
       ) : null}
 
-      <div className="grid items-start gap-8 xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:gap-10" hidden={gate !== null}>
+      {/*
+       * One column on a phone, two on a tablet in portrait with the stage across
+       * the top, three from a laptop or a tablet in landscape. The rails narrow
+       * before they disappear: 232px of controls beside the artwork beats a
+       * single column the moment there is room for both.
+       */}
+      <div
+        ref={editor}
+        className={cn(
+          // A phone gets a plain column so the stage can stick to the top of it;
+          // sticky inside a one-row grid has nowhere to travel.
+          "flex scroll-mt-16 flex-col gap-6 md:grid md:items-start",
+          "md:grid-cols-2",
+          "lg:grid-cols-[232px_minmax(0,1fr)_256px]",
+          "xl:grid-cols-[260px_minmax(0,1fr)_288px] xl:gap-8",
+          "2xl:grid-cols-[280px_minmax(0,1fr)_312px] 2xl:gap-10",
+        )}
+        hidden={gate !== null}
+      >
         {/* left — document, layers, data */}
-        <div className="flex flex-col gap-6 xl:order-1">
+        <div className={cn("flex flex-col gap-6 md:order-2 lg:order-1", pane === "setup" ? "flex" : "hidden md:flex")}>
           {/* A share link is somebody else's document; the shelf is not theirs to browse. */}
           {readOnly ? null : (
             <ProjectsPanel
@@ -411,19 +441,28 @@ export function MailMergePage() {
           />
         </div>
 
-        {/* centre — the stage */}
-        <div className="flex min-w-0 flex-col gap-4 xl:order-2">
-          <CanvasStage
-            doc={doc}
-            row={merge.currentRow}
-            base={base}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onPreview={merge.previewLayer}
-            onSnapshot={merge.snapshot}
-          />
+        {/*
+         * The stage. On a phone this wrapper dissolves (`display: contents`) so
+         * the canvas becomes a child of the page column and can stay pinned
+         * under the top bar while the panes scroll beneath it.
+         */}
+        <div className="contents md:order-1 md:col-span-2 md:flex md:min-w-0 md:flex-col md:gap-4 lg:order-2 lg:col-span-1">
+          <div className="bg-paper/92 sticky top-12 z-30 order-first -mx-5 px-5 pb-3 backdrop-blur-xl sm:-mx-8 sm:px-8 md:static md:mx-0 md:bg-transparent md:px-0 md:pb-0 md:backdrop-blur-none">
+            <CanvasStage
+              doc={doc}
+              row={merge.currentRow}
+              base={base}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onPreview={merge.previewLayer}
+              onSnapshot={merge.snapshot}
+            />
+
+            <PaneTabs value={pane} onChange={showPane} />
+          </div>
 
           <Section
+            className={cn("order-last md:order-none", pane === "output" ? "flex" : "hidden md:flex")}
             title="output"
             aside={
               <span className="text-meta text-meta font-mono uppercase">
@@ -447,7 +486,7 @@ export function MailMergePage() {
         </div>
 
         {/* right — inspector */}
-        <div className="xl:order-3">
+        <div className={cn("md:order-3", pane === "layer" ? "block" : "hidden md:block")}>
           <Inspector
             layer={selected}
             fields={data.fields}
@@ -470,5 +509,45 @@ export function MailMergePage() {
         />
       ) : null}
     </Shell>
+  );
+}
+
+/* ── the small-screen switcher ─────────────────────────────────────────────
+   A phone cannot hold three columns, and scrolling past a whole settings
+   column to reach the artwork is not an editor. The stage stays pinned under
+   the top bar and these three cells swap what sits beneath it — the same
+   arrangement, and the same language, as the rail across the floor of the
+   screen. */
+
+type Pane = "setup" | "layer" | "output";
+
+const PANES: { value: Pane; label: string }[] = [
+  { value: "setup", label: "set up" },
+  { value: "layer", label: "layer" },
+  { value: "output", label: "output" },
+];
+
+function PaneTabs({ value, onChange }: { value: Pane; onChange: (pane: Pane) => void }) {
+  return (
+    <nav className="border-wash mt-3 grid grid-cols-3 border-y md:hidden" aria-label="editor panes">
+      {PANES.map((pane) => {
+        const active = pane.value === value;
+        return (
+          <button
+            key={pane.value}
+            type="button"
+            onClick={() => onChange(pane.value)}
+            aria-pressed={active}
+            className={cn(
+              "text-meta relative cursor-pointer py-3.5 text-center font-mono uppercase transition-colors duration-200",
+              active ? "text-ink bg-surface-high" : "text-meta",
+            )}
+          >
+            {active ? <span className="bg-indigo absolute inset-x-0 top-0 h-px" aria-hidden /> : null}
+            {pane.label}
+          </button>
+        );
+      })}
+    </nav>
   );
 }

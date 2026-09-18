@@ -34,7 +34,8 @@ export function CanvasStage({
   const [scale, setScale] = useState(1);
   const [guides, setGuides] = useState<Guides>({ x: false, y: false });
 
-  // Fit the document into whatever room the column has.
+  // Fit the document into whatever room the stage area has — measured on the
+  // box the artwork actually gets, never the one the readout shares.
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -53,7 +54,9 @@ export function CanvasStage({
     if (canvas.current) paint(canvas.current, doc, row, base);
   }, [doc, row, base]);
 
-  const drag = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; layer: TextLayer } | null>(null);
+  const drag = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; layer: TextLayer } | null>(
+    null,
+  );
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent, layer: TextLayer, mode: "move" | "resize") => {
@@ -109,55 +112,62 @@ export function CanvasStage({
   const h = doc.canvas.height * scale;
 
   return (
-    <div ref={wrap} className="flex h-[min(68vh,620px)] flex-col items-center justify-center gap-2 overflow-hidden">
-      <div
-        className="border-hairline checkers rounded-sm relative border"
-        style={{ width: w, height: h }}
-        onPointerDown={() => onSelect(null)}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
-        <canvas ref={canvas} className="absolute inset-0 h-full w-full" style={{ width: w, height: h }} />
+    // Pinned above the panes on a phone, so it is short there and generous
+    // once there is a column of its own.
+    <div className="flex h-[min(38vh,300px)] flex-col gap-2 md:h-[min(54vh,540px)] xl:h-[min(68vh,640px)]">
+      <div ref={wrap} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        <div
+          className="border-hairline checkers relative rounded-sm border"
+          style={{ width: w, height: h }}
+          onPointerDown={() => onSelect(null)}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        >
+          <canvas ref={canvas} className="absolute inset-0 h-full w-full" style={{ width: w, height: h }} />
 
-        {guides.x ? <div className="bg-indigo pointer-events-none absolute inset-y-0 left-1/2 w-px opacity-60" /> : null}
-        {guides.y ? <div className="bg-indigo pointer-events-none absolute inset-x-0 top-1/2 h-px opacity-60" /> : null}
+          {guides.x ? (
+            <div className="bg-indigo pointer-events-none absolute inset-y-0 left-1/2 w-px opacity-60" />
+          ) : null}
+          {guides.y ? (
+            <div className="bg-indigo pointer-events-none absolute inset-x-0 top-1/2 h-px opacity-60" />
+          ) : null}
 
-        {doc.layers.map((layer) =>
-          layer.visible ? (
-            <div
-              key={layer.id}
-              role="button"
-              tabIndex={0}
-              aria-label={layer.name}
-              onPointerDown={(e) => onPointerDown(e, layer, "move")}
-              className={cn(
-                "absolute border transition-colors duration-150",
-                layer.locked ? "cursor-not-allowed" : "cursor-move",
-                layer.id === selectedId ? "border-indigo" : "border-transparent hover:border-wash",
-              )}
-              style={{
-                left: layer.x * scale,
-                top: layer.y * scale,
-                width: layer.width * scale,
-                height: layer.height * scale,
-                transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
-              }}
-            >
-              {layer.id === selectedId && !layer.locked ? (
-                <span
-                  onPointerDown={(e) => onPointerDown(e, layer, "resize")}
-                  className="border-indigo bg-indigo absolute -right-1 -bottom-1 size-2.5 cursor-se-resize rounded-[1px] border"
-                  aria-hidden
-                />
-              ) : null}
-            </div>
-          ) : null,
-        )}
-
+          {doc.layers.map((layer) =>
+            layer.visible ? (
+              <div
+                key={layer.id}
+                role="button"
+                tabIndex={0}
+                aria-label={layer.name}
+                onPointerDown={(e) => onPointerDown(e, layer, "move")}
+                className={cn(
+                  "absolute border transition-colors duration-150",
+                  layer.locked ? "cursor-not-allowed" : "cursor-move",
+                  layer.id === selectedId ? "border-indigo" : "hover:border-wash border-transparent",
+                )}
+                style={{
+                  left: layer.x * scale,
+                  top: layer.y * scale,
+                  width: layer.width * scale,
+                  height: layer.height * scale,
+                  transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+                }}
+              >
+                {layer.id === selectedId && !layer.locked ? (
+                  <span
+                    onPointerDown={(e) => onPointerDown(e, layer, "resize")}
+                    className="border-indigo bg-indigo absolute -bottom-1 -right-1 size-2.5 cursor-se-resize rounded-[1px] border [@media(pointer:coarse)]:-bottom-2 [@media(pointer:coarse)]:-right-2 [@media(pointer:coarse)]:size-4"
+                    aria-hidden
+                  />
+                ) : null}
+              </div>
+            ) : null,
+          )}
+        </div>
       </div>
 
-      <span className="text-meta font-mono text-meta tabular-nums uppercase">
+      <span className="text-meta text-meta shrink-0 text-center font-mono uppercase tabular-nums md:text-left">
         {doc.canvas.width}×{doc.canvas.height} · {Math.round(scale * 100)}%
       </span>
     </div>

@@ -51,12 +51,12 @@ export function LayersPanel({
                 type="button"
                 onClick={() => onSelect(layer.id)}
                 className={cn(
-                  "min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-label tracking-normal transition-colors duration-200",
+                  "text-label min-w-0 flex-1 cursor-pointer truncate text-left font-mono tracking-normal transition-colors duration-200",
                   layer.id === selectedId ? "text-ink" : "text-label hover:text-indigo",
                   !layer.visible && "opacity-50",
                 )}
               >
-                <span className="text-meta mr-2.5 text-meta tabular-nums">{pad(layers.length - i)}</span>
+                <span className="text-meta text-meta mr-2.5 tabular-nums">{pad(layers.length - i)}</span>
                 {layer.text.trim() ? layer.text.replace(/\n/g, " ").slice(0, 28) : layer.name}
               </button>
 
@@ -70,7 +70,7 @@ export function LayersPanel({
                 <IconButton label="duplicate" onClick={() => onDuplicate(layer.id)}>
                   <FiCopy className="size-3.5" />
                 </IconButton>
-                <IconButton label="delete" onClick={() => onRemove(layer.id)}>
+                <IconButton label="delete" data-tip-pos="top-right" onClick={() => onRemove(layer.id)}>
                   <FiTrash2 className="size-3.5" />
                 </IconButton>
               </span>
@@ -129,14 +129,17 @@ export function DataPanel({
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-1.5">
             {data.fields.map((field) => (
-              <Chip key={field} className={cn(!usedFields.some((u) => u.toLowerCase() === field.toLowerCase()) && "opacity-50")}>
+              <Chip
+                key={field}
+                className={cn(!usedFields.some((u) => u.toLowerCase() === field.toLowerCase()) && "opacity-50")}
+              >
                 &lt;{field}&gt;
               </Chip>
             ))}
           </div>
 
           {missing.length > 0 ? (
-            <p className="text-meta font-mono text-meta uppercase">
+            <p className="text-meta text-meta font-mono uppercase">
               not in this sheet: {missing.map((f) => `<${f}>`).join(" ")}
             </p>
           ) : null}
@@ -147,7 +150,7 @@ export function DataPanel({
               <TextButton onClick={() => onStep(-1)} aria-label="previous row">
                 ←
               </TextButton>
-              <span className="text-ink font-mono text-label tabular-nums">
+              <span className="text-ink text-label font-mono tabular-nums">
                 {pad(Math.min(rowIndex, data.rows.length - 1) + 1)} / {pad(data.rows.length)}
               </span>
               <TextButton onClick={() => onStep(1)} aria-label="next row">
@@ -159,9 +162,9 @@ export function DataPanel({
           <ul className="flex flex-col gap-1">
             {data.fields.map((field) => (
               <li key={field} className="flex items-baseline">
-                <span className="text-meta font-mono text-meta uppercase">{field}</span>
+                <span className="text-meta text-meta font-mono uppercase">{field}</span>
                 <span className="leader" aria-hidden />
-                <span className="text-ink max-w-[55%] truncate font-mono text-label tracking-normal">
+                <span className="text-ink text-label max-w-[55%] truncate font-mono tracking-normal">
                   {data.rows[Math.min(rowIndex, data.rows.length - 1)]?.[field] || "—"}
                 </span>
               </li>

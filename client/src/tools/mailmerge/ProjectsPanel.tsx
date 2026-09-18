@@ -109,6 +109,9 @@ export function ProjectsPanel({
 
               <IconButton
                 label={armed === project.id ? "delete for good" : "delete"}
+                // Last control in the row: its tip opens leftward so it cannot
+                // hang off the edge of a phone and widen the page.
+                data-tip-pos="top-right"
                 onClick={() => void remove(project.id)}
                 className={cn("shrink-0", armed === project.id && "text-indigo")}
               >
@@ -162,7 +165,7 @@ function NewMergeMenu({ onCreate }: { onCreate: (name: string, password: string)
 
       {open ? (
         <div
-          className="animate-menu-in border-wash bg-panel-high rounded-card absolute top-full right-0 z-50 mt-3 w-[min(16.5rem,calc(100vw-2.5rem))] border p-4"
+          className="animate-menu-in border-wash bg-panel-high rounded-card absolute right-0 top-full z-50 mt-3 w-[min(16.5rem,calc(100vw-2.5rem))] border p-4"
           style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.8)" }}
         >
           <Field label="name">

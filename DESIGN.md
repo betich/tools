@@ -273,7 +273,21 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 **Three measures.** `max-w-3xl` for reading, `max-w-6xl` for the index and squoosh, `max-w-[1600px]` for the merge editor. A tool takes the narrowest measure that fits its work. The index sits at the middle measure because nine tiles at the widest one would each be a billboard.
 
-**The editor skeleton.** Both tools resolve to settings / stage / inspector, collapsing to a single column in the order you would work in. Grid columns are `items-start`: a tall inspector must never stretch the stage, and a short stage must never leave a hole under it.
+**The editor skeleton.** Both tools resolve to settings / stage / inspector. Grid columns are `items-start`: a tall inspector must never stretch the stage, and a short stage must never leave a hole under it.
+
+It resolves in four tiers, and **the rails narrow before they disappear** — 232px of controls beside the artwork beats a single column the moment there is room for both:
+
+| from | columns | stage |
+| ---- | ------- | ----- |
+| 1536 | 280 / 1fr / 312 | 66vh, max 640 |
+| 1280 | 260 / 1fr / 288 | 66vh, max 640 |
+| 1024 | 232 / 1fr / 256 | 54vh, max 540 |
+| 768 | stage across the top, then settings \| inspector | 54vh, max 540 |
+| phone | one column, the stage pinned | 38vh, max 300 |
+
+**The phone is a different editor, not a narrower one.** The stage sticks under the top bar at `top-12` and a three-cell strip — `SET UP · LAYER · OUTPUT`, in the rail's own language — swaps what sits beneath it. You are always looking at the artwork while you change it, and switching cells scrolls you to the top of the new one. The stage's wrapper is `display: contents` below `md` so the canvas becomes a child of the page column: sticky inside a one-row grid has nowhere to travel.
+
+Touch gets its own sizes where it needs them: the layer's resize handle goes from 10px to 16px under `pointer: coarse`, and the pane cells are 46px tall.
 
 ### Named Rules
 
