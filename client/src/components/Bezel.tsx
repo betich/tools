@@ -31,21 +31,21 @@ export function Bezel({ count }: { count: number }) {
         <span
           className="absolute inset-x-0 top-1/2 h-4 -translate-y-1/2"
           style={{
-            backgroundImage: "repeating-linear-gradient(90deg, rgba(244,243,255,0.34) 0 1px, transparent 1px 9px)",
+            backgroundImage: "repeating-linear-gradient(90deg, rgba(246,245,255,0.40) 0 1px, transparent 1px 9px)",
           }}
         />
         {/* major ticks every 72px */}
         <span
           className="absolute inset-x-0 top-1/2 h-9 -translate-y-1/2"
           style={{
-            backgroundImage: "repeating-linear-gradient(90deg, rgba(244,243,255,0.7) 0 1px, transparent 1px 72px)",
+            backgroundImage: "repeating-linear-gradient(90deg, rgba(246,245,255,0.80) 0 1px, transparent 1px 72px)",
           }}
         />
         {/* the needle, and its bloom */}
         <span className="bg-indigo absolute inset-y-0 left-1/2 w-px -translate-x-1/2" />
         <span
           className="absolute inset-y-0 left-1/2 w-24 -translate-x-1/2"
-          style={{ background: "radial-gradient(closest-side, rgba(185,184,239,0.22), transparent)" }}
+          style={{ background: "radial-gradient(closest-side, rgba(195,194,250,0.26), transparent)" }}
         />
       </div>
 

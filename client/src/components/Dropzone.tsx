@@ -47,7 +47,7 @@ export function Dropzone({
       }}
       className={cn(
         "flex flex-col items-center justify-center gap-2.5 rounded-card border border-dashed px-6 py-10 text-center transition-colors duration-200",
-        over ? "border-indigo bg-[rgba(72,69,218,0.12)]" : "border-hairline hover:border-[rgba(244,243,255,0.28)]",
+        over ? "border-indigo bg-[rgba(90,87,240,0.16)]" : "border-hairline hover:border-edge",
         className,
       )}
     >

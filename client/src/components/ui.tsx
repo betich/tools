@@ -81,7 +81,7 @@ export function Chip({
 /** A surface that has risen off the ground. Fill and hairline, never a shadow. */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={cn("border-wash rounded-card border bg-[rgba(244,243,255,0.035)] p-5", className)}>{children}</div>
+    <div className={cn("border-wash rounded-card border bg-surface p-5", className)}>{children}</div>
   );
 }
 
@@ -129,9 +129,9 @@ export function Field({
 }
 
 const control =
-  "border-wash text-ink w-full rounded-xs border bg-[rgba(244,243,255,0.04)] px-2.5 py-2 font-mono text-label " +
-  "tracking-normal transition-colors duration-200 placeholder:text-meta hover:border-[rgba(244,243,255,0.28)] " +
-  "focus:border-indigo focus:bg-[rgba(244,243,255,0.06)] focus:outline-none " +
+  "border-wash text-ink w-full rounded-xs border bg-control px-2.5 py-2 font-mono text-label " +
+  "tracking-normal transition-colors duration-200 placeholder:text-meta hover:border-edge " +
+  "focus:border-indigo focus:bg-surface-high focus:outline-none " +
   "disabled:cursor-not-allowed disabled:opacity-40";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
@@ -154,7 +154,7 @@ export function ColorInput({ value, onChange, className }: { value: string; onCh
   return (
     <span
       className={cn(
-        "border-wash focus-within:border-indigo flex items-center gap-2.5 rounded-xs border bg-[rgba(244,243,255,0.04)] px-2 py-1.5 transition-colors hover:border-[rgba(244,243,255,0.28)]",
+        "border-wash focus-within:border-indigo flex items-center gap-2.5 rounded-xs border bg-control px-2 py-1.5 transition-colors hover:border-edge",
         className,
       )}
     >
@@ -184,6 +184,7 @@ export function Slider({
   min,
   max,
   step = 1,
+  disabled,
   className,
 }: {
   value: number;
@@ -193,6 +194,7 @@ export function Slider({
   min: number;
   max: number;
   step?: number;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
@@ -201,13 +203,14 @@ export function Slider({
       min={min}
       max={max}
       step={step}
+      disabled={disabled}
       value={value}
       onPointerDown={onCommitStart}
       onKeyDown={(e) => {
         if (e.key.startsWith("Arrow")) onCommitStart?.();
       }}
       onChange={(e) => onChange(Number(e.target.value))}
-      className={cn("w-full", className)}
+      className={cn("w-full disabled:cursor-not-allowed disabled:opacity-35", className)}
     />
   );
 }

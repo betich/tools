@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { downloadZip } from "client-zip";
 import { useParams } from "react-router-dom";
-import { emptyData, fileNameFor, newDoc, type MergeDoc } from "@tools/shared";
+import { emptyData, newDoc, type MergeDoc } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { PageHead, Shell } from "@/components/Shell";
 import { Empty, Field, Input, NumberInput, Section, Segmented, TextButton } from "@/components/ui";
@@ -11,12 +10,12 @@ import { api, ApiError, assetUrl } from "@/lib/api";
 import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { pad } from "@/lib/format";
 import { CanvasStage } from "./CanvasStage";
+import { ExportSheet } from "./ExportSheet";
 import { DataPanel, LayersPanel } from "./Panels";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { loadGoogleFont } from "./fonts";
 import { PasswordGate, ShareMenu } from "./ShareMenu";
-import { renderToBlob } from "./render";
 import { parseSheet, sampleData } from "./sheet";
 import { useMerge } from "./useMerge";
 
@@ -41,6 +40,7 @@ export function MailMergePage() {
   const [namePattern, setNamePattern] = useState("merge-<name>");
   // Bumped whenever the shelf changes, so the projects list re-reads itself.
   const [shelf, setShelf] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const { doc, setDoc, replaceDoc, data, setData, selected, selectedId, setSelectedId } = merge;
 
@@ -126,29 +126,6 @@ export function MailMergePage() {
 
   // ── export ───────────────────────────────────────────────────────────────
   const rows = data.rows;
-
-  const exportCurrent = useCallback(async () => {
-    const blob = await renderToBlob(doc, merge.currentRow, base);
-    download(blob, fileNameFor(namePattern, merge.currentRow ?? {}, merge.rowIndex, "png"));
-  }, [base, doc, merge.currentRow, merge.rowIndex, namePattern]);
-
-  const exportAllLocal = useCallback(async () => {
-    if (rows.length === 0) return;
-    setBusy(`rendering ${rows.length}`);
-    try {
-      const files = [];
-      for (let i = 0; i < rows.length; i++) {
-        files.push({
-          name: fileNameFor(namePattern, rows[i]!, i, "png"),
-          input: await renderToBlob(doc, rows[i]!, base),
-        });
-      }
-      download(await downloadZip(files).blob(), `${doc.name || "merge"}.zip`);
-      toast(`${rows.length} images zipped`);
-    } finally {
-      setBusy(null);
-    }
-  }, [base, doc, namePattern, rows, toast]);
 
   const exportAllServer = useCallback(async () => {
     if (rows.length === 0) return;
@@ -306,7 +283,7 @@ export function MailMergePage() {
         }
         actions={
           <>
-            <TextButton onClick={() => void exportCurrent()}>export row</TextButton>
+            <TextButton onClick={() => setExporting(true)}>export</TextButton>
             <TextButton onClick={() => void save()} disabled={readOnly}>
               save
             </TextButton>
@@ -458,8 +435,8 @@ export function MailMergePage() {
               <Input value={namePattern} onChange={(e) => setNamePattern(e.target.value)} spellCheck={false} />
             </Field>
             <div className="flex flex-wrap items-center gap-4">
-              <TextButton onClick={() => void exportAllLocal()} disabled={rows.length === 0 || busy !== null}>
-                render all here
+              <TextButton onClick={() => setExporting(true)} disabled={busy !== null}>
+                choose and export
               </TextButton>
               <TextButton onClick={() => void exportAllServer()} disabled={rows.length === 0 || busy !== null}>
                 render all on server
@@ -474,12 +451,24 @@ export function MailMergePage() {
           <Inspector
             layer={selected}
             fields={data.fields}
+            canvas={doc.canvas}
             onChange={(patch) => selectedId && merge.updateLayer(selectedId, patch)}
             onPreview={(patch) => selectedId && merge.previewLayer(selectedId, patch)}
             onSnapshot={merge.snapshot}
           />
         </div>
       </div>
+
+      {exporting ? (
+        <ExportSheet
+          doc={doc}
+          data={data}
+          base={base}
+          namePattern={namePattern}
+          onNamePattern={setNamePattern}
+          onClose={() => setExporting(false)}
+        />
+      ) : null}
     </Shell>
   );
 }

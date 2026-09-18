@@ -96,7 +96,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="border-wash text-ink hover:border-[rgba(244,243,255,0.28)] focus:border-indigo flex w-full items-center justify-between gap-2 rounded-xs border bg-[rgba(244,243,255,0.04)] px-2.5 py-2 text-left font-mono text-label tracking-normal transition-colors duration-200"
+            className="border-wash text-ink hover:border-edge focus:border-indigo flex w-full items-center justify-between gap-2 rounded-xs border bg-control px-2.5 py-2 text-left font-mono text-label tracking-normal transition-colors duration-200"
           >
             <span className="truncate">{font.family}</span>
             <span className="text-meta text-meta uppercase">{font.source.kind}</span>
@@ -171,7 +171,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
                     : font.source,
               });
             }}
-            className="border-wash text-ink hover:border-[rgba(244,243,255,0.28)] focus:border-indigo w-full cursor-pointer rounded-xs border bg-[rgba(244,243,255,0.04)] px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
+            className="border-wash text-ink hover:border-edge focus:border-indigo w-full cursor-pointer rounded-xs border bg-control px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
           >
             {(font.source.kind === "google" ? weightsOf(variants) : [300, 400, 500, 600, 700, 800, 900]).map((w) => (
               <option key={w} value={w}>

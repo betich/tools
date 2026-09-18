@@ -15,7 +15,7 @@ export function TopBar() {
   const status = useServerStatus();
 
   return (
-    <header className="border-wash bg-paper/70 sticky top-0 z-40 flex items-center justify-between gap-4 border-b px-5 py-3.5 backdrop-blur-xl sm:px-8">
+    <header className="border-wash bg-paper/75 sticky top-0 z-40 flex items-center justify-between gap-4 border-b px-5 py-3.5 backdrop-blur-xl sm:px-8">
       <NavLink
         to="/"
         className="text-ink hover:text-indigo font-mono text-label font-bold uppercase transition-colors duration-200"
@@ -50,7 +50,7 @@ export function TopBar() {
 /** Three destinations, equal weight, pinned to the floor of the screen. */
 export function TabRail() {
   return (
-    <div className="border-wash bg-paper/80 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl">
+    <div className="border-wash bg-paper/85 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur-xl">
       <nav aria-label="tools" className="grid grid-cols-3">
         <RailTab to="/" end>
           index
@@ -70,7 +70,7 @@ export function TabRail() {
         by{" "}
         <a
           href="https://betich.me"
-          className="hover:text-indigo underline decoration-[rgba(244,243,255,0.25)] underline-offset-4 transition-colors duration-200"
+          className="hover:text-indigo underline decoration-wash underline-offset-4 transition-colors duration-200"
         >
           betich.me
         </a>
@@ -87,7 +87,7 @@ function RailTab({ to, end, children }: { to: string; end?: boolean; children: R
       className={({ isActive }) =>
         cn(
           "relative py-4 text-center font-mono text-meta uppercase transition-colors duration-200",
-          isActive ? "text-ink bg-[rgba(244,243,255,0.05)]" : "text-meta hover:text-indigo hover:bg-[rgba(244,243,255,0.03)]",
+          isActive ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
         )
       }
     >

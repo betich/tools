@@ -87,14 +87,14 @@ function ToolTile({ tool, delay }: { tool: ClientTool; delay: number }) {
         className={cn(
           tile,
           tall,
-          "border-wash group h-full bg-[rgba(244,243,255,0.035)] transition-colors duration-300",
-          "hover:border-[rgba(185,184,239,0.45)] hover:bg-[rgba(244,243,255,0.06)]",
+          "border-wash group h-full bg-surface transition-colors duration-300",
+          "hover:border-indigo hover:bg-surface-high",
         )}
       >
         {/* A wash of the accent rises from the floor of the tile on approach. */}
         <span
           className="pointer-events-none absolute inset-x-0 bottom-0 h-32 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-          style={{ background: "linear-gradient(0deg, rgba(72,69,218,0.22), transparent)" }}
+          style={{ background: "linear-gradient(0deg, rgba(90,87,240,0.26), transparent)" }}
           aria-hidden
         />
 

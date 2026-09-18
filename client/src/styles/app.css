@@ -11,28 +11,37 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 @theme {
-  /* Ground and the surfaces that rise off it. */
-  --color-paper: #07071b;
-  --color-bloom: #0c0c22;
-  --color-panel: #101026;
-  --color-panel-high: #16162a;
+  /* Ground and the surfaces that rise off it. Near-black with a trace of
+     indigo in it — dark enough that a hairline is a line, not a smudge. */
+  --color-paper: #04040d;
+  --color-bloom: #07071a;
+  --color-panel: #0b0b1a;
+  --color-panel-high: #101026;
 
-  /* Ink, held at alpha steps rather than mixed as separate greys. */
-  --color-ink: #f3f2ff;
-  --color-prose: rgba(244, 243, 255, 0.82);
-  --color-prose-muted: rgba(244, 243, 255, 0.72);
-  --color-label: rgba(244, 243, 255, 0.7);
-  --color-meta: rgba(244, 243, 255, 0.55);
+  /* Ink, held at alpha steps rather than mixed as separate greys.
+     18.9 / 14.5 / 11.9 / 10.8 / 7.7 against the ground. */
+  --color-ink: #f6f5ff;
+  --color-prose: rgba(246, 245, 255, 0.88);
+  --color-prose-muted: rgba(246, 245, 255, 0.8);
+  --color-label: rgba(246, 245, 255, 0.76);
+  --color-meta: rgba(246, 245, 255, 0.64);
+
+  /* Surfaces in the document flow: an alpha of ink, never a solid colour, so
+     everything in flow stays transparent to the bloom behind it. */
+  --color-surface: rgba(246, 245, 255, 0.04);
+  --color-surface-high: rgba(246, 245, 255, 0.07);
+  --color-control: rgba(246, 245, 255, 0.045);
 
   /* Hairlines. Never text — these fail contrast by design. */
-  --color-wash: rgba(244, 243, 255, 0.12);
-  --color-hairline: rgba(244, 243, 255, 0.16);
-  --color-hairline-faint: rgba(244, 243, 255, 0.08);
-  --color-hover-wash: rgba(244, 243, 255, 0.06);
+  --color-wash: rgba(246, 245, 255, 0.16);
+  --color-hairline: rgba(246, 245, 255, 0.24);
+  --color-hairline-faint: rgba(246, 245, 255, 0.1);
+  --color-edge: rgba(246, 245, 255, 0.34);
+  --color-hover-wash: rgba(246, 245, 255, 0.07);
 
   /* Two accents: one you arrive at, one that means live. */
-  --color-indigo: #b9b8ef;
-  --color-signal: #4845da;
+  --color-indigo: #c3c2fa;
+  --color-signal: #5a57f0;
 
   --font-mono: "Roboto Mono", "Sarabun", monospace;
   --font-sans: "Inter", "IBM Plex Thai", sans-serif;
@@ -68,11 +77,12 @@
 @layer base {
   :root {
     color-scheme: dark;
-    --scrim: rgb(3 3 12 / 0.92);
-    /* The one light source. Everything else is flat. */
+    --scrim: rgb(2 2 8 / 0.94);
+    /* The one light source: tight, low and resolved by the fold, so the page
+       reads as a dark instrument with a lamp over it rather than a haze. */
     --bloom:
-      radial-gradient(90% 46% at 50% 8%, rgba(72, 69, 218, 0.4) 0%, rgba(72, 69, 218, 0.12) 38%, transparent 68%),
-      radial-gradient(130% 80% at 50% -18%, rgba(24, 23, 66, 0.9) 0%, transparent 62%);
+      radial-gradient(64% 34% at 50% 2%, rgba(90, 87, 240, 0.26) 0%, rgba(90, 87, 240, 0.07) 40%, transparent 64%),
+      radial-gradient(110% 62% at 50% -22%, rgba(14, 14, 40, 0.85) 0%, transparent 58%);
   }
 
   html {
@@ -109,14 +119,14 @@
   }
 
   ::selection {
-    background: rgba(72, 69, 218, 0.45);
+    background: rgba(90, 87, 240, 0.5);
     color: var(--color-ink);
   }
 
   /* The parts we did not draw still belong to the panel. */
   * {
     caret-color: var(--color-indigo);
-    scrollbar-color: rgba(244, 243, 255, 0.18) transparent;
+    scrollbar-color: rgba(246, 245, 255, 0.24) transparent;
     scrollbar-width: thin;
   }
 
@@ -128,13 +138,13 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(244, 243, 255, 0.14);
+    background: rgba(246, 245, 255, 0.2);
     border: 3px solid transparent;
     background-clip: content-box;
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(185, 184, 239, 0.4);
+    background: rgba(195, 194, 250, 0.45);
     background-clip: content-box;
   }
 
@@ -158,7 +168,7 @@
   }
   input[type="range"]::-webkit-slider-thumb:hover {
     background: var(--color-indigo);
-    box-shadow: 0 0 0 4px rgba(185, 184, 239, 0.16);
+    box-shadow: 0 0 0 4px rgba(195, 194, 250, 0.18);
   }
   input[type="range"]::-moz-range-thumb {
     height: 12px;
@@ -242,7 +252,7 @@
   /* A run of dashes from a label to its value, as on an instrument scale. */
   .leader {
     flex: 1;
-    border-bottom: 1px dashed var(--color-hairline-faint);
+    border-bottom: 1px dashed var(--color-wash);
     margin: 0 10px;
     transform: translateY(-3px);
   }
@@ -250,10 +260,10 @@
   .checkers {
     background-color: var(--color-bloom);
     background-image:
-      linear-gradient(45deg, rgba(244, 243, 255, 0.06) 25%, transparent 25%),
-      linear-gradient(-45deg, rgba(244, 243, 255, 0.06) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, rgba(244, 243, 255, 0.06) 75%),
-      linear-gradient(-45deg, transparent 75%, rgba(244, 243, 255, 0.06) 75%);
+      linear-gradient(45deg, rgba(246, 245, 255, 0.05) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(246, 245, 255, 0.05) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(246, 245, 255, 0.05) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(246, 245, 255, 0.05) 75%);
     background-size: 16px 16px;
     background-position:
       0 0,
@@ -303,11 +313,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(72, 69, 218, 0.5);
+    box-shadow: 0 0 0 0 rgba(90, 87, 240, 0.55);
   }
   50% {
     opacity: 0.75;
-    box-shadow: 0 0 0 5px rgba(72, 69, 218, 0);
+    box-shadow: 0 0 0 5px rgba(90, 87, 240, 0);
   }
 }
 

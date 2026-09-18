@@ -1,5 +1,7 @@
+import { Fragment } from "react";
 import type { Fill, TextLayer } from "@tools/shared";
 import { Chip, ColorInput, Empty, Field, NumberInput, Section, Segmented, Slider, TextButton, Toggle } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { FontPicker } from "./FontPicker";
 
 const DEFAULT_GRADIENT: Fill = {
@@ -19,12 +21,15 @@ const DEFAULT_GRADIENT: Fill = {
 export function Inspector({
   layer,
   fields,
+  canvas,
   onChange,
   onPreview,
   onSnapshot,
 }: {
   layer: TextLayer | null;
   fields: string[];
+  /** The page the layer is aligned against. */
+  canvas: { width: number; height: number };
   onChange: (patch: Partial<TextLayer>) => void;
   onPreview: (patch: Partial<TextLayer>) => void;
   onSnapshot: () => void;
@@ -49,7 +54,7 @@ export function Inspector({
             onChange={(e) => onChange({ text: e.target.value })}
             rows={3}
             spellCheck={false}
-            className="border-wash text-ink hover:border-[rgba(244,243,255,0.28)] focus:border-indigo w-full resize-y rounded-xs border bg-[rgba(244,243,255,0.04)] px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
+            className="border-wash text-ink hover:border-edge focus:border-indigo w-full resize-y rounded-xs border bg-control px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
           />
         </Field>
 
@@ -248,6 +253,8 @@ export function Inspector({
       </Section>
 
       <Section title="box">
+        <AlignBar layer={layer} canvas={canvas} onChange={onChange} />
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="x">
             <NumberInput value={Math.round(layer.x)} onChange={(e) => onChange({ x: Number(e.target.value) || 0 })} />
@@ -272,4 +279,121 @@ export function Inspector({
       </Section>
     </div>
   );
+}
+
+/* ── align to the page ─────────────────────────────────────────────────────
+   Six moves, the way every canvas editor arranges them: the horizontal trio,
+   a rule, then the vertical trio. Each is one commit, so each is one undo.
+   A button reads as active when the layer is already flush that way, which
+   turns the cluster into a readout as well as a control. */
+
+type Move = { key: string; label: string; axis: "x" | "y"; value: (c: { width: number; height: number }, l: TextLayer) => number };
+
+const MOVES: Move[] = [
+  { key: "left", label: "align left", axis: "x", value: () => 0 },
+  { key: "centre-x", label: "centre horizontally", axis: "x", value: (c, l) => (c.width - l.width) / 2 },
+  { key: "right", label: "align right", axis: "x", value: (c, l) => c.width - l.width },
+  { key: "top", label: "align top", axis: "y", value: () => 0 },
+  { key: "middle", label: "centre vertically", axis: "y", value: (c, l) => (c.height - l.height) / 2 },
+  { key: "bottom", label: "align bottom", axis: "y", value: (c, l) => c.height - l.height },
+];
+
+function AlignBar({
+  layer,
+  canvas,
+  onChange,
+}: {
+  layer: TextLayer;
+  canvas: { width: number; height: number };
+  onChange: (patch: Partial<TextLayer>) => void;
+}) {
+  return (
+    <Field label="align to page">
+      <div className="border-wash flex w-fit items-center gap-0.5 rounded-xs border bg-control p-0.5">
+        {MOVES.map((move, i) => {
+          const target = move.value(canvas, layer);
+          const flush = Math.abs(layer[move.axis] - target) < 0.5;
+          return (
+            <Fragment key={move.key}>
+              {i === 3 ? <span className="bg-wash mx-1 h-4 w-px" aria-hidden /> : null}
+              <button
+                type="button"
+                aria-label={move.label}
+                data-tip={move.label}
+                aria-pressed={flush}
+                onClick={() => onChange({ [move.axis]: Math.round(target) })}
+                className={cn(
+                  "tooltip flex size-7 cursor-pointer items-center justify-center rounded-xs transition-colors duration-200",
+                  flush ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
+                )}
+              >
+                <AlignGlyph move={move.key} />
+              </button>
+            </Fragment>
+          );
+        })}
+      </div>
+    </Field>
+  );
+}
+
+/**
+ * Drawn rather than borrowed: a 1px rule for the edge you are aligning to and
+ * two bars moving onto it, at the same hairline weight as the rest of the panel.
+ */
+function AlignGlyph({ move }: { move: string }) {
+  const rule = "currentColor";
+  const bar = "currentColor";
+  const common = { width: 16, height: 16, viewBox: "0 0 16 16", "aria-hidden": true } as const;
+
+  switch (move) {
+    case "left":
+      return (
+        <svg {...common}>
+          <rect x="2" y="1.5" width="1" height="13" fill={rule} />
+          <rect x="4.5" y="4" width="8" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="4.5" y="9.5" width="5" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+    case "centre-x":
+      return (
+        <svg {...common}>
+          <rect x="7.5" y="1.5" width="1" height="13" fill={rule} />
+          <rect x="3" y="4" width="10" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="4.5" y="9.5" width="7" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+    case "right":
+      return (
+        <svg {...common}>
+          <rect x="13" y="1.5" width="1" height="13" fill={rule} />
+          <rect x="3.5" y="4" width="8" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="6.5" y="9.5" width="5" height="2.5" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+    case "top":
+      return (
+        <svg {...common}>
+          <rect x="1.5" y="2" width="13" height="1" fill={rule} />
+          <rect x="4" y="4.5" width="2.5" height="8" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="9.5" y="4.5" width="2.5" height="5" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+    case "middle":
+      return (
+        <svg {...common}>
+          <rect x="1.5" y="7.5" width="13" height="1" fill={rule} />
+          <rect x="4" y="3" width="2.5" height="10" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="9.5" y="4.5" width="2.5" height="7" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <rect x="1.5" y="13" width="13" height="1" fill={rule} />
+          <rect x="4" y="3.5" width="2.5" height="8" rx="0.75" fill={bar} opacity="0.75" />
+          <rect x="9.5" y="6.5" width="2.5" height="5" rx="0.75" fill={bar} opacity="0.75" />
+        </svg>
+      );
+  }
 }

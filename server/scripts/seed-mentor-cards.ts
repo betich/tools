@@ -19,7 +19,9 @@ const arg = (name: string, fallback: string) => {
 
 const API = arg("api", "http://localhost:8787").replace(/\/$/, "");
 const PASSWORD = arg("password", "champeng");
-const CSV = arg("csv", "/home/betich/code/tools/.orca/drops/Mentor info - Sheet5.csv");
+const CSV = arg("csv", "/home/betich/code/tools/.orca/drops/Mentor info - Sheet5 (1).csv");
+/** Given, the run updates that project in place so its share link survives. */
+const PROJECT = arg("project", "");
 const IMAGE = arg("image", "/home/betich/code/tools/.orca/drops/A.png");
 
 const CANVAS = { width: 2242, height: 3171 };
@@ -119,9 +121,9 @@ const doc: MergeDoc = {
       autoFit: { enabled: true, minSize: 30 },
     }),
     layer({
-      id: "name",
-      name: "full name",
-      text: "<name>",
+      id: "company",
+      name: "company",
+      text: "<company>",
       y: 2266, // ink centres on 2336
       height: 140,
       inkNudge: -10,
@@ -191,10 +193,14 @@ function buildData(csv: string): MergeData {
       intania_class: intaniaClass,
       intania_dept: dept,
       role: at(cells, "ตำแหน่งงานปัจจุบัน (ENG)"),
+      company: at(cells, "บริษัทปัจจุบัน (ENG)"),
     };
   });
 
-  return { fields: ["no", "nickname", "name", "intania", "intania_class", "intania_dept", "role"], rows };
+  return {
+    fields: ["no", "nickname", "name", "intania", "intania_class", "intania_dept", "role", "company"],
+    rows,
+  };
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────
@@ -214,20 +220,21 @@ doc.base = { src: asset.ref, fit: "cover" };
 console.log(`  artwork     ->  ${asset.ref}`);
 
 const project = await json<{ id: string }>(
-  await fetch(`${API}/api/projects`, {
-    method: "POST",
+  await fetch(`${API}/api/projects${PROJECT ? `/${PROJECT}` : ""}`, {
+    method: PROJECT ? "PUT" : "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name: doc.name, doc, data }),
   }),
-  "project create",
+  PROJECT ? "project update" : "project create",
 );
-console.log(`  project     ->  ${project.id}`);
+console.log(`  project     ->  ${project.id}${PROJECT ? "  (updated in place)" : ""}`);
 
 const share = await json<{ slug: string; protected: boolean }>(
   await fetch(`${API}/api/projects/${project.id}/share`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ password: PASSWORD }),
+    // Updating an existing collection leaves whatever lock it already has.
+    body: JSON.stringify(PROJECT ? {} : { password: PASSWORD }),
   }),
   "share",
 );

@@ -3,22 +3,26 @@ name: betich's tools
 description: A workshop bench after dark — the betich.me voice taken into track.betich.me's instrument panel.
 extends: track.betich.me
 colors:
-  ground: "#07071B"
-  bloom: "#0C0C22"
-  panel: "#101026"
-  panel-high: "#16162A"
-  ink: "#F3F2FF"
-  prose: "rgba(244,243,255,0.82)"
-  prose-muted: "rgba(244,243,255,0.72)"
-  label: "rgba(244,243,255,0.70)"
-  meta: "rgba(244,243,255,0.55)"
-  hairline: "rgba(244,243,255,0.16)"
-  wash: "rgba(244,243,255,0.12)"
-  hairline-faint: "rgba(244,243,255,0.08)"
-  hover-wash: "rgba(244,243,255,0.06)"
-  periwinkle: "#B9B8EF"
-  signal: "#4845DA"
-  scrim: "rgb(3 3 12 / 0.92)"
+  ground: "#04040D"
+  bloom: "#07071A"
+  panel: "#0B0B1A"
+  panel-high: "#101026"
+  ink: "#F6F5FF"
+  prose: "rgba(246,245,255,0.88)"
+  prose-muted: "rgba(246,245,255,0.80)"
+  label: "rgba(246,245,255,0.76)"
+  meta: "rgba(246,245,255,0.64)"
+  surface: "rgba(246,245,255,0.04)"
+  surface-high: "rgba(246,245,255,0.07)"
+  control: "rgba(246,245,255,0.045)"
+  edge: "rgba(246,245,255,0.34)"
+  hairline: "rgba(246,245,255,0.24)"
+  wash: "rgba(246,245,255,0.16)"
+  hairline-faint: "rgba(246,245,255,0.10)"
+  hover-wash: "rgba(246,245,255,0.07)"
+  periwinkle: "#C3C2FA"
+  signal: "#5A57F0"
+  scrim: "rgb(2 2 8 / 0.94)"
 typography:
   display:
     fontFamily: "Roboto Mono, Sarabun, monospace"
@@ -163,7 +167,9 @@ components:
 
 This site used to be a paper notebook. It is now the console you read the notebook by.
 
-The voice did not change — Roboto Mono still carries every piece of structure, Inter still appears only inside running prose, and Thai is still covered by Sarabun so it never falls back mid-sentence. What changed is the room the lights are on in. The ground is `#07071B`, a near-black with indigo in it; ink is `#F3F2FF`, a lavender white held at four alpha steps rather than mixed into four separate greys. One bloom of light sits behind the top of the page and everything else is flat. Nothing casts a shadow, because nothing here is made of paper.
+The voice did not change — Roboto Mono still carries every piece of structure, Inter still appears only inside running prose, and Thai is still covered by Sarabun so it never falls back mid-sentence. What changed is the room the lights are on in. The ground is `#04040D` — near-black, with only a trace of indigo left in it — and ink is `#F6F5FF`, a lavender white held at four alpha steps rather than mixed into four separate greys. One bloom of light sits behind the top of the page, tight and low enough to have resolved by the fold, and everything else is flat. Nothing casts a shadow, because nothing here is made of paper.
+
+The room is deliberately darker than the reference, and the ink is deliberately brighter in it. Contrast is the whole point of an instrument panel: a hairline has to read as a line rather than a smudge, and a micro-label at 11px has to survive being glanced at. Every step of the ramp clears 7:1.
 
 The reference is [track.betich.me](https://track.betich.me), which is the same person's work in the same typeface solving a different problem: a compass, a map, a status line, a tab bar. Its conventions are adopted wholesale — the uppercase wide-tracked labels, the single status dot, the fixed rail across the floor of the screen, the `MADE WITH <3 BY BETICH.ME` line under it. A visitor arriving here from there should not have to learn a second system.
 
@@ -171,7 +177,7 @@ The reference is [track.betich.me](https://track.betich.me), which is the same p
 
 - Structure is uppercase mono with wide tracking: `0.18em` at 11px, `0.1em` at 12px, `0.22em` on a page title. Sentence case begins at the first paragraph of prose and nowhere earlier.
 - Two accents with different jobs: periwinkle `#B9B8EF` is where an interactive element _arrives_, indigo `#4845DA` means _live_ — the status dot, the needle, the wash under a panel you are about to open.
-- Depth is alpha, not elevation. A raised surface is the ground plus 3.5% ink; a hairline is the ground plus 12–16%.
+- Depth is alpha, not elevation. A raised surface is the ground plus 4% ink; a hairline is the ground plus 10–24%.
 - Navigation never scrolls away: a hairline bar at the top, a three-cell rail pinned to the floor.
 - Every number is `tabular-nums` and zero-padded — `01 / 36`, `2242×3171 · 46%`.
 - Both tools work with the server down, and the status dot says which mode you are in rather than leaving you to find out.
@@ -194,27 +200,38 @@ One ground, one ink, two accents. There is no third hue anywhere in the product,
 
 ### Ground
 
-- **Ground** (`#07071B`): The universal page background, set on `html` as well as `body` so an overscroll never flashes white.
-- **Bloom** (`#0C0C22`): The checkerboard's base, and the colour the bloom resolves toward.
-- **Panel / Panel High** (`#101026` / `#16162A`): The two floating surfaces — the font picker popover, the share popover, the tooltip and the toast. Nothing in the document flow uses them; in-flow surfaces are an alpha of ink instead, so they inherit whatever is behind them.
+- **Ground** (`#04040D`): The universal page background, set on `html` as well as `body` so an overscroll never flashes white.
+- **Bloom** (`#07071A`): The checkerboard's base, and the colour the bloom resolves toward.
+- **Panel / Panel High** (`#0B0B1A` / `#101026`): The two floating surfaces — the font picker popover, the share popover, the tooltip and the toast. Nothing in the document flow uses them; in-flow surfaces are an alpha of ink instead, so they inherit whatever is behind them.
 
 ### Ink
 
 A single colour at four steps. Contrast was measured against the ground, not assumed:
 
-| token | alpha | contrast | use                                                |
-| ----- | ----- | -------- | -------------------------------------------------- |
-| ink   | 1.0   | 17:1     | values, headings, the active tab, a selected layer |
-| prose | 0.82  | 11:1     | running prose in a panel                           |
-| label | 0.70  | 7.5:1    | field values, list rows, tool blurbs               |
-| meta  | 0.55  | 5.0:1    | every uppercase micro-label, status, counters      |
+| token       | alpha | contrast | use                                                |
+| ----------- | ----- | -------- | -------------------------------------------------- |
+| ink         | 1.00  | 18.9:1   | values, headings, the active tab, a selected layer |
+| prose       | 0.88  | 14.5:1   | running prose in a panel                           |
+| prose-muted | 0.80  | 11.9:1   | the index's standfirst                             |
+| label       | 0.76  | 10.8:1   | field values, list rows, tool blurbs               |
+| meta        | 0.64  | 7.7:1    | every uppercase micro-label, status, counters      |
 
-**0.55 is the floor for text.** Below it the ramp is hairlines only — `0.16`, `0.12`, `0.08` — and none of them ever carries a glyph.
+**0.64 is the floor for text**, and it clears AA for body copy rather than merely for large type. Below it the ramp is structure only — `edge 0.34`, `hairline 0.24`, `wash 0.16`, `hairline-faint 0.10` — and none of those ever carries a glyph.
+
+### Surfaces
+
+Three fills, all of them ink over the ground, so everything in the document flow stays transparent to the bloom.
+
+| token        | alpha | use                                                        |
+| ------------ | ----- | ---------------------------------------------------------- |
+| surface      | 0.040 | a tile, a card, a panel that has risen off the ground      |
+| control      | 0.045 | the inside of an input, a select, a segmented control      |
+| surface-high | 0.070 | that surface hovered, the active rail cell, a chosen page  |
 
 ### Accents
 
-- **Periwinkle** (`#B9B8EF`): The destination. Hover, focus, the active underline, the selection box on the canvas, the caret, the slider thumb's edge.
-- **Signal** (`#4845DA`): Life. The API dot when the server answers (and only then — it also gets the slow pulse), the bezel needle, the wash that rises inside a tool panel on approach, and the text selection background.
+- **Periwinkle** (`#C3C2FA`): The destination. Hover, focus, the active underline, the selection box on the canvas, the caret, the slider thumb's edge.
+- **Signal** (`#5A57F0`): Life. The API dot when the server answers (and only then — it also gets the slow pulse), the bezel needle, the wash that rises inside a tool panel on approach, and the text selection background.
 
 ### Named Rules
 
@@ -252,7 +269,7 @@ A single colour at four steps. Contrast was measured against the ground, not ass
 
 **Top bar.** Sticky, hairline bottom, `backdrop-blur-xl` over the ground at 70% so content dissolves under it rather than colliding. Wordmark left, API state right.
 
-**Bottom rail.** Fixed, three equal cells, hairline top, blurred ground at 80%. The active cell takes a 5% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
+**Bottom rail.** Fixed, three equal cells, hairline top, blurred ground at 80%. The active cell takes a 7% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
 
 **Three measures.** `max-w-3xl` for reading, `max-w-6xl` for the index and squoosh, `max-w-[1600px]` for the merge editor. A tool takes the narrowest measure that fits its work. The index sits at the middle measure because nine tiles at the widest one would each be a billboard.
 
@@ -266,7 +283,7 @@ A single colour at four steps. Contrast was measured against the ground, not ass
 
 ## Elevation & Depth
 
-There is exactly **one light source** — a fixed radial bloom at the top of the viewport, indigo at 40% fading through a dark halo to nothing by 68%. It sits behind everything at `z-0` and never moves or scrolls.
+There is exactly **one light source** — a fixed radial bloom at the top of the viewport, indigo at 26% over a 64%-wide ellipse, fading through a dark halo to nothing by 64%. It sits behind everything at `z-0` and never moves or scrolls. It is small and low on purpose: a wide, bright bloom lifts the whole upper page toward the ink and costs the chrome its contrast.
 
 Nothing in the document flow casts a shadow. Two floating surfaces carry one, and it is the same one: `0 24px 60px -20px rgba(0,0,0,0.8)` — a deep, soft, offset drop that reads as distance from the panel, not as a halo. The lightbox keeps its own, heavier version over the scrim.
 
@@ -293,7 +310,7 @@ Wordmark at `0.32em` tracking, and a status chip. The chip is a 6px dot plus a w
 
 ### Bottom rail
 
-Three equal cells, uppercase meta, with the active cell taking a 5% fill and a periwinkle top edge. The footer line sits under it and is the only place the product signs its own name.
+Three equal cells, uppercase meta, with the active cell taking a 7% fill and a periwinkle top edge. The footer line sits under it and is the only place the product signs its own name.
 
 ### Bezel (signature component)
 
@@ -308,10 +325,10 @@ The index page's authored moment: track's compass bezel unrolled flat.
 
 The index is one grid of nine slots, three across, and every cell is the same size. The bench is the unit, not the card: a slot holds a tool, an idea, or nothing yet, and the difference between them is **state**, never weight.
 
-- **Tool tile:** ground plus 3.5% ink behind a 12% hairline. Name in display type, blurb in Inter under it, then a hairline with the tagline and `OPEN →` beneath. The tagline sits below the rule on purpose — above the heading it would be an eyebrow.
-- **Queued tile:** the same frame at 8% hairline with no fill, the name in headline type at 55% ink, and `QUEUED` where `OPEN →` would be. It is not a link and never lights up, because there is nothing behind it.
-- **Empty slot:** the same frame at the full 12% hairline, empty but for a 6px dot of ink at 16% at its centre. It exists to say the bench is not full. Below `md` the grid drops to one or two columns and the empty slots are not drawn — an empty frame is a statement about a grid, and there is no grid on a phone.
-- **Hover** (tool tiles only): the border moves to periwinkle at 45%, the fill lifts from 3.5% to 6%, the name turns periwinkle, the arrow translates 4px, and a 128px indigo wash rises from the floor of the tile over 500ms.
+- **Tool tile:** ground plus 4% ink behind a 16% hairline. Name in display type, blurb in Inter under it, then a hairline with the tagline and `OPEN →` beneath. The tagline sits below the rule on purpose — above the heading it would be an eyebrow.
+- **Queued tile:** the same frame at the 10% hairline with no fill, the name in headline type at 64% ink, and `QUEUED` where `OPEN →` would be. It is not a link and never lights up, because there is nothing behind it.
+- **Empty slot:** the same frame at the full 16% hairline, empty but for a 6px dot of ink at 24% at its centre. It exists to say the bench is not full. Below `md` the grid drops to one or two columns and the empty slots are not drawn — an empty frame is a statement about a grid, and there is no grid on a phone.
+- **Hover** (tool tiles only): the border moves to periwinkle at 45%, the fill lifts from 4% to 7%, the name turns periwinkle, the arrow translates 4px, and a 128px indigo wash rises from the floor of the tile over 500ms.
 - **Keys:** `1`–`3` open the tools in slot order from the index.
 
 ### Saved list (mail merge)
@@ -322,9 +339,24 @@ Saved merges are a list, never a gallery: what separates two projects is a name 
 
 **Delete is two taps, not a dialog.** The first tap arms the row and the icon turns periwinkle; the second deletes; three and a half seconds of silence disarms it. A modal would interrupt for something the user can simply not confirm.
 
+### Align cluster (mail merge)
+
+Six moves in one bordered strip, arranged the way every canvas editor arranges them: the horizontal trio, a 16px rule, then the vertical trio. The glyphs are authored rather than borrowed — a 1px rule for the edge you are aligning to and two bars moving onto it — so they carry the same hairline weight as the panel around them.
+
+**A button that is already true reads as pressed.** When the layer is flush to that edge the cell takes the 7% fill and full ink, which makes the cluster a readout as well as a control. Every press is one commit, so every press is one undo.
+
+### Export sheet (mail merge)
+
+A full-bleed surface, portalled above the chrome, that replaces "render everything and hope": every row as a thumbnail, the ones you want picked by clicking them, and the format decided beside the grid.
+
+- **The pages.** A responsive grid of cards at the document's own aspect ratio over the checkerboard. The artwork is never dimmed — a preview that lies about the output is worthless — so selection is carried by the frame, a tick in the corner, and the file name going to full ink.
+- **Rendering.** Thumbnails fill in one row per frame with a yield between them, and the header counts them up in periwinkle while it happens. A 500-row merge fills progressively instead of freezing the tab.
+- **The panel.** Format, quality (disabled and explained under png), and the file-name pattern. It states what will land — `12 jpg files · one zip` — directly above the one filled-on-hover button in the sheet, bottom-right where the eye finishes.
+- **Escape closes it**, unless a render is running.
+
 ### Form controls
 
-Ground plus 4% ink, a 12% hairline, 6px radius, 8×10px padding, uppercase meta label above and sentence-case hint below. Hover raises the border to 28%; focus takes it to periwinkle and the fill to 6%. Focus removes the outline because the border is already the signal.
+Ground plus 4.5% ink, a 16% hairline, 6px radius, 8×10px padding, uppercase meta label above and sentence-case hint below. Hover raises the border to 34%; focus takes it to periwinkle and the fill to 7%. Focus removes the outline because the border is already the signal.
 
 ### Motion
 
@@ -332,7 +364,7 @@ One authored entrance — `resolve`: 14px rise, 8px blur, opacity to 1, over 700
 
 ### Browser surfaces
 
-Selection is indigo at 45% with full ink on top. The caret is periwinkle. Scrollbars are a 10px track with a pill thumb of ink at 14%, going periwinkle at 40% on hover, themed for both WebKit and Firefox. `color-scheme: dark` is declared so form controls and the scrollbar gutter come up dark before any CSS lands, and `#07071B` is inlined in the document head so the first paint is never white.
+Selection is indigo at 50% with full ink on top. The caret is periwinkle. Scrollbars are a 10px track with a pill thumb of ink at 20%, going periwinkle at 45% on hover, themed for both WebKit and Firefox. `color-scheme: dark` is declared so form controls and the scrollbar gutter come up dark before any CSS lands, and `#04040D` is inlined in the document head so the first paint is never white.
 
 ## Do's and Don'ts
 

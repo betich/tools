@@ -99,7 +99,7 @@ export function PasswordGate({ error, onSubmit }: { error: string | null; onSubm
         e.preventDefault();
         onSubmit(password);
       }}
-      className="border-wash rounded-card max-w-sm border bg-[rgba(244,243,255,0.035)] p-6"
+      className="border-wash rounded-card max-w-sm border bg-surface p-6"
     >
       <Field label="password" hint={error ?? "this merge is locked"}>
         <Input autoFocus type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
