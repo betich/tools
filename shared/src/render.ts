@@ -16,7 +16,7 @@ export interface Ctx2D {
   clearRect(x: number, y: number, w: number, h: number): void;
   fillRect(x: number, y: number, w: number, h: number): void;
   drawImage(img: never, dx: number, dy: number, dw: number, dh: number): void;
-  measureText(text: string): { width: number };
+  measureText(text: string): { width: number; fontBoundingBoxAscent?: number; fontBoundingBoxDescent?: number };
   fillText(text: string, x: number, y: number): void;
   strokeText(text: string, x: number, y: number): void;
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradientLike;
@@ -146,8 +146,8 @@ function drawTextLayer(ctx: Ctx2D, layer: TextLayer, row: MergeRow | null): void
   ctx.save();
   ctx.globalAlpha = clamp(layer.opacity, 0, 1);
   ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
   setFont(ctx, layer, size);
+  const middle = middleShift(ctx, size);
 
   const lines = wrap(ctx, tokens, layer.width, spacing);
   const blockH = lines.length * lineH;
@@ -174,7 +174,7 @@ function drawTextLayer(ctx: Ctx2D, layer: TextLayer, row: MergeRow | null): void
     const w = measureLine(ctx, line, spacing);
     const x =
       layer.align === "left" ? layer.x : layer.align === "right" ? layer.x + layer.width - w : layer.x + (layer.width - w) / 2;
-    const y = top + i * lineH + lineH / 2;
+    const y = top + i * lineH + lineH / 2 + middle;
 
     if (layer.shadow) {
       ctx.shadowColor = layer.shadow.color;
@@ -195,6 +195,27 @@ function drawTextLayer(ctx: Ctx2D, layer: TextLayer, row: MergeRow | null): void
   }
 
   ctx.restore();
+}
+
+/**
+ * How far below a line's centre its alphabetic baseline sits. This is the
+ * browser's `textBaseline = "middle"`, computed by hand: Chrome takes the
+ * middle of the font's ascent/descent scaled to one em, Skia the middle of the
+ * raw ascent/descent — identical for most Latin faces, but a Thai face with
+ * tall metrics (IBM Plex Sans Thai: 1.12 / 0.53 em) lands ~10% of the size
+ * lower on the server. Both engines report the same font box, so the maths is
+ * done once, here, from those numbers. Rounded as Chrome rounds them.
+ */
+function middleShift(ctx: Ctx2D, size: number): number {
+  ctx.textBaseline = "alphabetic";
+  const m = ctx.measureText("Hg");
+  const ascent = Math.round(m.fontBoundingBoxAscent ?? 0);
+  const descent = Math.round(m.fontBoundingBoxDescent ?? 0);
+  if (ascent + descent <= 0) {
+    ctx.textBaseline = "middle";
+    return 0;
+  }
+  return (size * (ascent - descent)) / (2 * (ascent + descent));
 }
 
 function setFont(ctx: Ctx2D, layer: TextLayer, size: number): void {

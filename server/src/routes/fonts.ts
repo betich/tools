@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { catalogue, normaliseVariant } from "../lib/fonts";
+import { catalogue, familyFaces, parseVariant } from "../lib/fonts";
 
 export const fonts = new Elysia({ prefix: "/api/fonts" })
   .get(
@@ -26,12 +26,12 @@ export const fonts = new Elysia({ prefix: "/api/fonts" })
   .get(
     "/:family/:variant",
     async ({ params, set }) => {
-      const { fonts: all } = await catalogue();
-      const font = all.find((f) => f.family.toLowerCase() === params.family.toLowerCase());
-      const url = font?.files[params.variant] ?? font?.files[normaliseVariant(params.variant)];
+      const want = parseVariant(params.variant);
+      const faces = await familyFaces(params.family);
+      const url = faces.find((f) => f.weight === want.weight && f.italic === want.italic)?.url;
       if (!url) {
         set.status = 404;
-        return { error: "font not available", hint: "set GOOGLE_FONTS_API_KEY to enable font file proxying" };
+        return { error: "font not available" };
       }
       const res = await fetch(url);
       if (!res.ok) {

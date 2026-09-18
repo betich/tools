@@ -7,6 +7,7 @@ import { Field, Input, Segmented, Slider, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { pad } from "@/lib/format";
+import { ensureDocFonts } from "./fonts";
 import { extensionFor, renderThumbnail, renderToBlob, type ExportFormat } from "./render";
 
 /**
@@ -55,6 +56,9 @@ export function ExportSheet({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Every face and every glyph the sheet will draw, before the first page:
+      // a page rendered while a face is still downloading is a wrong page.
+      await ensureDocFonts(doc, rows);
       for (let i = 0; i < rows.length; i++) {
         if (cancelled) return;
         const url = renderThumbnail(doc, rows[i] ?? null, base);
@@ -102,6 +106,7 @@ export function ExportSheet({
     setBusy(true);
     setProgress({ done: 0, total: picks.length });
     try {
+      await ensureDocFonts(doc, picks.map((i) => rows[i] ?? null));
       const options = { format, quality: quality / 100 };
       const files: { name: string; input: Blob }[] = [];
       for (const i of picks) {

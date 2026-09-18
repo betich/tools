@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MergeDoc, MergeRow, TextLayer } from "@tools/shared";
 import { cn } from "@/lib/cn";
+import { ensureDocFonts, useFontEpoch } from "./fonts";
 import { paint } from "./render";
 
 type Guides = { x: boolean; y: boolean };
@@ -50,9 +51,19 @@ export function CanvasStage({
     return () => observer.disconnect();
   }, [doc.canvas.width, doc.canvas.height]);
 
+  // Paint now, then again whenever a font file lands: canvas never waits for
+  // a face, so the first paint of new text can be in the fallback.
+  const fontEpoch = useFontEpoch();
   useEffect(() => {
     if (canvas.current) paint(canvas.current, doc, row, base);
-  }, [doc, row, base]);
+  }, [doc, row, base, fontEpoch]);
+
+  // Ask for the faces this row needs by name — a Thai subset the page has not
+  // used yet is only fetched when something requests it. The epoch above does
+  // the repaint once it arrives.
+  useEffect(() => {
+    void ensureDocFonts(doc, [row]);
+  }, [doc, row]);
 
   const drag = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; layer: TextLayer } | null>(
     null,

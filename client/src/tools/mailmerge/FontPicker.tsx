@@ -5,7 +5,7 @@ import { Field, Input, TextButton } from "@/components/ui";
 import { useToast } from "@/hooks/useToast";
 import { api, type FontList } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { hasItalic, loadGoogleFont, loadUploadedFont, SYSTEM_STACKS, variantFor, weightsOf } from "./fonts";
+import { loadGoogleFont, loadUploadedFont, SYSTEM_STACKS, variantFor, weightsOf } from "./fonts";
 
 type Catalogue = FontList["fonts"];
 
@@ -57,7 +57,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
     setOpen(false);
     setQuery("");
     try {
-      await loadGoogleFont(family, familyVariants);
+      await loadGoogleFont(family);
     } catch {
       toast(`could not load ${family}`);
     }
@@ -65,10 +65,19 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
     onChange({
       family,
       weight,
-      italic: font.italic && hasItalic(familyVariants),
+      // A family with no italic still gets one: browser and server both slant the upright face.
       source: { kind: "google", family, variant: variantFor(weight, font.italic, familyVariants) },
     });
   };
+
+  const setItalic = (italic: boolean) =>
+    onChange({
+      italic,
+      source:
+        font.source.kind === "google"
+          ? { kind: "google", family: font.source.family, variant: variantFor(font.weight, italic, variants) }
+          : font.source,
+    });
 
   const upload = async (file: File) => {
     const family = file.name.replace(/\.[^.]+$/, "");
@@ -173,7 +182,11 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
             }}
             className="border-wash text-ink hover:border-edge focus:border-indigo w-full cursor-pointer rounded-xs border bg-control px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
           >
-            {(font.source.kind === "google" ? weightsOf(variants) : [300, 400, 500, 600, 700, 800, 900]).map((w) => (
+            {/* The layer's own weight stays listed even if the family lacks it, so the select never lies. */}
+            {weightsOf([
+              ...(font.source.kind === "google" ? variants : ["300", "400", "500", "600", "700", "800", "900"]),
+              String(font.weight),
+            ]).map((w) => (
               <option key={w} value={w}>
                 {w}
               </option>
@@ -182,10 +195,10 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
         </Field>
         <Field label="style">
           <div className="flex items-center gap-3 pt-1.5">
-            <TextButton active={!font.italic} onClick={() => onChange({ italic: false })}>
+            <TextButton active={!font.italic} onClick={() => setItalic(false)}>
               normal
             </TextButton>
-            <TextButton active={font.italic} onClick={() => onChange({ italic: true })}>
+            <TextButton active={font.italic} onClick={() => setItalic(true)}>
               italic
             </TextButton>
           </div>

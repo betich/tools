@@ -1,35 +1,45 @@
-import type { FontSource } from "@tools/shared";
+import { useEffect, useState } from "react";
+import { resolve, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
+import { assetUrl } from "@/lib/api";
 
 /** Families already requested this session, so a re-select is instant. */
 const loaded = new Map<string, Promise<void>>();
 
 export const SYSTEM_STACKS = ["Roboto Mono", "Inter", "Georgia", "Times New Roman", "Courier New", "Arial"];
 
+/** Closes every family stack in the renderer, so it is always wanted. */
+const DEFAULT_FAMILY = "Roboto Mono";
+
+/** No single face may hold a render hostage; past this the nearest face is used. */
+const FACE_TIMEOUT_MS = 12_000;
+
 /**
- * Pull a family in from Google Fonts and wait until the browser can actually
- * paint with it — canvas silently falls back to a default otherwise, and the
- * preview would then disagree with the server render.
+ * Every weight and style of a Google family. css2 accepts the full ital×wght
+ * grid and answers with only the faces that exist, so one stylesheet brings in
+ * the whole family — whatever weight or italic a layer picks later is already
+ * declared, and the browser only fetches the files a render actually touches.
  */
-export function loadGoogleFont(family: string, variants: string[]): Promise<void> {
+export function loadGoogleFont(family: string): Promise<void> {
   const key = `google:${family}`;
   const existing = loaded.get(key);
   if (existing) return existing;
 
-  const promise = (async () => {
+  const grid: string[] = [];
+  for (const ital of [0, 1]) for (let w = 100; w <= 900; w += 100) grid.push(`${ital},${w}`);
+
+  const promise = new Promise<void>((done, fail) => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}:${axes(variants)}&display=swap`;
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}:ital,wght@${grid.join(";")}&display=swap`;
+    link.onload = () => done();
+    link.onerror = () => {
+      link.remove();
+      // Forget the failure so the next render gets another go.
+      loaded.delete(key);
+      fail(new Error(`could not load ${family}`));
+    };
     document.head.appendChild(link);
-
-    await Promise.all(
-      weightsOf(variants).map((w) =>
-        document.fonts.load(`${w} 32px "${family}"`).catch(() => {
-          /* a missing weight is not fatal — the nearest one is used */
-        }),
-      ),
-    );
-    await document.fonts.ready;
-  })();
+  });
 
   loaded.set(key, promise);
   return promise;
@@ -43,9 +53,78 @@ export async function loadUploadedFont(family: string, file: File): Promise<void
   loaded.set(`upload:${family}`, Promise.resolve());
 }
 
-export function ensureFont(source: FontSource, family: string, variants: string[]): Promise<void> {
-  if (source.kind === "google") return loadGoogleFont(source.family || family, variants);
+/** An uploaded face this browser has not seen — a shared or reopened merge — read back from the asset store. */
+function loadAssetFont(family: string, assetId: string): Promise<void> {
+  const key = `upload:${family}`;
+  const existing = loaded.get(key);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const face = new FontFace(family, `url("${assetUrl(assetId)}")`);
+    await face.load();
+    document.fonts.add(face);
+  })();
+  promise.catch(() => loaded.delete(key));
+  loaded.set(key, promise);
+  return promise;
+}
+
+function loadFace(face: FallbackFont): Promise<void> {
+  if (face.source.kind === "google") return loadGoogleFont(face.source.family || face.family);
+  if (face.source.kind === "upload" && face.source.assetId) return loadAssetFont(face.family, face.source.assetId);
   return Promise.resolve();
+}
+
+const withTimeout = <T,>(p: Promise<T>, ms = FACE_TIMEOUT_MS) =>
+  Promise.race([p, new Promise<void>((r) => setTimeout(r, ms))]).catch(() => {});
+
+/**
+ * Resolve once every face `doc` draws with is ready to paint the text these
+ * rows will put on the canvas. Declaring a face is not enough — canvas never
+ * waits for a download, it silently paints the fallback, so a preview or an
+ * export taken a moment too early disagrees with the server render. Asking
+ * `document.fonts.load` for the exact weight, style and characters fetches the
+ * very files (including Thai unicode-range subsets) the render needs.
+ *
+ * Never rejects and never hangs: a face that fails or stalls is skipped.
+ */
+export async function ensureDocFonts(doc: MergeDoc, rows: (MergeRow | null)[]): Promise<void> {
+  const sample = rows.length ? rows : [null];
+  const jobs: Promise<unknown>[] = [];
+
+  jobs.push(withTimeout(loadGoogleFont(DEFAULT_FAMILY).then(() => document.fonts.load(`400 16px "${DEFAULT_FAMILY}"`))));
+
+  for (const layer of doc.layers) {
+    if (!layer.visible) continue;
+    const chars = new Set<string>();
+    for (const row of sample) {
+      const text = resolve(layer.text, row);
+      for (const ch of layer.uppercase ? text.toUpperCase() : text) chars.add(ch);
+    }
+    const text = [...chars].join("") || " ";
+    const style = layer.font.italic ? "italic " : "";
+
+    for (const face of [{ family: layer.font.family, source: layer.font.source }, ...(layer.font.fallbacks ?? [])]) {
+      jobs.push(
+        withTimeout(
+          loadFace(face).then(() => document.fonts.load(`${style}${layer.font.weight} 16px "${face.family}"`, text)),
+        ),
+      );
+    }
+  }
+
+  await Promise.all(jobs);
+}
+
+/** A number that ticks whenever the browser finishes loading font files — a cue to repaint. */
+export function useFontEpoch(): number {
+  const [epoch, setEpoch] = useState(0);
+  useEffect(() => {
+    const bump = () => setEpoch((n) => n + 1);
+    document.fonts.addEventListener("loadingdone", bump);
+    return () => document.fonts.removeEventListener("loadingdone", bump);
+  }, []);
+  return epoch;
 }
 
 export function weightsOf(variants: string[]): number[] {
@@ -59,16 +138,6 @@ export function weightsOf(variants: string[]): number[] {
 }
 
 export const hasItalic = (variants: string[]) => variants.some((v) => v.includes("italic"));
-
-/** css2 wants the axis tuples sorted: ital ascending, then weight ascending. */
-function axes(variants: string[]): string {
-  const weights = weightsOf(variants);
-  const italics = hasItalic(variants);
-  const tuples: string[] = [];
-  for (const w of weights) tuples.push(`0,${w}`);
-  if (italics) for (const w of weights) tuples.push(`1,${w}`);
-  return `ital,wght@${tuples.join(";")}`;
-}
 
 /** Google's variant strings map onto the weight/italic pair the editor uses. */
 export function variantFor(weight: number, italic: boolean, variants: string[]): string {

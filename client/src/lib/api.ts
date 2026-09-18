@@ -32,7 +32,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-export type ProjectSummary = { id: string; name: string; createdAt: string; updatedAt: string };
+export type ProjectSummary = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  /** The project's share link, if one has been minted. */
+  slug?: string | null;
+  /** Locked projects need their password to open, save or delete. */
+  locked?: boolean;
+};
+
+export type ShareState = { slug: string; protected: boolean };
+export type OpenedProject = Project & { share: ShareState | null };
+
+/** The header a locked project wants; nothing at all for an open one. */
+const lock = (password?: string): Record<string, string> => (password ? { "x-share-password": password } : {});
 export type FontList = { source: "google" | "fallback"; total: number; fonts: Pick<GoogleFont, "family" | "category" | "variants">[] };
 
 export const api = {
@@ -44,25 +59,33 @@ export const api = {
   fonts: (q = "", limit = 300) => request<FontList>(`/api/fonts?q=${encodeURIComponent(q)}&limit=${limit}`),
 
   listProjects: () => request<ProjectSummary[]>("/api/projects"),
-  getProject: (id: string) => request<Project>(`/api/projects/${id}`),
+  getProject: (id: string, password?: string) => request<OpenedProject>(`/api/projects/${id}`, { headers: lock(password) }),
   createProject: (name: string, doc: MergeDoc, data: MergeData) =>
     request<ProjectSummary>("/api/projects", { method: "POST", body: JSON.stringify({ name, doc, data }) }),
-  updateProject: (id: string, name: string, doc: MergeDoc, data: MergeData) =>
-    request<ProjectSummary>(`/api/projects/${id}`, { method: "PUT", body: JSON.stringify({ name, doc, data }) }),
-  deleteProject: (id: string) => request<null>(`/api/projects/${id}`, { method: "DELETE" }),
+  updateProject: (id: string, name: string, doc: MergeDoc, data: MergeData, password?: string) =>
+    request<ProjectSummary>(`/api/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name, doc, data }),
+      headers: lock(password),
+    }),
+  deleteProject: (id: string, password?: string) =>
+    request<null>(`/api/projects/${id}`, { method: "DELETE", headers: lock(password) }),
 
-  /** An empty password unlocks an existing link; omitting it leaves the lock as it is. */
-  share: (id: string, password?: string) =>
-    request<{ slug: string; protected: boolean }>(`/api/projects/${id}/share`, {
+  /**
+   * An empty password unlocks an existing link; omitting it leaves the lock as
+   * it is. `current` is the password the project is locked with now, if any.
+   */
+  share: (id: string, password?: string, current?: string) =>
+    request<ShareState>(`/api/projects/${id}/share`, {
       method: "POST",
       body: JSON.stringify(password === undefined ? {} : { password }),
+      headers: lock(current),
     }),
-  unshare: (id: string) => request<null>(`/api/projects/${id}/share`, { method: "DELETE" }),
+  unshare: (id: string, current?: string) =>
+    request<null>(`/api/projects/${id}/share`, { method: "DELETE", headers: lock(current) }),
   shareMeta: (slug: string) => request<{ protected: boolean }>(`/api/share/${slug}/meta`),
   getShared: (slug: string, password?: string) =>
-    request<Project & { readOnly: true; protected: boolean }>(`/api/share/${slug}`, {
-      headers: password ? { "x-share-password": password } : undefined,
-    }),
+    request<Project & { share: ShareState }>(`/api/share/${slug}`, { headers: lock(password) }),
 
   uploadAsset: async (file: File) => {
     const form = new FormData();

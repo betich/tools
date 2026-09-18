@@ -30,6 +30,19 @@ type WebfontsResponse = {
 };
 
 export async function catalogue(): Promise<{ fonts: GoogleFont[]; source: "google" | "fallback" }> {
+  const result = await googleCatalogue();
+  if (result.source === "google") return result;
+  // The hand-picked list cannot know every weight a family ships; ask Google.
+  const fonts = await Promise.all(
+    result.fonts.map(async (font) => {
+      const faces = await familyFaces(font.family).catch(() => []);
+      return faces.length ? { ...font, variants: variantsOf(faces) } : font;
+    }),
+  );
+  return { fonts, source: "fallback" };
+}
+
+async function googleCatalogue(): Promise<{ fonts: GoogleFont[]; source: "google" | "fallback" }> {
   const cached = cacheGet<GoogleFont[]>(CATALOGUE_KEY);
   if (cached) return { fonts: cached, source: "google" };
   if (!env.googleFontsKey) return { fonts: FALLBACK, source: "fallback" };
@@ -54,21 +67,94 @@ export async function catalogue(): Promise<{ fonts: GoogleFont[]; source: "googl
 }
 
 const registered = new Set<string>();
+const inflight = new Map<string, Promise<boolean>>();
+
+/** Roboto Mono closes every family stack in the renderer, so the server always has it. */
+export const DEFAULT_FAMILY = "Roboto Mono";
+
+export type GoogleFace = { weight: number; italic: boolean; url: string };
 
 /**
- * Make `family` available to the canvas under its own name, downloading the
- * TTF once and caching it on disk. Safe to call on every render.
+ * Every face Google serves for a family, found without an API key: css2 accepts
+ * the full ital×wght grid and answers only with the faces that exist, and a
+ * User-Agent that predates woff2 gets plain TTFs the canvas can register.
  */
-export async function registerGoogleFont(family: string, variant = "regular"): Promise<boolean> {
-  const key = `${family}::${variant}`;
-  if (registered.has(key)) return true;
+export async function familyFaces(family: string): Promise<GoogleFace[]> {
+  const key = `google-faces:${family.toLowerCase()}`;
+  const cached = cacheGet<GoogleFace[]>(key);
+  if (cached) return cached;
 
-  const file = join(paths.fonts, `${slugify(family)}-${slugify(variant)}.ttf`);
+  const grid: string[] = [];
+  for (const ital of [0, 1]) for (let w = 100; w <= 900; w += 100) grid.push(`${ital},${w}`);
+  const url =
+    `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}` +
+    `:ital,wght@${grid.join(";")}&display=swap`;
+
+  let faces: GoogleFace[] = [];
+  try {
+    const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0" } });
+    if (res.ok) faces = parseFaces(await res.text());
+  } catch {
+    /* fall through to the catalogue */
+  }
+
+  // The keyed catalogue carries the same TTFs; it is the backstop if css2 is unreachable.
+  if (faces.length === 0) {
+    const { fonts } = await googleCatalogue();
+    const font = fonts.find((f) => f.family.toLowerCase() === family.toLowerCase());
+    faces = Object.entries(font?.files ?? {}).map(([variant, file]) => ({ ...parseVariant(variant), url: file }));
+  }
+
+  if (faces.length) cacheSet(key, faces, env.fontCacheTtlMs);
+  return faces;
+}
+
+function parseFaces(css: string): GoogleFace[] {
+  const out: GoogleFace[] = [];
+  for (const block of css.split("@font-face").slice(1)) {
+    const style = /font-style:\s*(\w+)/.exec(block)?.[1];
+    const weight = Number(/font-weight:\s*(\d+)/.exec(block)?.[1]);
+    const url = /url\((https:\/\/[^)]+\.(?:ttf|otf))\)/.exec(block)?.[1];
+    if (url && Number.isFinite(weight)) out.push({ weight, italic: style === "italic", url });
+  }
+  return out;
+}
+
+/** Google variant strings for a set of faces: `400`, `700italic`, … */
+export function variantsOf(faces: GoogleFace[]): string[] {
+  return faces
+    .toSorted((a, b) => Number(a.italic) - Number(b.italic) || a.weight - b.weight)
+    .map((f) => `${f.weight}${f.italic ? "italic" : ""}`);
+}
+
+/**
+ * Make every face of `family` available to the canvas under its own name,
+ * downloading each TTF once and caching it on disk. Registering the whole
+ * family is what lets Skia match the weight and style a layer asks for — and
+ * synthesize an oblique when the family has no italic, as the browser does.
+ * Safe to call on every render; concurrent calls share one download.
+ */
+export function registerGoogleFamily(family: string): Promise<boolean> {
+  const key = family.toLowerCase();
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const job = (async () => {
+    const faces = await familyFaces(family);
+    const results = await Promise.all(faces.map((face) => registerFace(family, face)));
+    return results.some(Boolean);
+  })().finally(() => inflight.delete(key));
+
+  inflight.set(key, job);
+  return job;
+}
+
+async function registerFace(family: string, face: GoogleFace): Promise<boolean> {
+  const file = join(paths.fonts, `${slugify(family)}-${face.weight}${face.italic ? "italic" : ""}.ttf`);
+  if (registered.has(file)) return true;
   if (!existsSync(file)) {
-    const url = await ttfUrl(family, variant);
-    if (!url) return false;
     try {
-      const res = await fetch(url);
+      const res = await fetch(face.url);
       if (!res.ok) return false;
       await mkdir(paths.fonts, { recursive: true });
       await writeFile(file, Buffer.from(await res.arrayBuffer()));
@@ -76,48 +162,18 @@ export async function registerGoogleFont(family: string, variant = "regular"): P
       return false;
     }
   }
-
   const ok = Boolean(GlobalFonts.registerFromPath(file, family));
-  if (ok) registered.add(key);
+  if (ok) registered.add(file);
   return ok;
 }
 
 /** Register an uploaded face (TTF/OTF/WOFF) under an arbitrary family name. */
-export function registerFontBuffer(buffer: Buffer, family: string): boolean {
-  const key = `upload::${family}`;
+export function registerFontBuffer(buffer: Buffer, family: string, assetId: string): boolean {
+  const key = `upload::${family}::${assetId}`;
   if (registered.has(key)) return true;
   const ok = Boolean(GlobalFonts.register(buffer, family));
   if (ok) registered.add(key);
   return ok;
-}
-
-async function ttfUrl(family: string, variant: string): Promise<string | null> {
-  const { fonts } = await catalogue();
-  const font = fonts.find((f) => f.family.toLowerCase() === family.toLowerCase());
-  const files = font?.files ?? {};
-  const fromCatalogue = files[variant] ?? files[normaliseVariant(variant)] ?? files["regular"] ?? Object.values(files)[0];
-  if (fromCatalogue) return fromCatalogue;
-  return resolveViaCss2(family, variant);
-}
-
-/**
- * The catalogue needs an API key; the CSS2 endpoint does not. Asking it with a
- * User-Agent that predates woff2 makes Google answer with a plain TTF, which is
- * what the canvas can register — so the renderer works on a box with no key.
- */
-async function resolveViaCss2(family: string, variant: string): Promise<string | null> {
-  const { weight, italic } = parseVariant(variant);
-  const url =
-    `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}` +
-    `:ital,wght@${italic ? 1 : 0},${weight}&display=swap`;
-  try {
-    const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0" } });
-    if (!res.ok) return null;
-    const css = await res.text();
-    return /url\((https:\/\/fonts\.gstatic\.com\/[^)]+\.(?:ttf|otf))\)/.exec(css)?.[1] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export function parseVariant(variant: string): { weight: number; italic: boolean } {
@@ -127,12 +183,6 @@ export function parseVariant(variant: string): { weight: number; italic: boolean
   return { weight, italic };
 }
 
-/** Google's webfonts API calls weight 400 "regular" and 400 italic "italic". */
-export function normaliseVariant(variant: string): string {
-  if (variant === "400") return "regular";
-  if (variant === "400italic") return "italic";
-  return variant;
-}
 
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

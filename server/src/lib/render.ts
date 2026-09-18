@@ -1,35 +1,47 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createCanvas, loadImage, type Image } from "@napi-rs/canvas";
-import { renderDoc, type Ctx2D, type MergeDoc, type MergeRow } from "@tools/shared";
+import { renderDoc, type Ctx2D, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
 import { paths } from "../env";
-import { registerFontBuffer, registerGoogleFont } from "./fonts";
+import { DEFAULT_FAMILY, registerFontBuffer, registerGoogleFamily } from "./fonts";
 
 /**
- * Resolve every face the doc references. Google faces are fetched and cached;
- * uploaded faces are read back out of the asset store. A face that cannot be
- * resolved falls through to the canvas default rather than failing the render.
+ * Resolve every face the doc references. Google families are fetched whole —
+ * every weight and style — and cached, so whatever weight or italic a layer
+ * asks for is there to match. Uploaded faces are read back out of the asset
+ * store. A face that cannot be resolved falls through to the canvas default
+ * rather than failing the render; its name is reported back.
  */
 export async function prepareFonts(doc: MergeDoc): Promise<string[]> {
-  const missing: string[] = [];
-  const faces = doc.layers.flatMap((layer) => [
-    { family: layer.font.family, source: layer.font.source },
-    ...(layer.font.fallbacks ?? []),
-  ]);
-
-  for (const face of faces) {
-    if (face.source.kind === "google") {
-      if (!(await registerGoogleFont(face.source.family, face.source.variant))) missing.push(face.family);
-    } else if (face.source.kind === "upload") {
-      try {
-        const buf = await readFile(join(paths.assets, face.source.assetId));
-        if (!registerFontBuffer(buf, face.family)) missing.push(face.family);
-      } catch {
-        missing.push(face.family);
-      }
+  const faces = new Map<string, FallbackFont>();
+  faces.set(`google:${DEFAULT_FAMILY}`, { family: DEFAULT_FAMILY, source: { kind: "google", family: DEFAULT_FAMILY, variant: "400" } });
+  for (const layer of doc.layers) {
+    for (const face of [{ family: layer.font.family, source: layer.font.source }, ...(layer.font.fallbacks ?? [])]) {
+      const key =
+        face.source.kind === "google"
+          ? `google:${face.source.family || face.family}`
+          : face.source.kind === "upload"
+            ? `upload:${face.family}:${face.source.assetId}`
+            : `system:${face.family}`;
+      faces.set(key, face);
     }
   }
-  return [...new Set(missing)];
+
+  const missing = await Promise.all(
+    [...faces.values()].map(async (face) => {
+      if (face.source.kind === "google") return (await registerGoogleFamily(face.source.family || face.family)) ? null : face.family;
+      if (face.source.kind === "upload") {
+        try {
+          const buf = await readFile(join(paths.assets, face.source.assetId));
+          return registerFontBuffer(buf, face.family, face.source.assetId) ? null : face.family;
+        } catch {
+          return face.family;
+        }
+      }
+      return null;
+    }),
+  );
+  return [...new Set(missing.filter((m): m is string => m !== null))];
 }
 
 /** `asset:<id>`, a data URL, or an absolute http(s) URL. */

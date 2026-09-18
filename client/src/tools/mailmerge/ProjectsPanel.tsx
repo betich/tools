@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiArrowUpRight, FiTrash2 } from "react-icons/fi";
+import { FiArrowUpRight, FiLock, FiTrash2 } from "react-icons/fi";
 import { Empty, Field, IconButton, Input, Section, TextButton } from "@/components/ui";
-import { api, type ProjectSummary } from "@/lib/api";
+import { api, ApiError, type ProjectSummary } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { pad, stamp } from "@/lib/format";
+import { useToast } from "@/hooks/useToast";
+import { unlockFor } from "./unlocks";
 
 /**
  * Saved merges, as a list rather than a grid of thumbnails: the useful
  * distinction between two projects is their name and when you last touched
  * them, and a list puts both on one line at a glance.
+ *
+ * Every project is listed, locked ones included — a lock keeps the contents
+ * behind a password, not the fact that the project exists. Opening a locked
+ * one asks for the password; deleting one needs it to have been given.
  *
  * Needs the server. With it down the panel says so and the editor carries on.
  */
@@ -27,6 +33,7 @@ export function ProjectsPanel({
   onNew: (name: string, password: string) => void;
   onDeleted: (id: string) => void;
 }) {
+  const toast = useToast();
   const [items, setItems] = useState<ProjectSummary[] | null>(null);
   const [offline, setOffline] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
@@ -59,14 +66,15 @@ export function ProjectsPanel({
       }
       setArmed(null);
       try {
-        await api.deleteProject(id);
+        await api.deleteProject(id, unlockFor(id));
         setItems((prev) => prev?.filter((p) => p.id !== id) ?? null);
         onDeleted(id);
-      } catch {
-        setOffline(true);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) toast("locked — open it with its password first");
+        else setOffline(true);
       }
     },
-    [armed, onDeleted],
+    [armed, onDeleted, toast],
   );
 
   return (
@@ -99,12 +107,18 @@ export function ProjectsPanel({
               >
                 <span className="flex w-full min-w-0 items-center gap-1.5">
                   <span className="text-label truncate font-mono tracking-normal">{project.name || "untitled"}</span>
+                  {project.locked ? (
+                    <FiLock className="text-meta size-3 shrink-0" aria-label="locked" role="img" />
+                  ) : null}
                   <FiArrowUpRight
                     className="size-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                     aria-hidden
                   />
                 </span>
-                <span className="text-meta text-meta font-mono tabular-nums">{stamp(project.updatedAt)}</span>
+                <span className="text-meta text-meta font-mono tabular-nums">
+                  {stamp(project.updatedAt)}
+                  {project.locked ? " · locked" : project.slug ? " · shared" : ""}
+                </span>
               </button>
 
               <IconButton

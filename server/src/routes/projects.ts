@@ -13,6 +13,37 @@ const hydrate = (row: Row): Project => ({
   updatedAt: row.updated_at,
 });
 
+/**
+ * A share password locks the project, not just its link: reading, saving,
+ * deleting and re-locking all need it. An unlocked project stays open to
+ * anyone, as it always was. The password travels in `x-share-password`.
+ */
+async function access(projectId: string, supplied: string | undefined): Promise<"ok" | "missing" | "denied"> {
+  const link = db
+    .query<{ password_hash: string | null }, [string]>("SELECT password_hash FROM shares WHERE project_id = ?")
+    .get(projectId);
+  if (!link?.password_hash) return "ok";
+  if (!supplied) return "missing";
+  return (await Bun.password.verify(supplied, link.password_hash)) ? "ok" : "denied";
+}
+
+type Guard = { projectId: string; headers: Record<string, string | undefined>; set: { status?: number | string } };
+
+/** `null` when the caller may proceed; otherwise the 401 body to send back. */
+async function guard({ projectId, headers, set }: Guard) {
+  const verdict = await access(projectId, headers["x-share-password"]);
+  if (verdict === "ok") return null;
+  set.status = 401;
+  return { error: verdict === "missing" ? "password required" : "wrong password", protected: true };
+}
+
+const shareOf = (projectId: string) => {
+  const link = db
+    .query<{ slug: string; password_hash: string | null }, [string]>("SELECT slug, password_hash FROM shares WHERE project_id = ?")
+    .get(projectId);
+  return link ? { slug: link.slug, protected: Boolean(link.password_hash) } : null;
+};
+
 const projectBody = t.Object({
   name: t.String({ minLength: 1, maxLength: 120 }),
   doc: t.Any(),
@@ -20,11 +51,23 @@ const projectBody = t.Object({
 });
 
 export const projects = new Elysia({ prefix: "/api/projects" })
+  /** Every project, locked ones included — the lock guards the contents, not the name. */
   .get("/", () => {
     const rows = db
-      .query<Omit<Row, "doc" | "data">, []>("SELECT id, name, created_at, updated_at FROM projects ORDER BY updated_at DESC")
+      .query<Omit<Row, "doc" | "data"> & { slug: string | null; locked: number }, []>(
+        `SELECT p.id, p.name, p.created_at, p.updated_at, s.slug, (s.password_hash IS NOT NULL) AS locked
+         FROM projects p LEFT JOIN shares s ON s.project_id = p.id
+         ORDER BY p.updated_at DESC`,
+      )
       .all();
-    return rows.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at, updatedAt: r.updated_at }));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      slug: r.slug,
+      locked: Boolean(r.locked),
+    }));
   })
 
   .post(
@@ -46,18 +89,22 @@ export const projects = new Elysia({ prefix: "/api/projects" })
     { body: projectBody },
   )
 
-  .get("/:id", ({ params, set }) => {
+  .get("/:id", async ({ params, headers, set }) => {
     const row = db.query<Row, [string]>("SELECT * FROM projects WHERE id = ?").get(params.id);
     if (!row) {
       set.status = 404;
       return { error: "not found" };
     }
-    return hydrate(row);
+    const denied = await guard({ projectId: params.id, headers, set });
+    if (denied) return denied;
+    return { ...hydrate(row), share: shareOf(params.id) };
   })
 
   .put(
     "/:id",
-    ({ params, body, set }) => {
+    async ({ params, body, headers, set }) => {
+      const denied = await guard({ projectId: params.id, headers, set });
+      if (denied) return denied;
       const ts = nowIso();
       const res = db.run("UPDATE projects SET name = ?, doc = ?, data = ?, updated_at = ? WHERE id = ?", [
         body.name,
@@ -75,7 +122,9 @@ export const projects = new Elysia({ prefix: "/api/projects" })
     { body: projectBody },
   )
 
-  .delete("/:id", ({ params, set }) => {
+  .delete("/:id", async ({ params, headers, set }) => {
+    const denied = await guard({ projectId: params.id, headers, set });
+    if (denied) return denied;
     const res = db.run("DELETE FROM projects WHERE id = ?", [params.id]);
     if (res.changes === 0) {
       set.status = 404;
@@ -88,16 +137,19 @@ export const projects = new Elysia({ prefix: "/api/projects" })
   /**
    * Mint (or update) a public read-only link. Passing a password locks the
    * link; passing an empty string unlocks it. The slug is stable either way,
-   * so a link already handed out keeps working.
+   * so a link already handed out keeps working. Changing the lock on a locked
+   * project needs its current password.
    */
   .post(
     "/:id/share",
-    async ({ params, body, set }) => {
+    async ({ params, body, headers, set }) => {
       const exists = db.query<{ id: string }, [string]>("SELECT id FROM projects WHERE id = ?").get(params.id);
       if (!exists) {
         set.status = 404;
         return { error: "not found" };
       }
+      const denied = await guard({ projectId: params.id, headers, set });
+      if (denied) return denied;
 
       const password = body?.password?.trim() ?? "";
       const hash = password ? await Bun.password.hash(password) : null;
@@ -116,7 +168,9 @@ export const projects = new Elysia({ prefix: "/api/projects" })
     { body: t.Optional(t.Object({ password: t.Optional(t.String({ maxLength: 200 })) })) },
   )
 
-  .delete("/:id/share", ({ params, set }) => {
+  .delete("/:id/share", async ({ params, headers, set }) => {
+    const denied = await guard({ projectId: params.id, headers, set });
+    if (denied) return denied;
     db.run("DELETE FROM shares WHERE project_id = ?", [params.id]);
     set.status = 204;
     return null;
@@ -161,7 +215,9 @@ export const shares = new Elysia({ prefix: "/api/share" })
         set.status = 404;
         return { error: "not found" };
       }
-      return { ...hydrate(row), readOnly: true as const, protected: Boolean(link.password_hash) };
+      // A share link opens the project itself — whoever holds it (and its
+      // password) edits the same document everyone else sees.
+      return { ...hydrate(row), share: { slug: params.slug, protected: Boolean(link.password_hash) } };
     },
     { query: t.Object({ password: t.Optional(t.String()) }) },
   );

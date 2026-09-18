@@ -15,8 +15,9 @@ import { ExportSheet } from "./ExportSheet";
 import { DataPanel, LayersPanel } from "./Panels";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
-import { loadGoogleFont } from "./fonts";
+import { ensureDocFonts, loadGoogleFont } from "./fonts";
 import { PasswordGate, ShareMenu } from "./ShareMenu";
+import { forget, remember, unlockFor } from "./unlocks";
 import { parseSheet, sampleData } from "./sheet";
 import { useMerge } from "./useMerge";
 
@@ -35,8 +36,8 @@ export function MailMergePage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [shareProtected, setShareProtected] = useState(false);
-  const [readOnly, setReadOnly] = useState(false);
-  const [gate, setGate] = useState<{ error: string | null } | null>(null);
+  // A locked merge — from a share link or the shelf — waits here for its password.
+  const [gate, setGate] = useState<{ error: string | null; target: GateTarget } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [namePattern, setNamePattern] = useState("merge-<name>");
   // Bumped whenever the shelf changes, so the projects list re-reads itself.
@@ -59,11 +60,7 @@ export function MailMergePage() {
   // ── loading ──────────────────────────────────────────────────────────────
   const hydrate = useCallback(
     async (incoming: MergeDoc) => {
-      for (const layer of incoming.layers) {
-        if (layer.font.source.kind === "google") {
-          await loadGoogleFont(layer.font.source.family, [String(layer.font.weight), "400", "700"]).catch(() => {});
-        }
-      }
+      await ensureDocFonts(incoming, []);
       if (incoming.base) {
         const src = incoming.base.src.startsWith("asset:") ? assetUrl(incoming.base.src) : incoming.base.src;
         setBase(await loadImage(src).catch(() => null));
@@ -82,14 +79,17 @@ export function MailMergePage() {
         const project = await api.getShared(shareSlugToOpen, password);
         await hydrate(project.doc);
         setData(project.data);
-        setReadOnly(true);
-        setShareSlug(shareSlugToOpen);
-        setShareProtected(project.protected);
+        // The link opens the project itself: saving writes to the same
+        // document everyone holding the link sees.
+        setProjectId(project.id);
+        if (password) remember(project.id, password);
+        setShareSlug(project.share.slug);
+        setShareProtected(project.share.protected);
         setSelectedId(project.doc.layers[0]?.id ?? null);
         setGate(null);
       } catch (error) {
         const status = error instanceof ApiError ? error.status : 0;
-        if (status === 401) setGate({ error: password ? "wrong password" : null });
+        if (status === 401) setGate({ error: password ? "wrong password" : null, target: { kind: "share", slug: shareSlugToOpen } });
         else toast("that share link is not valid");
       } finally {
         setBusy(null);
@@ -105,7 +105,7 @@ export function MailMergePage() {
 
   // The default Roboto Mono face must be present before the first paint.
   useEffect(() => {
-    void loadGoogleFont("Roboto Mono", ["400", "700"]).catch(() => {});
+    void loadGoogleFont("Roboto Mono").catch(() => {});
   }, []);
 
   // ── base image ───────────────────────────────────────────────────────────
@@ -157,15 +157,18 @@ export function MailMergePage() {
     setBusy("saving");
     try {
       if (projectId) {
-        await api.updateProject(projectId, doc.name, doc, data);
+        await api.updateProject(projectId, doc.name, doc, data, unlockFor(projectId));
       } else {
         const created = await api.createProject(doc.name, doc, data);
         setProjectId(created.id);
       }
       setShelf((n) => n + 1);
       toast("saved");
-    } catch {
-      toast("could not save — is the api running?");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        if (projectId) forget(projectId);
+        toast("this merge is locked — reopen it with its password");
+      } else toast("could not save — is the api running?");
     } finally {
       setBusy(null);
     }
@@ -176,21 +179,28 @@ export function MailMergePage() {
       setBusy("sharing");
       try {
         let id = projectId;
+        const current = unlockFor(id);
         if (!id) {
           id = (await api.createProject(doc.name, doc, data)).id;
           setProjectId(id);
         } else {
-          await api.updateProject(id, doc.name, doc, data);
+          await api.updateProject(id, doc.name, doc, data, current);
         }
+        const result = await api.share(id, password, current);
+        // The new password is now the one this tab holds; an unlock forgets it.
+        remember(id, password);
         setShelf((n) => n + 1);
-        const result = await api.share(id, password);
         setShareSlug(result.slug);
         setShareProtected(result.protected);
         const url = `${location.origin}/mail-merge/s/${result.slug}`;
         await navigator.clipboard.writeText(url).catch(() => {});
         toast(result.protected ? "locked share link copied" : "share link copied");
-      } catch {
-        toast("could not create a share link");
+      } catch (error) {
+        toast(
+          error instanceof ApiError && error.status === 401
+            ? "this merge is locked — reopen it with its password"
+            : "could not create a share link",
+        );
       } finally {
         setBusy(null);
       }
@@ -199,21 +209,25 @@ export function MailMergePage() {
   );
 
   const openProject = useCallback(
-    async (id: string) => {
+    async (id: string, password?: string) => {
       setBusy("opening");
+      const key = password ?? unlockFor(id);
       try {
-        const project = await api.getProject(id);
+        const project = await api.getProject(id, key);
         await hydrate(project.doc);
         setData(project.data);
         setSelectedId(project.doc.layers[0]?.id ?? null);
         setProjectId(project.id);
-        // A share link belongs to the project, not to this session; the share
-        // menu mints or recovers it on demand.
-        setShareSlug(null);
-        setShareProtected(false);
-        setReadOnly(false);
-      } catch {
-        toast("could not open that project");
+        if (key) remember(project.id, key);
+        setShareSlug(project.share?.slug ?? null);
+        setShareProtected(project.share?.protected ?? false);
+        setGate(null);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          // A remembered password that no longer works is dropped, not retried.
+          forget(id);
+          setGate({ error: password ? "wrong password" : null, target: { kind: "project", id } });
+        } else toast("could not open that project");
       } finally {
         setBusy(null);
       }
@@ -235,7 +249,7 @@ export function MailMergePage() {
       setProjectId(null);
       setShareSlug(null);
       setShareProtected(false);
-      setReadOnly(false);
+      setGate(null);
       if (!password) return;
 
       setBusy("creating a locked merge");
@@ -243,6 +257,7 @@ export function MailMergePage() {
         const created = await api.createProject(name, fresh, emptyData);
         setProjectId(created.id);
         const link = await api.share(created.id, password);
+        remember(created.id, password);
         setShareSlug(link.slug);
         setShareProtected(link.protected);
         setShelf((n) => n + 1);
@@ -289,17 +304,17 @@ export function MailMergePage() {
       <PageHead
         title="mail merge"
         note={
-          readOnly
-            ? "Read-only — you are looking at a shared merge."
+          shareSlug
+            ? "A shared merge. Saving updates it for everyone with the link."
             : "A base image, text layers, and a spreadsheet. One image comes out per row."
         }
         actions={
           <>
             <TextButton onClick={() => setExporting(true)}>export</TextButton>
-            <TextButton onClick={() => void save()} disabled={readOnly}>
+            <TextButton onClick={() => void save()}>
               save
             </TextButton>
-            <ShareMenu disabled={readOnly} currentSlug={shareSlug} isProtected={shareProtected} onShare={share} />
+            <ShareMenu currentSlug={shareSlug} isProtected={shareProtected} onShare={share} />
           </>
         }
       />
@@ -307,7 +322,13 @@ export function MailMergePage() {
       {busy ? <p className="text-indigo text-meta mb-5 font-mono uppercase">{busy}…</p> : null}
 
       {gate ? (
-        <PasswordGate error={gate.error} onSubmit={(password) => slug && void openShared(slug, password)} />
+        <PasswordGate
+          error={gate.error}
+          onSubmit={(password) =>
+            void (gate.target.kind === "share" ? openShared(gate.target.slug, password) : openProject(gate.target.id, password))
+          }
+          onCancel={gate.target.kind === "project" ? () => setGate(null) : undefined}
+        />
       ) : null}
       {shareSlug ? (
         <p className="text-meta text-meta mb-5 font-mono uppercase">
@@ -333,20 +354,22 @@ export function MailMergePage() {
           "xl:grid-cols-[260px_minmax(0,1fr)_288px] xl:gap-8",
           "2xl:grid-cols-[280px_minmax(0,1fr)_312px] 2xl:gap-10",
         )}
-        hidden={gate !== null}
+        // A share link has nothing to show until it is unlocked; a locked
+        // project picked from the shelf leaves the current one in place.
+        hidden={gate?.target.kind === "share"}
       >
         {/* left — document, layers, data */}
         <div className={cn("flex flex-col gap-6 md:order-2 lg:order-1", pane === "setup" ? "flex" : "hidden md:flex")}>
-          {/* A share link is somebody else's document; the shelf is not theirs to browse. */}
-          {readOnly ? null : (
-            <ProjectsPanel
-              currentId={projectId}
-              refreshKey={shelf}
-              onOpen={(id) => void openProject(id)}
-              onNew={(name, password) => void startNew(name, password)}
-              onDeleted={(id) => setProjectId((current) => (current === id ? null : current))}
-            />
-          )}
+          <ProjectsPanel
+            currentId={projectId}
+            refreshKey={shelf}
+            onOpen={(id) => void openProject(id)}
+            onNew={(name, password) => void startNew(name, password)}
+            onDeleted={(id) => {
+              forget(id);
+              setProjectId((current) => (current === id ? null : current));
+            }}
+          />
 
           <Section title="document">
             <Field label="name">
@@ -520,6 +543,8 @@ export function MailMergePage() {
    screen. */
 
 type Pane = "setup" | "layer" | "output";
+
+type GateTarget = { kind: "share"; slug: string } | { kind: "project"; id: string };
 
 const PANES: { value: Pane; label: string }[] = [
   { value: "setup", label: "set up" },
