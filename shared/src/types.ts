@@ -1,0 +1,128 @@
+/**
+ * The document model shared by the browser editor and the server renderer.
+ * Everything here must stay plain JSON — it is persisted to SQLite and shared by link.
+ */
+
+export type Fit = "cover" | "contain" | "stretch";
+export type Align = "left" | "center" | "right";
+export type VAlign = "top" | "middle" | "bottom";
+
+export type GradientStop = { offset: number; color: string };
+
+export type Fill =
+  | { type: "solid"; color: string }
+  | { type: "linear"; angle: number; stops: GradientStop[] };
+
+export type Stroke = { color: string; width: number };
+
+export type Shadow = { color: string; blur: number; offsetX: number; offsetY: number };
+
+export type FontSpec = {
+  /** Family name as it is registered with the canvas, e.g. "Roboto Mono". */
+  family: string;
+  weight: number;
+  italic: boolean;
+  size: number;
+  /** Multiplier of font size. */
+  lineHeight: number;
+  /** Pixels added between characters. */
+  letterSpacing: number;
+  /** Where the face came from, so the server can load the same bytes. */
+  source: FontSource;
+  /**
+   * Families tried after `family`, for scripts the primary face has no glyphs
+   * for — a Latin display face backed by a Thai one, for instance.
+   */
+  fallbacks?: FallbackFont[];
+};
+
+export type FallbackFont = { family: string; source: FontSource };
+
+export type FontSource =
+  | { kind: "system" }
+  | { kind: "google"; family: string; variant: string }
+  | { kind: "upload"; assetId: string; fileName: string };
+
+export type TextLayer = {
+  id: string;
+  name: string;
+  kind: "text";
+  /** May contain `<field>` tokens resolved against a merge row. */
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  align: Align;
+  vAlign: VAlign;
+  opacity: number;
+  visible: boolean;
+  locked: boolean;
+  font: FontSpec;
+  fill: Fill;
+  stroke: Stroke | null;
+  shadow: Shadow | null;
+  /** Shrink the type until the block fits its box, down to `minSize`. */
+  autoFit: { enabled: boolean; minSize: number };
+  uppercase: boolean;
+};
+
+export type Layer = TextLayer;
+
+export type BaseImage = {
+  /** Data URL in the browser; an asset id once persisted server-side. */
+  src: string;
+  fit: Fit;
+};
+
+export type MergeDoc = {
+  version: 1;
+  name: string;
+  canvas: { width: number; height: number; background: string };
+  base: BaseImage | null;
+  layers: Layer[];
+};
+
+export type MergeRow = Record<string, string>;
+
+export type MergeData = {
+  fields: string[];
+  rows: MergeRow[];
+};
+
+export type Project = {
+  id: string;
+  name: string;
+  doc: MergeDoc;
+  data: MergeData;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A read-only publicly shared snapshot of a project. */
+export type ShareLink = {
+  slug: string;
+  projectId: string;
+  createdAt: string;
+};
+
+export type GoogleFont = {
+  family: string;
+  category: string;
+  variants: string[];
+  /** variant -> woff2/ttf url */
+  files: Record<string, string>;
+};
+
+export type ToolId = "squoosh" | "mail-merge";
+
+export type ToolMeta = {
+  id: ToolId;
+  name: string;
+  blurb: string;
+  href: string;
+  /** Zero-padded index stamped on the launchpad tile. */
+  index: string;
+  status: "live" | "wip";
+};

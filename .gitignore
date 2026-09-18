@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+.wrangler/
+data/
+server/data/
+.cache/
+*.tsbuildinfo
+
+# tunnel credentials are a secret, not source
+deploy/tunnel-credentials.json
+.orca/

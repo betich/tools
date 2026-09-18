@@ -1,0 +1,23 @@
+{
+  "name": "@tools/server",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "^1.4.0",
+    "@elysiajs/swagger": "^1.3.0",
+    "@napi-rs/canvas": "^1.0.9",
+    "@tools/shared": "workspace:*",
+    "elysia": "^1.4.0",
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "typescript": "^5.9.0"
+  }
+}

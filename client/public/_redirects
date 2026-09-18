@@ -1,0 +1,4 @@
+# Single-page app: every route is served by index.html.
+# The API is a separate origin (api.tools.betich.me) reached with CORS —
+# Pages cannot proxy a rewrite to an external host, so don't try.
+/*  /index.html  200

@@ -1,0 +1,22 @@
+{
+  "name": "betich-tools",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": ["shared", "client", "server"],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "dev:client": "bun run --cwd client dev",
+    "dev:server": "bun run --cwd server dev",
+    "build": "bun run --cwd client build",
+    "typecheck": "bun run --cwd shared typecheck && bun run --cwd client typecheck && bun run --cwd server typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,css,json,md}\"",
+    "up": "docker compose up -d --build",
+    "down": "docker compose down"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "typescript": "^5.9.0"
+  }
+}

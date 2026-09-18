@@ -1,0 +1,10 @@
+# Ingress for the `tools` tunnel. Dedicated to this stack so restarting it
+# never touches the other services sharing this machine.
+tunnel: 2d7f35af-fd6c-4151-a11f-b6066f96c148
+credentials-file: /etc/cloudflared/credentials.json
+no-autoupdate: true
+
+ingress:
+  - hostname: tools-api.betich.me
+    service: http://api:8787
+  - service: http_status:404
