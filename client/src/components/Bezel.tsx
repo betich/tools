@@ -10,7 +10,7 @@ import { stamp } from "@/lib/format";
  * It is the page's one authored moment, and it is not decoration: it carries
  * the clock, stamped to the minute the way every entry on betich.me is.
  */
-export function Bezel({ count }: { count: number }) {
+export function Bezel() {
   const [now, setNow] = useState(() => stamp());
 
   useEffect(() => {
@@ -56,10 +56,6 @@ export function Bezel({ count }: { count: number }) {
 
       <div className="mt-5 flex flex-wrap items-baseline justify-center gap-x-5 gap-y-1 font-mono text-meta uppercase">
         <time className="text-ink tabular-nums">{now}</time>
-        <span className="text-meta opacity-50">·</span>
-        <span className="text-meta tabular-nums">
-          {count} {count === 1 ? "tool" : "tools"} on the bench
-        </span>
       </div>
     </div>
   );

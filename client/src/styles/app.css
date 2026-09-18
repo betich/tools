@@ -46,6 +46,10 @@
   --font-mono: "Roboto Mono", "Sarabun", monospace;
   --font-sans: "Inter", "IBM Plex Thai", sans-serif;
 
+  /* A tool's name on the index, and nothing else: the door is the headline. */
+  --text-hero: clamp(3rem, 6.4vw, 7.25rem);
+  --text-hero--line-height: 0.92;
+  --text-hero--letter-spacing: -0.035em;
   --text-display: 1.5rem;
   --text-display--line-height: 1.25;
   --text-display--letter-spacing: 0.02em;

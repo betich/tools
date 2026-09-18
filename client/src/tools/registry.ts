@@ -33,6 +33,3 @@ export const registry: ClientTool[] = [
     key: "2",
   },
 ];
-
-/** Things on the list, not yet on the bench. */
-export const backlog = ["favicon set", "og image composer", "clipboard history", "unit scratchpad"];
