@@ -232,16 +232,40 @@ export function MailMergePage() {
     [hydrate, setData, setSelectedId, toast],
   );
 
-  const startNew = useCallback(() => {
-    const fresh = newDoc();
-    void hydrate(fresh);
-    setData(emptyData);
-    setSelectedId(fresh.layers[0]?.id ?? null);
-    setProjectId(null);
-    setShareSlug(null);
-    setShareProtected(false);
-    setReadOnly(false);
-  }, [hydrate, setData, setSelectedId]);
+  /**
+   * A new merge is local until it has a reason not to be. Give it a password
+   * and it is created and locked in the same gesture, so the link that goes
+   * out is never briefly open.
+   */
+  const startNew = useCallback(
+    async (name: string, password: string) => {
+      const fresh = newDoc(name);
+      await hydrate(fresh);
+      setData(emptyData);
+      setSelectedId(fresh.layers[0]?.id ?? null);
+      setProjectId(null);
+      setShareSlug(null);
+      setShareProtected(false);
+      setReadOnly(false);
+      if (!password) return;
+
+      setBusy("creating a locked merge");
+      try {
+        const created = await api.createProject(name, fresh, emptyData);
+        setProjectId(created.id);
+        const link = await api.share(created.id, password);
+        setShareSlug(link.slug);
+        setShareProtected(link.protected);
+        setShelf((n) => n + 1);
+        toast("created — the share link is locked");
+      } catch {
+        toast("created here — a locked link needs the api");
+      } finally {
+        setBusy(null);
+      }
+    },
+    [hydrate, setData, setSelectedId, toast],
+  );
 
   useHotkey("mod+z", (e) => {
     e.preventDefault();
@@ -312,7 +336,7 @@ export function MailMergePage() {
               currentId={projectId}
               refreshKey={shelf}
               onOpen={(id) => void openProject(id)}
-              onNew={startNew}
+              onNew={(name, password) => void startNew(name, password)}
               onDeleted={(id) => setProjectId((current) => (current === id ? null : current))}
             />
           )}

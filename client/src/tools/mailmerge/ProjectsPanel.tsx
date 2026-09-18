@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FiArrowUpRight, FiTrash2 } from "react-icons/fi";
-import { Empty, IconButton, Section, TextButton } from "@/components/ui";
+import { Empty, Field, IconButton, Input, Section, TextButton } from "@/components/ui";
 import { api, type ProjectSummary } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { pad, stamp } from "@/lib/format";
@@ -23,7 +23,8 @@ export function ProjectsPanel({
   /** Bumped by the page after a save, so a new row appears without a reload. */
   refreshKey: number;
   onOpen: (id: string) => void;
-  onNew: () => void;
+  /** An empty password means a local, unshared merge — the usual case. */
+  onNew: (name: string, password: string) => void;
   onDeleted: (id: string) => void;
 }) {
   const [items, setItems] = useState<ProjectSummary[] | null>(null);
@@ -73,7 +74,7 @@ export function ProjectsPanel({
       title="projects"
       aside={
         <span className="flex items-center gap-4">
-          <TextButton onClick={onNew}>new</TextButton>
+          <NewMergeMenu onCreate={onNew} />
           <span className="text-meta text-meta font-mono tabular-nums">{items ? pad(items.length) : "—"}</span>
         </span>
       }
@@ -118,5 +119,82 @@ export function ProjectsPanel({
         </ul>
       )}
     </Section>
+  );
+}
+
+/**
+ * New merge, with its lock decided at birth. The password is optional and the
+ * usual answer is no password at all — but a collection that is going out to a
+ * group is easier to lock here than to remember to lock after the first save.
+ */
+function NewMergeMenu({ onCreate }: { onCreate: (name: string, password: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const create = () => {
+    setOpen(false);
+    onCreate(name.trim() || "untitled", password);
+    setName("");
+    setPassword("");
+  };
+
+  return (
+    <div ref={box} className="relative">
+      <TextButton onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        new
+      </TextButton>
+
+      {open ? (
+        <div
+          className="animate-menu-in border-wash bg-panel-high rounded-card absolute top-full right-0 z-50 mt-3 w-[min(16.5rem,calc(100vw-2.5rem))] border p-4"
+          style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.8)" }}
+        >
+          <Field label="name">
+            <Input
+              autoFocus
+              value={name}
+              placeholder="untitled"
+              spellCheck={false}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && create()}
+            />
+          </Field>
+
+          <div className="mt-4">
+            <Field label="password" hint="optional — leave empty and the merge stays unshared">
+              <Input
+                type="text"
+                value={password}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && create()}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <TextButton onClick={create}>create</TextButton>
+            <TextButton onClick={() => setOpen(false)}>cancel</TextButton>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

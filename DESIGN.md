@@ -318,6 +318,8 @@ The index is one grid of nine slots, three across, and every cell is the same si
 
 Saved merges are a list, never a gallery: what separates two projects is a name and a timestamp, and a list puts both on one line. Each row is a hairline-separated two-line button — the name in normal tracking because the user typed it, the `YYYY.MM.DD HH:MM` stamp under it in meta — with the open arrow appearing on row hover and a delete button held to the right. The open project sits at full ink; everything else at 70% and periwinkle on hover.
 
+**NEW opens a popover, not a blank document.** A name and an optional password, in the same panel-high surface the share menu uses. Empty password — the usual answer — means the merge stays local until it is saved; a password creates and locks it in one gesture, so a link that is going to a group is never briefly open.
+
 **Delete is two taps, not a dialog.** The first tap arms the row and the icon turns periwinkle; the second deletes; three and a half seconds of silence disarms it. A modal would interrupt for something the user can simply not confirm.
 
 ### Form controls
