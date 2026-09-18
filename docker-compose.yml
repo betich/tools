@@ -4,7 +4,7 @@
 #   docker compose up -d --build
 #
 # The client is deployed separately to Cloudflare Pages (`bun run deploy` in
-# client/). Only the API runs here, reached at https://api.tools.betich.me.
+# client/). Only the API runs here, reached at https://tools-api.betich.me.
 
 services:
   api:

@@ -1,8 +1,6 @@
 import type { ToolMeta } from "@tools/shared";
 
 export type ClientTool = ToolMeta & {
-  /** Bento span on the launchpad grid, at `md` and up. */
-  span: string;
   /** Single-key shortcut from the index page. */
   key: string;
   tagline: string;
@@ -16,12 +14,12 @@ export const registry: ClientTool[] = [
   {
     id: "squoosh",
     name: "squoosh",
-    blurb: "Compress and convert images without leaving the page. The webp, avif, jpeg and png codecs run as wasm in a worker, so nothing is uploaded anywhere.",
+    blurb:
+      "Compress and convert images without leaving the page. The webp, avif, jpeg and png codecs run as wasm in a worker, so nothing is uploaded anywhere.",
     tagline: "image compression",
     href: "/squoosh",
     index: "01",
     status: "live",
-    span: "md:col-span-4 md:row-span-2",
     key: "1",
   },
   {
@@ -32,7 +30,6 @@ export const registry: ClientTool[] = [
     href: "/mail-merge",
     index: "02",
     status: "live",
-    span: "md:col-span-2 md:row-span-2",
     key: "2",
   },
 ];

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { downloadZip } from "client-zip";
 import { useParams } from "react-router-dom";
-import { fileNameFor, type MergeDoc } from "@tools/shared";
+import { emptyData, fileNameFor, newDoc, type MergeDoc } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { PageHead, Shell } from "@/components/Shell";
 import { Empty, Field, Input, NumberInput, Section, Segmented, TextButton } from "@/components/ui";
@@ -12,6 +12,7 @@ import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { pad } from "@/lib/format";
 import { CanvasStage } from "./CanvasStage";
 import { DataPanel, LayersPanel } from "./Panels";
+import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { loadGoogleFont } from "./fonts";
 import { PasswordGate, ShareMenu } from "./ShareMenu";
@@ -38,6 +39,8 @@ export function MailMergePage() {
   const [gate, setGate] = useState<{ error: string | null } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [namePattern, setNamePattern] = useState("merge-<name>");
+  // Bumped whenever the shelf changes, so the projects list re-reads itself.
+  const [shelf, setShelf] = useState(0);
 
   const { doc, setDoc, replaceDoc, data, setData, selected, selectedId, setSelectedId } = merge;
 
@@ -135,7 +138,10 @@ export function MailMergePage() {
     try {
       const files = [];
       for (let i = 0; i < rows.length; i++) {
-        files.push({ name: fileNameFor(namePattern, rows[i]!, i, "png"), input: await renderToBlob(doc, rows[i]!, base) });
+        files.push({
+          name: fileNameFor(namePattern, rows[i]!, i, "png"),
+          input: await renderToBlob(doc, rows[i]!, base),
+        });
       }
       download(await downloadZip(files).blob(), `${doc.name || "merge"}.zip`);
       toast(`${rows.length} images zipped`);
@@ -167,6 +173,7 @@ export function MailMergePage() {
         const created = await api.createProject(doc.name, doc, data);
         setProjectId(created.id);
       }
+      setShelf((n) => n + 1);
       toast("saved");
     } catch {
       toast("could not save — is the api running?");
@@ -186,6 +193,7 @@ export function MailMergePage() {
         } else {
           await api.updateProject(id, doc.name, doc, data);
         }
+        setShelf((n) => n + 1);
         const result = await api.share(id, password);
         setShareSlug(result.slug);
         setShareProtected(result.protected);
@@ -200,6 +208,40 @@ export function MailMergePage() {
     },
     [data, doc, projectId, toast],
   );
+
+  const openProject = useCallback(
+    async (id: string) => {
+      setBusy("opening");
+      try {
+        const project = await api.getProject(id);
+        await hydrate(project.doc);
+        setData(project.data);
+        setSelectedId(project.doc.layers[0]?.id ?? null);
+        setProjectId(project.id);
+        // A share link belongs to the project, not to this session; the share
+        // menu mints or recovers it on demand.
+        setShareSlug(null);
+        setShareProtected(false);
+        setReadOnly(false);
+      } catch {
+        toast("could not open that project");
+      } finally {
+        setBusy(null);
+      }
+    },
+    [hydrate, setData, setSelectedId, toast],
+  );
+
+  const startNew = useCallback(() => {
+    const fresh = newDoc();
+    void hydrate(fresh);
+    setData(emptyData);
+    setSelectedId(fresh.layers[0]?.id ?? null);
+    setProjectId(null);
+    setShareSlug(null);
+    setShareProtected(false);
+    setReadOnly(false);
+  }, [hydrate, setData, setSelectedId]);
 
   useHotkey("mod+z", (e) => {
     e.preventDefault();
@@ -222,7 +264,9 @@ export function MailMergePage() {
         value={doc.canvas[key]}
         min={16}
         max={8000}
-        onChange={(e) => setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, [key]: Math.max(16, Number(e.target.value) || 16) } }))}
+        onChange={(e) =>
+          setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, [key]: Math.max(16, Number(e.target.value) || 16) } }))
+        }
       />
     </Field>
   );
@@ -231,7 +275,11 @@ export function MailMergePage() {
     <Shell width="wide">
       <PageHead
         title="mail merge"
-        note={readOnly ? "Read-only — you are looking at a shared merge." : "A base image, text layers, and a spreadsheet. One image comes out per row."}
+        note={
+          readOnly
+            ? "Read-only — you are looking at a shared merge."
+            : "A base image, text layers, and a spreadsheet. One image comes out per row."
+        }
         actions={
           <>
             <TextButton onClick={() => void exportCurrent()}>export row</TextButton>
@@ -243,13 +291,13 @@ export function MailMergePage() {
         }
       />
 
-      {busy ? <p className="text-indigo mb-5 font-mono text-meta uppercase">{busy}…</p> : null}
+      {busy ? <p className="text-indigo text-meta mb-5 font-mono uppercase">{busy}…</p> : null}
 
       {gate ? (
         <PasswordGate error={gate.error} onSubmit={(password) => slug && void openShared(slug, password)} />
       ) : null}
       {shareSlug ? (
-        <p className="text-meta mb-5 font-mono text-meta uppercase">
+        <p className="text-meta text-meta mb-5 font-mono uppercase">
           shared at /mail-merge/s/{shareSlug}
           {shareProtected ? " · locked" : ""}
         </p>
@@ -258,6 +306,17 @@ export function MailMergePage() {
       <div className="grid items-start gap-8 xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:gap-10" hidden={gate !== null}>
         {/* left — document, layers, data */}
         <div className="flex flex-col gap-6 xl:order-1">
+          {/* A share link is somebody else's document; the shelf is not theirs to browse. */}
+          {readOnly ? null : (
+            <ProjectsPanel
+              currentId={projectId}
+              refreshKey={shelf}
+              onOpen={(id) => void openProject(id)}
+              onNew={startNew}
+              onDeleted={(id) => setProjectId((current) => (current === id ? null : current))}
+            />
+          )}
+
           <Section title="document">
             <Field label="name">
               <Input value={doc.name} onChange={(e) => setDoc((prev) => ({ ...prev, name: e.target.value }))} />
@@ -271,7 +330,12 @@ export function MailMergePage() {
                 <TextButton
                   key={preset.label}
                   active={doc.canvas.width === preset.width && doc.canvas.height === preset.height}
-                  onClick={() => setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, width: preset.width, height: preset.height } }))}
+                  onClick={() =>
+                    setDoc((prev) => ({
+                      ...prev,
+                      canvas: { ...prev.canvas, width: preset.width, height: preset.height },
+                    }))
+                  }
                 >
                   {preset.label}
                 </TextButton>
@@ -361,7 +425,7 @@ export function MailMergePage() {
           <Section
             title="output"
             aside={
-              <span className="text-meta font-mono text-meta uppercase">
+              <span className="text-meta text-meta font-mono uppercase">
                 {rows.length > 0 ? `${pad(rows.length)} rows` : "no data"}
               </span>
             }

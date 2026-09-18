@@ -78,6 +78,9 @@
   html {
     -webkit-text-size-adjust: 100%;
     background: var(--color-paper);
+    /* A tooltip or a wide readout must never hand the page a sideways scroll.
+       `clip` rather than `hidden` so the sticky top bar keeps working. */
+    overflow-x: clip;
   }
 
   body {
@@ -211,7 +214,8 @@
     line-height: 1.4;
     padding: 4px 9px;
     border-radius: var(--radius-xs);
-    white-space: nowrap;
+    /* Long tips wrap inside the cap instead of running off the viewport. */
+    width: max-content;
     max-width: min(240px, 100vw - 2rem);
     opacity: 0;
     pointer-events: none;
