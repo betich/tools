@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { FiChevronDown } from "react-icons/fi";
 import {
+  DEFAULT_ENGINE,
+  ENGINES,
   PRESET_IDS,
   PRESETS,
   defaultCompressParams,
   passInfo,
   passesIn,
-  reasonUnsupported,
-  supportNote,
   type CompressParams,
   type PassId,
   type PdfAnalysis,
   type PresetId,
 } from "@tools/shared";
+import { EnginePicker } from "@/components/pdf/EnginePicker";
 import { Button, Section, Sections, Segmented, Toggle } from "@/components/ui";
+import { useEngineSupport, type RowSupport } from "@/hooks/useEngineSupport";
 import { cn } from "@/lib/cn";
 
 /** What each preset is for, in one line under the picker. */
@@ -33,6 +35,7 @@ const CONSEQUENCE: Partial<Record<PassId, string>> = {
 /** `Ebook · 150 dpi · q75 · grayscale` — a run's settings in one line, for its row in the history. */
 export function describeParams(params: CompressParams): string {
   return [
+    ...(params.engine && params.engine !== DEFAULT_ENGINE ? [ENGINES[params.engine]?.label ?? params.engine] : []),
     PRESETS[params.preset]?.label ?? params.preset,
     params.dpiCap ? `${params.dpiCap} dpi` : "full resolution",
     `q${params.quality}`,
@@ -71,8 +74,11 @@ export function RunPanel({
   const toggle = (pass: PassId, on: boolean) =>
     setParams((p) => ({ ...p, advanced: on ? [...p.advanced, pass] : p.advanced.filter((x) => x !== pass) }));
 
+  const support = useEngineSupport(params.engine);
   const optIns = passesIn("advanced");
-  const on = params.advanced.length;
+  // An opt-in the engine can't run is skipped, so it isn't counted as on.
+  const on = params.advanced.filter((p) => support.pass(p).supported).length;
+  const engineLabel = params.engine !== DEFAULT_ENGINE ? ENGINES[params.engine].label : null;
 
   return (
     <Sections>
@@ -84,9 +90,17 @@ export function RunPanel({
         />
         <p className="text-prose text-body font-sans normal-case">{PURPOSE[params.preset]}</p>
         <dl className="flex flex-col">
-          <Fact label="images above" value={params.dpiCap ? `${params.dpiCap} dpi` : "kept"} />
-          <Fact label="quality" value={String(params.quality)} />
-          <Fact label="metadata" value={params.stripMetadata ? "stripped" : "kept"} />
+          <Fact
+            label="images above"
+            value={params.dpiCap ? `${params.dpiCap} dpi` : "kept"}
+            support={support.pass("downsample")}
+          />
+          <Fact label="quality" value={String(params.quality)} support={support.pass("reencode-images")} />
+          <Fact
+            label="metadata"
+            value={params.stripMetadata ? "stripped" : "kept"}
+            support={params.stripMetadata ? support.pass("strip-metadata") : undefined}
+          />
         </dl>
       </Section>
 
@@ -94,15 +108,16 @@ export function RunPanel({
         <p className="text-meta text-body font-sans normal-case">Lossless — the pages look exactly the same.</p>
         <ul className="flex flex-col gap-1.5">
           {passesIn("lossless").map((pass) => {
-            const reason = reasonUnsupported(params.engine, pass);
+            const { reason, note } = support.pass(pass);
             return (
-              <li
-                key={pass}
-                title={reason ?? undefined}
-                className={`text-label text-meta flex items-baseline gap-2.5 font-mono uppercase ${reason ? "opacity-35" : ""}`}
-              >
-                <span aria-hidden className="bg-ink/40 size-1 shrink-0 self-center rounded-full" />
-                {passInfo(pass).label}
+              <li key={pass} className={cn("flex flex-col gap-0.5", reason && "opacity-35")}>
+                <span className="text-label text-meta flex items-baseline gap-2.5 font-mono uppercase">
+                  <span aria-hidden className="bg-ink/40 size-1 shrink-0 self-center rounded-full" />
+                  {passInfo(pass).label}
+                </span>
+                {reason || note ? (
+                  <span className="text-meta text-body pl-3.5 font-sans normal-case leading-snug">{reason ?? note}</span>
+                ) : null}
               </li>
             );
           })}
@@ -117,7 +132,7 @@ export function RunPanel({
           className="group flex min-h-5 cursor-pointer items-center justify-between gap-3 text-left"
         >
           <span className="text-meta text-meta group-hover:text-indigo font-mono uppercase transition-colors duration-200">
-            advanced{on ? ` · ${on} on` : ""}
+            {["advanced", engineLabel, on ? `${on} on` : null].filter(Boolean).join(" · ")}
           </span>
           <FiChevronDown
             aria-hidden
@@ -130,12 +145,15 @@ export function RunPanel({
 
         {advancedOpen ? (
           <div className="flex flex-col gap-6">
-            {/* #13 engine picker goes first, then #10 codecs, above the opt-ins. */}
+            <div className="flex flex-col gap-4">
+              <span className="text-meta text-meta font-mono uppercase">engine</span>
+              <EnginePicker tool="compress" value={params.engine} onChange={(engine) => setParams((p) => ({ ...p, engine }))} />
+            </div>
+            {/* #10 codecs go here, above the opt-ins; dim them with support.codec(id). */}
             <div className="flex flex-col gap-4">
               <span className="text-meta text-meta font-mono uppercase">changes the document</span>
               {optIns.map((pass) => {
-                const reason = reasonUnsupported(params.engine, pass);
-                const note = supportNote(params.engine, pass);
+                const { reason, note } = support.pass(pass);
                 return (
                   <div key={pass} className={cn("flex flex-col gap-1.5", reason && "opacity-35")}>
                     <Toggle
@@ -171,11 +189,16 @@ export function RunPanel({
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+/** A preset number, dimmed with the reason when the engine can't apply it, or with what it leaves out. */
+function Fact({ label, value, support }: { label: string; value: string; support?: RowSupport }) {
+  const said = support?.reason ?? support?.note;
   return (
-    <div className="border-hairline-faint flex items-baseline justify-between gap-3 border-b py-1.5 last:border-b-0">
-      <dt className="text-meta text-meta font-mono uppercase">{label}</dt>
-      <dd className="text-ink text-label font-mono tabular-nums tracking-normal">{value}</dd>
+    <div className={cn("border-hairline-faint flex flex-col gap-0.5 border-b py-1.5 last:border-b-0", support?.reason && "opacity-35")}>
+      <div className="flex items-baseline justify-between gap-3">
+        <dt className="text-meta text-meta font-mono uppercase">{label}</dt>
+        <dd className="text-ink text-label font-mono tabular-nums tracking-normal">{value}</dd>
+      </div>
+      {said ? <dd className="text-meta text-body font-sans normal-case leading-snug">{said}</dd> : null}
     </div>
   );
 }
