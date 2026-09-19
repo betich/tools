@@ -63,7 +63,8 @@ const finished = (row: Row & { kind: UploadKind }): UploadedFile => ({ id: row.i
 /** Bytes part `n` must be: every part is full-size but the last. */
 const partBytes = (row: Row, n: number) => (n < row.parts - 1 ? row.part_size : row.bytes - row.part_size * (row.parts - 1));
 
-async function drop(uploadId: string): Promise<void> {
+/** Deletes an upload's row and files now — a discarded job's inputs go this way. */
+export async function dropUpload(uploadId: string): Promise<void> {
   db.run("DELETE FROM uploads WHERE id = ?", [uploadId]);
   await rm(dirOf(uploadId), { recursive: true, force: true });
 }
@@ -186,7 +187,7 @@ export async function sweepUploads(): Promise<void> {
     .query<{ id: string }, [number]>("SELECT id FROM uploads WHERE touched_at < ?")
     .all(Date.now() - env.jobTtlMs)
     .filter((r) => !assembling.has(r.id));
-  for (const { id: uploadId } of stale) await drop(uploadId);
+  for (const { id: uploadId } of stale) await dropUpload(uploadId);
   const known = new Set(db.query<{ id: string }, []>("SELECT id FROM uploads").all().map((r) => r.id));
   for (const name of await readdir(UPLOADS).catch(() => [] as string[])) {
     if (!known.has(name)) await rm(join(UPLOADS, name), { recursive: true, force: true });
@@ -298,7 +299,7 @@ export const pdfUploads = new Elysia({ prefix: "/api/pdf/uploads" })
       }
       const kind = await job;
       if (!kind) {
-        await drop(row.id);
+        await dropUpload(row.id);
         return refuse(set, 415, "that is not a PDF or an image we can read — PDF, JPEG, PNG, WebP, AVIF, GIF, HEIC and TIFF are");
       }
       return finished({ ...row, kind });

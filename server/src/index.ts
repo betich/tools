@@ -8,6 +8,7 @@ import { admin } from "./routes/admin";
 import { assets } from "./routes/assets";
 import { fonts } from "./routes/fonts";
 import { health } from "./routes/health";
+import { pdfJobs } from "./routes/pdf-jobs";
 import { pdfUploads } from "./routes/pdf-uploads";
 import { projects, shares } from "./routes/projects";
 import { render } from "./routes/render";
@@ -56,6 +57,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: Math.max(env.maxBod
   .use(admin)
   .use(worker)
   .use(pdfUploads)
+  .use(pdfJobs)
   .listen(env.port);
 
 console.log(`  tools api  ->  http://localhost:${env.port}`);

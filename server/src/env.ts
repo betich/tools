@@ -27,6 +27,11 @@ export const env = {
   maxPartBodyBytes: UPLOAD_PART_BYTES + 1024 * 1024,
   /** Upload sessions (and the jobs built on them) not touched for this long are swept. */
   jobTtlMs: int(process.env.JOB_TTL_MS, 60 * 60 * 1000),
+  /** How often expired PDF jobs are looked for. */
+  jobSweepMs: int(process.env.JOB_SWEEP_MS, 5 * 60_000),
+  /** Open job event streams, per caller and in all. */
+  maxStreamsPerCaller: int(process.env.MAX_STREAMS_PER_CALLER, 6),
+  maxStreams: int(process.env.MAX_STREAMS, 200),
   /** Unfinished uploads one caller may hold open at once. */
   maxOpenUploads: int(process.env.MAX_OPEN_UPLOADS, 8),
   /** A saved project's doc + data, serialized. */

@@ -60,8 +60,14 @@ services:
     restart: unless-stopped
     environment:
       WORKER_PORT: 8788
+      # Must match the api's DATA_DIR and JOBS_DIR: the job table is in its
+      # SQLite, the uploads and results under its jobs dir.
       DATA_DIR: /data
+      JOBS_DIR: /bulk/jobs
       WORK_DIR: /bulk/pdf-work
+      # mem_limit is not enforced on this Pi (cgroup_disable=memory); this
+      # budget, applied to every child through prlimit, is the real cap.
+      WORKER_MEMORY_BYTES: ${WORKER_MEMORY_BYTES:-3221225472}
     mem_limit: 3g
     memswap_limit: 3g
     cpus: 3
