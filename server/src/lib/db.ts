@@ -34,6 +34,27 @@ db.exec(`
     created_at   TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS uploads (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    bytes      INTEGER NOT NULL,
+    part_size  INTEGER NOT NULL,
+    parts      INTEGER NOT NULL,
+    caller     TEXT NOT NULL,
+    kind       TEXT,
+    touched_at INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS uploads_touched ON uploads(touched_at);
+
+  CREATE TABLE IF NOT EXISTS upload_parts (
+    upload_id TEXT NOT NULL REFERENCES uploads(id) ON DELETE CASCADE,
+    n         INTEGER NOT NULL,
+    sha256    TEXT NOT NULL,
+    PRIMARY KEY (upload_id, n)
+  );
+
   CREATE TABLE IF NOT EXISTS cache (
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,

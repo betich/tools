@@ -28,6 +28,8 @@ services:
       # /mnt/media); SQLite stays on the named volume, on the SD card.
       ASSETS_DIR: /bulk/assets
       FONTS_DIR: /bulk/fonts
+      # Upload parts and PDF job files; swept an hour after they are last touched.
+      JOBS_DIR: /bulk/jobs
       MIN_FREE_BYTES: ${MIN_FREE_BYTES:-2147483648}
       MAX_ASSET_BYTES: ${MAX_ASSET_BYTES:-21474836480}
       RENDER_CONCURRENCY: ${RENDER_CONCURRENCY:-1}
