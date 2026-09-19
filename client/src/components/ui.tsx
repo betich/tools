@@ -1,5 +1,6 @@
 import { createContext, useContext, type ButtonHTMLAttributes, type ComponentProps, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { normaliseHex } from "@/lib/color";
 
 /* ───────────────────────────────────────────────────────────────────────────
    Primitives for the instrument panel.
@@ -228,7 +229,7 @@ export function ColorInput({ value, onChange, className }: { value: string; onCh
         className,
       )}
     >
-      <input type="color" value={normaliseHex(value)} onChange={(e) => onChange(e.target.value)} className="size-5 shrink-0" aria-label="colour" />
+      <input type="color" value={normaliseHex(value, { short: true }) ?? "#000000"} onChange={(e) => onChange(e.target.value)} className="size-5 shrink-0" aria-label="colour" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -238,13 +239,6 @@ export function ColorInput({ value, onChange, className }: { value: string; onCh
       />
     </span>
   );
-}
-
-function normaliseHex(value: string): string {
-  const v = value.trim();
-  if (/^#[0-9a-f]{6}$/i.test(v)) return v;
-  if (/^#[0-9a-f]{3}$/i.test(v)) return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
-  return "#000000";
 }
 
 export function Slider({
@@ -393,4 +387,14 @@ export function Stat({ label, value, accent }: { label: string; value: ReactNode
       <span className={cn("font-mono text-body tabular-nums", accent ? "text-indigo" : "text-ink")}>{value}</span>
     </div>
   );
+}
+
+/** A sentence in the panel: Inter, sentence case, the meta size. */
+export function Prose({ children }: { children: ReactNode }) {
+  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
+}
+
+/** A number inside uppercase chrome: normal tracking, tabular figures; `accent` for the one that matters. */
+export function Value({ children, accent }: { children: ReactNode; accent?: boolean }) {
+  return <span className={cn("tabular-nums tracking-normal", accent ? "text-indigo" : "text-ink")}>{children}</span>;
 }

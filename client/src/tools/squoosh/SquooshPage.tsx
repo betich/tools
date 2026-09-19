@@ -1,19 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { downloadZip } from "client-zip";
 import { FiDownload, FiX } from "react-icons/fi";
 import { Dropzone } from "@/components/Dropzone";
 import { PageHead, Shell } from "@/components/Shell";
 import { Empty, Field, IconButton, Section, Segmented, Slider, Stat, TextButton } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/cn";
 import { bytes, delta, ms, pad } from "@/lib/format";
 import { download } from "@/lib/download";
+import { IMAGE_ACCEPT } from "@/lib/codecs";
 import { useCodec } from "./useCodec";
 import { formatMeta, formats, type Job, type OutputFormat } from "./types";
 
 export function SquooshPage() {
-  const { options, setOptions, jobs, addFiles, remove, clear, totals, busy, outputName } = useCodec();
+  const { options, setOptions, jobs, addFiles, remove, clear, totals, busy, outputName, preview } = useCodec();
   const toast = useToast();
   const [compare, setCompare] = useState<Job | null>(null);
 
@@ -55,6 +57,7 @@ export function SquooshPage() {
               options={formats.map((f) => ({ value: f.value, label: f.label }))}
               className="flex-wrap"
             />
+            {meta.note ? <p className="text-meta font-sans text-label">{meta.note}</p> : null}
           </Section>
 
           <Section title="settings">
@@ -114,9 +117,9 @@ export function SquooshPage() {
               const n = addFiles(files);
               if (n === 0) toast("no images in that drop");
             }}
-            accept="image/*"
+            accept={IMAGE_ACCEPT}
             label="drop images, or choose files"
-            hint="jpeg · png · webp · avif · gif"
+            hint="jpeg · png · webp · avif · gif · heic"
           />
 
           <Section
@@ -148,7 +151,7 @@ export function SquooshPage() {
         </div>
       </div>
 
-      {compare ? <Compare job={compare} name={outputName(compare)} onClose={() => setCompare(null)} /> : null}
+      {compare ? <Compare job={compare} name={outputName(compare)} onClose={() => setCompare(null)} preview={preview} /> : null}
     </Shell>
   );
 }
@@ -220,18 +223,28 @@ function JobRow({
 }
 
 /** Before/after lightbox. Hold space, or use the toggle, to flip back to the original. */
-function Compare({ job, name, onClose }: { job: Job; name: string; onClose: () => void }) {
+function Compare({
+  job,
+  name,
+  onClose,
+  preview,
+}: {
+  job: Job;
+  name: string;
+  onClose: () => void;
+  preview: (file: File) => Promise<Blob>;
+}) {
   const [showing, setShowing] = useState<"after" | "before">("after");
+  // The original as-is, until the browser refuses it (HEIC outside Safari); then a decoded copy.
+  const [beforeBlob, setBeforeBlob] = useState<Blob>(job.file);
 
-  const beforeUrl = useMemo(() => URL.createObjectURL(job.file), [job.file]);
-  const afterUrl = useMemo(() => (job.outBlob ? URL.createObjectURL(job.outBlob) : ""), [job.outBlob]);
+  const beforeUrl = useObjectUrl(beforeBlob);
+  const afterUrl = useObjectUrl(job.outBlob);
 
-  useEffect(() => {
-    return () => {
-      URL.revokeObjectURL(beforeUrl);
-      if (afterUrl) URL.revokeObjectURL(afterUrl);
-    };
-  }, [beforeUrl, afterUrl]);
+  const onImageError = () => {
+    if (showing !== "before" || beforeBlob !== job.file) return;
+    preview(job.file).then(setBeforeBlob, () => undefined);
+  };
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => e.code === "Space" && (e.preventDefault(), setShowing("before"));
@@ -254,11 +267,12 @@ function Compare({ job, name, onClose }: { job: Job; name: string; onClose: () =
       aria-label={`compare ${name}`}
     >
       <img
-        src={showing === "after" ? afterUrl : beforeUrl}
+        src={(showing === "after" ? afterUrl : beforeUrl) ?? undefined}
         alt={name}
         className="checkers max-h-full max-w-full rounded-md object-contain"
         style={{ boxShadow: "var(--shadow-lightbox)" }}
         onClick={(e) => e.stopPropagation()}
+        onError={onImageError}
       />
       <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
         <Segmented

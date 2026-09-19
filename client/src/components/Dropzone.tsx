@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { filesFromDrop } from "@/lib/droppedFiles";
 import { Button } from "./ui";
 
 /**
@@ -16,6 +17,7 @@ export function Dropzone({
   children,
   cta,
   onPick,
+  folders = false,
 }: {
   onFiles: (files: File[]) => void;
   accept?: string;
@@ -31,6 +33,8 @@ export function Dropzone({
   cta?: ReactNode;
   /** Replaces the hidden input — e.g. a picker that can hand back a file handle. */
   onPick?: () => void;
+  /** Walk into dropped folders and hand over the files inside, each with its path in `webkitRelativePath`. */
+  folders?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -53,7 +57,8 @@ export function Dropzone({
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
-        handle(e.dataTransfer.files);
+        if (!folders) return handle(e.dataTransfer.files);
+        void filesFromDrop(e.dataTransfer).then((files) => files.length > 0 && onFiles(files));
       }}
       className={cn(
         "flex flex-col items-center justify-center gap-2.5 rounded-card border border-dashed px-6 py-10 text-center transition-colors duration-200",

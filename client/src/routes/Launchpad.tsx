@@ -37,11 +37,12 @@ export function Launchpad() {
       });
   }, []);
 
-  // 1…4 jump straight to whatever is live in that slot.
+  // 1…5 jump straight to whatever is live in that slot.
   useHotkey("1", () => tools[0] && navigate(tools[0].href));
   useHotkey("2", () => tools[1] && navigate(tools[1].href));
   useHotkey("3", () => tools[2] && navigate(tools[2].href));
   useHotkey("4", () => tools[3] && navigate(tools[3].href));
+  useHotkey("5", () => tools[4] && navigate(tools[4].href));
 
   return (
     <Shell width="wide">

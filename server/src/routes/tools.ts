@@ -38,6 +38,14 @@ export const registry: ToolMeta[] = [
     index: "04",
     status: "wip",
   },
+  {
+    id: "media2media",
+    name: "media2media",
+    blurb: "convert images, video and gifs in the browser. nothing is uploaded.",
+    href: "/media2media",
+    index: "05",
+    status: "wip",
+  },
 ];
 
 export const tools = new Elysia().get("/api/tools", () => registry);
