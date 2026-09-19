@@ -5,8 +5,10 @@ import {
   imageDpi,
   type EngineId,
   type ImageDpi,
+  type MergeItem,
   type MergeItemOptions,
   type MergeOutput,
+  type MergePageRun,
   type MergeParams,
   type UploadedFile,
   type UploadKind,
@@ -245,16 +247,33 @@ export function useMergeFiles() {
   return { entries, add, remove, move, moveTo, setLayout, layoutToAll, retry, clear };
 }
 
-/** The merge request, once every file is on the server; null until then. `engine` is #18's picker. */
-export function mergeParams(entries: MergeEntry[], output: MergeOutput, engine: EngineId = DEFAULT_ENGINE): MergeParams | null {
+/**
+ * The merge request, once every file is on the server; null until then.
+ * `engine` is #18's picker. `pages` is the page view's order (#37) as
+ * `orderRequest` hands it over — only when it differs from every file whole,
+ * so an untouched page view sends exactly the file-level request.
+ */
+export function mergeParams(
+  entries: MergeEntry[],
+  output: MergeOutput,
+  engine: EngineId = DEFAULT_ENGINE,
+  pages?: MergePageRun[],
+): MergeParams | null {
+  const items = mergeItems(entries);
+  if (!items) return null;
+  const title = output.title?.trim() || null;
+  return { items, output: { ...output, title }, engine, ...(pages ? { pages } : {}) };
+}
+
+/** One item per entry, in list order — so an item's index is its entry's — once every file is uploaded; null until then. */
+export function mergeItems(entries: MergeEntry[]): MergeItem[] | null {
   if (entries.length === 0) return null;
-  const items: MergeParams["items"] = [];
+  const items: MergeItem[] = [];
   for (const e of entries) {
     if (e.upload.phase !== "done") return null;
     items.push({ upload: e.upload.result.id, name: e.file.name, kind: e.upload.result.kind, layout: e.layout });
   }
-  const title = output.title?.trim() || null;
-  return { items, output: { ...output, title }, engine };
+  return items;
 }
 
 /** The title a merge gets when none is typed: the first file's name without its extension, as the server does. */

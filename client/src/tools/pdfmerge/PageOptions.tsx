@@ -1,6 +1,26 @@
-import { PAPER_IDS, PAPER_SIZES, type MergeItemOptions, type PageFit, type PageOrientation, type MarginUnit } from "@tools/shared";
-import { Field, NumberInput, Section, Segmented, Select, TextButton } from "@/components/ui";
+import { useRef, useState } from "react";
+import {
+  formatPageRange,
+  PAPER_IDS,
+  PAPER_SIZES,
+  parsePageRange,
+  type MergeItemOptions,
+  type PageFit,
+  type PageOrientation,
+  type MarginUnit,
+} from "@tools/shared";
+import { Field, Input, NumberInput, Section, Segmented, Select, TextButton } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { pad } from "@/lib/format";
 import type { MergeEntry } from "./useMergeFiles";
+
+/** The selected PDF's pages in the merge (#37): its count as the order knows it, the pages kept in output order, and the two ways to change them. */
+export type FilePages = {
+  count: number | null | undefined;
+  kept: number[];
+  onApply: (pages: number[]) => void;
+  onReset: () => void;
+};
 
 const MODES: { value: MergeItemOptions["mode"]; label: string }[] = [
   { value: "image", label: "image size" },
@@ -29,10 +49,13 @@ const UNITS: { value: MarginUnit; label: string }[] = [
 export function PageOptions({
   entry,
   images,
+  pages,
   onChange,
   onApplyToAll,
 }: {
   entry: MergeEntry | null;
+  /** For a PDF: its pages in the merge, or null while the order doesn't know it (not uploaded yet). */
+  pages: FilePages | null;
   /** How many images the list holds, so "apply to all" only offers itself when it would do something. */
   images: number;
   onChange: (change: Partial<MergeItemOptions>) => void;
@@ -40,13 +63,7 @@ export function PageOptions({
 }) {
   if (!entry) return null;
 
-  if (entry.kind === "pdf") {
-    return (
-      <Section title="page">
-        <p className="text-prose font-sans text-body normal-case">A PDF goes in as it is: every page, at its own size.</p>
-      </Section>
-    );
-  }
+  if (entry.kind === "pdf") return <PdfPages key={entry.key} pages={pages} />;
 
   const o = entry.layout;
   return (
@@ -110,6 +127,81 @@ export function PageOptions({
           </div>
         </div>
       )}
+    </Section>
+  );
+}
+
+/**
+ * Which of a PDF's pages go in, as a range to type: "1-3, 5, 8-", in the order
+ * they should come out. The box shows the pages kept now; ↵ or leaving the
+ * box applies what was typed, escape puts it back. A range that can't be read
+ * says why under the box and changes nothing. Reset brings every page back,
+ * in order, where the file's first page sits.
+ */
+function PdfPages({ pages }: { pages: FilePages | null }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Escape blurs the box, and the blur must not apply what escape just threw away.
+  const dropped = useRef(false);
+  const count = pages?.count;
+
+  if (!pages || typeof count !== "number") {
+    return (
+      <Section title="pages">
+        <p className="text-prose font-sans text-body normal-case">
+          {count === null
+            ? "The server couldn't count this file's pages — it may be locked or damaged — so they can't be picked. It can only go in whole."
+            : pages
+              ? "Counting this file's pages…"
+              : "A PDF goes in as it is: every page, at its own size. Its pages can be picked once it has uploaded."}
+        </p>
+      </Section>
+    );
+  }
+
+  const whole = pages.kept.length === count && pages.kept.every((p, i) => p === i);
+  const shown = formatPageRange(pages.kept);
+  const value = draft ?? shown;
+  const forget = () => (setDraft(null), setError(null));
+
+  const apply = () => {
+    if (dropped.current) return void (dropped.current = false);
+    if (draft === null) return;
+    const text = draft.trim();
+    if (text === shown) return forget();
+    const read = parsePageRange(text, count);
+    if (!read.ok) return setError(read.error);
+    forget();
+    pages.onApply(read.pages);
+  };
+
+  return (
+    <Section
+      title={`pages · ${pad(pages.kept.length)} of ${pad(count)}`}
+      aside={whole ? undefined : <TextButton onClick={() => (forget(), pages.onReset())}>reset</TextButton>}
+    >
+      <Field label="keep" changed={draft !== null && draft.trim() !== shown}>
+        <Input
+          value={value}
+          placeholder="1-3, 5, 8-"
+          spellCheck={false}
+          autoComplete="off"
+          aria-invalid={error ? true : undefined}
+          onChange={(e) => (setDraft(e.target.value), setError(null))}
+          onBlur={apply}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") apply();
+            else if (e.key === "Escape") {
+              dropped.current = true;
+              forget();
+              e.currentTarget.blur();
+            }
+          }}
+        />
+      </Field>
+      <p className={cn("font-sans text-body normal-case", error ? "text-prose" : "text-meta")} aria-live="polite">
+        {error ?? "Type pages in the order they should go out: 8- runs to the last page, 5-3 counts down."}
+      </p>
     </Section>
   );
 }
