@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "@/components/Shell";
 import { Empty } from "@/components/ui";
 import { ToastProvider } from "@/hooks/useToast";
@@ -12,6 +12,7 @@ const Admin = lazy(() => import("@/routes/Admin").then((m) => ({ default: m.Admi
 const MailMerge = lazy(() => import("@/tools/mailmerge/MailMergePage").then((m) => ({ default: m.MailMergePage })));
 const PdfCompress = lazy(() => import("@/tools/pdfcompress/PdfCompress").then((m) => ({ default: m.PdfCompress })));
 const PdfMerge = lazy(() => import("@/tools/pdfmerge/PdfMerge").then((m) => ({ default: m.PdfMerge })));
+const Media2Media = lazy(() => import("@/tools/media2media/Media2MediaPage").then((m) => ({ default: m.Media2MediaPage })));
 
 export function App() {
   return (
@@ -26,6 +27,8 @@ export function App() {
             <Route path="/mail-merge/p/:id" element={<MailMerge />} />
             <Route path="/pdf-compress" element={<PdfCompress />} />
             <Route path="/pdf-merge" element={<PdfMerge />} />
+            <Route path="/media2media" element={<Navigate to="/media2media/image" replace />} />
+            <Route path="/media2media/:tab" element={<Media2Media />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

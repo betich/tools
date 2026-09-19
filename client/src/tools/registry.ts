@@ -56,4 +56,15 @@ export const registry: ClientTool[] = [
     key: "4",
     needsServer: true,
   },
+  {
+    id: "media2media",
+    name: "media2media",
+    blurb:
+      "Convert images, video and GIFs. Every codec runs in this browser, on your own hardware, so nothing is uploaded and the server can be down.",
+    tagline: "image, video and gif conversion",
+    href: "/media2media",
+    index: "05",
+    status: "wip",
+    key: "5",
+  },
 ];
