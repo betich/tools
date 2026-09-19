@@ -1,6 +1,6 @@
 import { copyFile, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { PdfAnalysis, RunResult } from "@tools/shared";
+import { repairNote, type PdfAnalysis, type RunResult } from "@tools/shared";
 import { readParams, runPipeline } from "../compress";
 import { outputName, registerHandler } from "../jobs";
 import { analyseFile } from "./analyse";
@@ -22,18 +22,20 @@ registerHandler("compress", async (ctx) => {
   const outcome = await runPipeline(ctx, input, params);
 
   const produced = outcome.file === input.path ? input.size : (await stat(outcome.file)).size;
-  const keptOriginal = produced >= input.size;
+  const inputAnalysis = (ctx.analysis as PdfAnalysis | null) ?? null;
+  // An encrypted input the user wants saved without its password is never served as it came (#15).
+  const mustRewrite = !!inputAnalysis?.flags.encrypted && !params.reencrypt && outcome.file !== input.path;
+  const keptOriginal = produced >= input.size && !mustRewrite;
   const target = join(ctx.outDir, OUTPUT);
   // The work dir and the results dir can sit on different drives.
   if (keptOriginal) await copyFile(input.path, target);
   else await rename(outcome.file, target).catch(() => copyFile(outcome.file, target));
 
   const bytes = keptOriginal ? input.size : produced;
-  const inputAnalysis = (ctx.analysis as PdfAnalysis | null) ?? null;
   const analysis =
     keptOriginal && inputAnalysis && !inputAnalysis.truncated
       ? inputAnalysis
-      : await analyseFile(ctx, target, bytes, { stage: "measuring the result" });
+      : await analyseFile(ctx, target, bytes, { stage: "measuring the result", password: ctx.job.password });
 
   const result: RunResult = {
     inputBytes: input.size,
@@ -48,8 +50,8 @@ registerHandler("compress", async (ctx) => {
   return { result, file: { name: OUTPUT, downloadName: result.fileName } };
 });
 
-/** The analysis found a broken xref; the rewrite carries the repair into the output. */
+/** The analysis found broken objects; the rewrite carries the repair into the output. The only repair note a run gets. */
 function repairNotes(analysis: PdfAnalysis | null): string[] {
-  const n = analysis?.flags.repaired ?? 0;
-  return n > 0 ? [`Repaired ${n} broken ${n === 1 ? "object" : "objects"}.`] : [];
+  const note = repairNote(analysis?.flags.repaired ?? 0);
+  return note ? [note] : [];
 }

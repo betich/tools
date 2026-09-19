@@ -5,5 +5,6 @@
 import "./jpegs";
 import "./qpdf";
 import "./mupdf";
+import "./special";
 
 export { readParams, registerStep, runPipeline, wantedPasses, type CompressRun, type Phase, type Step } from "./pipeline";
