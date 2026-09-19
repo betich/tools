@@ -15,6 +15,7 @@ import { bytes } from "@/lib/format";
 import { pdfJobs } from "@/lib/pdfjobs";
 import { change, colourName, pageRanges } from "./analysis";
 import { DpiControl, PutBack, QualityControl } from "./controls";
+import { useJxlConfirm } from "./JxlDialog";
 import {
   asCropResult,
   boxAround,
@@ -31,7 +32,7 @@ import type { CropState } from "./useCrop";
 const PER_IMAGE: CodecId[] = [
   "mozjpeg",
   "openjpeg",
-  // #14: "libjxl" joins here once its warning dialog exists; until then it is offered nowhere.
+  "libjxl", // experimental: picking it goes through `JxlDialog` first
   "flate",
 ];
 
@@ -77,6 +78,13 @@ export function CropPanel({
     onOverride(pruneOverride(next));
   };
   const lossless = !CODECS[eff.codec].lossy;
+  const jxl = useJxlConfirm();
+  const pickCodec = (codec: CodecId | "") => {
+    if (!codec) return clear("codec");
+    // The select is controlled, so until the dialog is confirmed it keeps showing the old choice.
+    if (CODECS[codec].availability === "experimental") jxl.ask(() => set({ codec }));
+    else set({ codec });
+  };
 
   return (
     <div className="flex flex-col gap-6 px-1 pb-6 pt-4">
@@ -108,6 +116,11 @@ export function CropPanel({
             <Field
               label="codec"
               changed={o.codec !== undefined}
+              hint={
+                CODECS[eff.codec].availability === "experimental"
+                  ? "Experimental — almost no viewer opens JPEG XL in PDF yet."
+                  : undefined
+              }
               action={
                 o.codec !== undefined ? <PutBack label="back to the run's" onClick={() => clear("codec")} /> : null
               }
@@ -115,7 +128,7 @@ export function CropPanel({
               <Select
                 value={o.codec ?? ""}
                 disabled={eff.skip}
-                onChange={(e) => (e.target.value ? set({ codec: e.target.value as CodecId }) : clear("codec"))}
+                onChange={(e) => pickCodec(e.target.value as CodecId | "")}
               >
                 <option value="">as the run · {CODEC_SHORT[params.codec]}</option>
                 {PER_IMAGE.map((id) => (
@@ -163,8 +176,9 @@ export function CropPanel({
           {canPick(image) && !eff.skip ? <Overview image={image} box={box} onBox={onBox} /> : null}
         </div>
 
-        <Compare jobId={jobId} image={image} crop={crop} skipped={eff.skip} />
+        <Compare jobId={jobId} image={image} crop={crop} skipped={eff.skip} codec={eff.codec} />
       </div>
+      {jxl.dialog}
     </div>
   );
 }
@@ -184,11 +198,14 @@ function Compare({
   image,
   crop,
   skipped,
+  codec,
 }: {
   jobId: string;
   image: PdfImage;
   crop: CropState;
   skipped: boolean;
+  /** The codec this image is written with, run or override. */
+  codec: CodecId;
 }) {
   if (skipped) {
     return (
@@ -234,6 +251,9 @@ function Compare({
           src={result && shown ? pdfJobs.taskFileUrl(jobId, shown.id, result.after) : null}
           aspect={aspect}
           stale={crop.stale}
+          // The PDF renderer can't decode JPEG XL, so the worker draws this from its own decode — say so, but only
+          // once the picture on show is the one drawn under these settings. Under the picture, so both stay level.
+          source={codec === "libjxl" && !crop.stale && result ? "decoded jpeg xl" : null}
         />
       </div>
 
@@ -262,12 +282,15 @@ function Figure({
   src,
   aspect,
   stale,
+  source,
 }: {
   label: string;
   value: ReactNode;
   src: string | null;
   aspect: string;
   stale?: boolean;
+  /** What the picture was drawn from, when it isn't the PDF itself. */
+  source?: string | null;
 }) {
   return (
     <figure className="flex min-w-0 flex-col gap-2">
@@ -288,6 +311,7 @@ function Figure({
           />
         ) : null}
       </div>
+      {source ? <span className="text-meta text-meta font-mono uppercase">{source}</span> : null}
     </figure>
   );
 }
