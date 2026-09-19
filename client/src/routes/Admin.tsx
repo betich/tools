@@ -238,6 +238,13 @@ const ROUTES: Record<string, string> = {
   "GET /api/share/:slug": "Opened a shared project",
   "POST /api/render": "Rendered a preview on the server",
   "POST /api/render/batch": "Exported a batch",
+  "POST /api/pdf/uploads": "Started a PDF tools upload",
+  "POST /api/pdf/uploads/:id/complete": "Uploaded a file for the PDF tools",
+  "POST /api/pdf/jobs": "Opened a PDF job",
+  "DELETE /api/pdf/jobs/:id": "Discarded a PDF job",
+  "POST /api/pdf/jobs/:id/tasks": "Ran a PDF task",
+  "GET /api/pdf/jobs/:id/result": "Downloaded a PDF result",
+  "GET /api/pdf/worker": "Checked the PDF worker",
 };
 
 const count = (n: number, noun: string) => `${n.toLocaleString()} ${noun}${n === 1 ? "" : "s"}`;

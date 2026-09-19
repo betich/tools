@@ -10,6 +10,8 @@ export type RunOptions = {
   memoryBytes: number;
   timeoutMs: number;
   cwd?: string;
+  /** Added to the worker's own environment. */
+  env?: Record<string, string>;
   /** Cancels the run, e.g. when the user abandons the job. */
   signal?: AbortSignal;
   /** Keep stdout — off by default; most tools write their output to a file. */
@@ -36,6 +38,7 @@ export async function run(cmd: string[], opts: RunOptions): Promise<RunResult> {
   const started = Date.now();
   const child = Bun.spawn(["prlimit", `--as=${Math.floor(opts.memoryBytes)}`, "--", ...cmd], {
     cwd: opts.cwd,
+    env: opts.env ? { ...process.env, ...opts.env } : undefined,
     stdin: "ignore",
     stdout: opts.stdout ? "pipe" : "ignore",
     stderr: "pipe",

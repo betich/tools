@@ -1,9 +1,10 @@
 import { env } from "./env";
 import { lastBeat, startHeartbeat, startedAt } from "./heartbeat";
+import "./handlers";
 import { startJobs } from "./jobs";
 
 startHeartbeat();
-startJobs();
+void startJobs();
 
 // For the container probe only; the API learns about the worker from the heartbeat row.
 Bun.serve({
