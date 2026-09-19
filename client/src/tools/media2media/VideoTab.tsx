@@ -26,6 +26,7 @@ import {
   type SourceInfo,
   type VideoEdit,
 } from "./video/settings";
+import { SendToGif } from "./video/SendToGif";
 import { readSource, SourceError, VIDEO_ACCEPT, looksLikeVideo } from "./video/source";
 import {
   canSaveToDisk,
@@ -291,6 +292,16 @@ function Editor({
           blocker={blocker}
           saveToDisk={caps?.saveToDisk ?? canSaveToDisk()}
           onExport={run}
+        />
+
+        {/* frameHook: the tab's active hook (the chroma keyer, #30), once there is one. */}
+        <SendToGif
+          file={file}
+          source={source}
+          edit={edit}
+          frameHook={null}
+          disabled={busy}
+          onStart={() => playback.setPlaying(false)}
         />
       </div>
     </div>
