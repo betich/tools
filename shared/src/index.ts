@@ -7,3 +7,4 @@ export * from "./pdf";
 export * from "./pdfcaps";
 export * from "./uploads";
 export * from "./worker";
+export * from "./pageLayout";

@@ -44,7 +44,7 @@ export function useUpload() {
       if (control.current === ctrl) setState({ phase: "done", file, progress, result });
       return result;
     } catch (error) {
-      if (control.current === ctrl) setState({ phase: "failed", file, progress, message: describe(error) });
+      if (control.current === ctrl) setState({ phase: "failed", file, progress, message: uploadFailure(error) });
       return null;
     } finally {
       cancelAnimationFrame(frame);
@@ -68,7 +68,7 @@ export function useUpload() {
 }
 
 /** What to say when an upload stops. The server's refusals are already sentences, so they pass through as-is. */
-function describe(error: unknown): string {
+export function uploadFailure(error: unknown): string {
   if (error instanceof DOMException && error.name === "AbortError") return "Stopped. Upload the same file again to pick up where it left off.";
   if (error instanceof ApiError || error instanceof UploadInterrupted) return error.message;
   return "The API could not be reached. Try again in a moment.";
