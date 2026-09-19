@@ -1,10 +1,291 @@
-import { Empty } from "@/components/ui";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import type { JobInfo, PdfAnalysis } from "@tools/shared";
+import { Dropzone } from "@/components/Dropzone";
+import { QueueNotice } from "@/components/QueueNotice";
+import { RetentionNote } from "@/components/RetentionNote";
+import { Empty, Section, TextButton } from "@/components/ui";
+import { UploadProgress } from "@/components/UploadProgress";
+import { useJob } from "@/hooks/useJob";
+import { useToast } from "@/hooks/useToast";
+import { useUpload } from "@/hooks/useUpload";
+import { bytes } from "@/lib/format";
+import { asAnalysis } from "./analysis";
+import { FontTable } from "./FontTable";
+import { ImageTable } from "./ImageTable";
+import { RunPanel } from "./RunPanel";
+import { SizeBreakdown } from "./SizeBreakdown";
 
-/** Upload, analysis and settings land here (#8 onward). Only mounted while the api answers. */
+/**
+ * The open job's id, per tab. A reload re-attaches to it while the server still
+ * has it (an hour past the last action); sessionStorage rather than the address
+ * so a copied link never hands someone else the file.
+ */
+const STORE = "tools.pdfcompress.job";
+
+const stored = (): string | null => {
+  try {
+    return sessionStorage.getItem(STORE);
+  } catch {
+    return null;
+  }
+};
+const remember = (id: string | null) => {
+  try {
+    if (id) sessionStorage.setItem(STORE, id);
+    else sessionStorage.removeItem(STORE);
+  } catch {
+    // Storage blocked: the page still works, it just forgets on reload.
+  }
+};
+
+const isPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+
+/**
+ * The compress page's state owner: one PDF, dropped or picked, goes up with
+ * progress, becomes a job, and the job's `analyse` task runs on the worker
+ * while the queue notice says where it stands. Then the analysis — where the
+ * bytes go, every image and every font — with the settings column (#9) beside
+ * it. The retention note and discard stay visible from the moment the server
+ * holds anything. Only mounted while the api answers.
+ */
 export function CompressWorkbench() {
+  const upload = useUpload();
+  const job = useJob();
+  const toast = useToast();
+  const [restoring, setRestoring] = useState(() => stored() !== null);
+  const [creating, setCreating] = useState(false);
+
+  // Re-attach to this tab's job after a reload. `attach` reports a vanished job as `expired`.
+  useEffect(() => {
+    const id = stored();
+    if (!id) return;
+    void job.attach(id).finally(() => setRestoring(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
+
+  useEffect(() => {
+    if (job.expired) remember(null);
+  }, [job.expired]);
+
+  const open = useCallback(
+    async (uploadId: string) => {
+      setCreating(true);
+      const created = await job.createJob({ tool: "compress", uploads: [uploadId] });
+      setCreating(false);
+      if (created) remember(created.id);
+    },
+    [job],
+  );
+
+  const pick = useCallback(
+    async (files: File[]) => {
+      const file = files.find(isPdf);
+      if (!file) return toast(files.length === 1 ? `${files[0]!.name} is not a pdf` : "none of those is a pdf");
+      if (files.length > 1) toast("one pdf at a time — took the first");
+      const done = await upload.start(file);
+      if (done) await open(done.id);
+    },
+    [upload, open, toast],
+  );
+
+  const discard = useCallback(async () => {
+    if (!(await job.discard())) return;
+    remember(null);
+    upload.reset();
+  }, [job, upload]);
+
+  const info = job.job;
+
+  if (restoring) {
+    return (
+      <Frame>
+        <Empty>reopening your file…</Empty>
+      </Frame>
+    );
+  }
+
+  if (info) return <Opened info={info} job={job} onDiscard={discard} />;
+
+  // Nothing on a job yet: the drop target, or the upload and job creation in flight.
+  if (upload.state.phase === "idle") {
+    return (
+      <div className="flex flex-col gap-4">
+        {job.expired ? (
+          <p className="text-meta text-body font-sans normal-case">
+            That file's hour ran out, so the server has deleted it. Drop it again to start over.
+          </p>
+        ) : job.error ? (
+          <p className="text-meta text-body font-sans normal-case">{job.error}</p>
+        ) : null}
+        <Dropzone
+          onFiles={pick}
+          accept="application/pdf,.pdf"
+          multiple={false}
+          cta="choose a pdf"
+          label="or drop one here"
+          hint="up to 1 GB"
+          className="min-h-64"
+        />
+      </div>
+    );
+  }
+
+  const uploaded = upload.state.phase === "done" ? upload.state.result : null;
   return (
-    <div className="border-wash flex min-h-64 items-center justify-center rounded-card border border-dashed px-6 py-10">
-      <Empty>workbench coming</Empty>
+    <Frame>
+      <div className="flex w-full max-w-xl flex-col gap-5">
+        <UploadProgress
+          state={upload.state}
+          onCancel={upload.cancel}
+          onRetry={async () => {
+            const done = await upload.retry();
+            if (done) await open(done.id);
+          }}
+        />
+        {uploaded ? (
+          creating ? (
+            <Empty>opening a job…</Empty>
+          ) : job.error ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <p className="text-meta text-body font-sans normal-case">{job.error}</p>
+              <TextButton onClick={() => open(uploaded.id)}>try again</TextButton>
+            </div>
+          ) : null
+        ) : null}
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <p className="text-meta text-body font-sans normal-case">Files are deleted an hour after your last action.</p>
+          {upload.state.phase === "failed" || (uploaded && !creating) ? (
+            <TextButton onClick={upload.reset}>choose another file</TextButton>
+          ) : null}
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+/** The job is on the server: its file, the analyse task until it lands, then the analysis. */
+function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeof useJob>; onDiscard: () => unknown }) {
+  const input = info.inputs[0];
+  const analysis = asAnalysis(info.analysis);
+  const analyse = info.tasks.find((t) => t.kind === "analyse") ?? null;
+  // Anything else the queue is doing for this job (a run, a crop) — #9 onward shows it by the run panel.
+  const busy = job.activeTask !== null;
+
+  return (
+    <div className="flex flex-col gap-10">
+      <header className="border-hairline-faint flex flex-col gap-3 border-b pb-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <span className="text-ink text-title min-w-0 truncate font-mono tracking-normal" title={input?.name}>
+            {input?.name ?? "document.pdf"}
+          </span>
+          <Facts analysis={analysis} size={input?.size ?? null} />
+        </div>
+        <RetentionNote onDiscard={onDiscard} />
+        {job.error ? <p className="text-meta text-body font-sans normal-case">{job.error}</p> : null}
+      </header>
+
+      <div className="grid items-start gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
+        <aside className="order-last lg:sticky lg:top-20 lg:order-none">
+          <RunPanel analysis={analysis} busy={busy} />
+        </aside>
+
+        <div className="flex min-w-0 flex-col gap-10">
+          {analysis ? (
+            <Analysis analysis={analysis} />
+          ) : analyse ? (
+            <Section title="analysis">
+              <QueueNotice task={analyse} />
+              {analyse.state === "failed" ? (
+                <p className="text-meta text-body font-sans normal-case">
+                  Nothing was changed. Discard this file and try another, or the same one again later.
+                </p>
+              ) : null}
+            </Section>
+          ) : (
+            <Section title="analysis">
+              <Empty>waiting for the queue…</Empty>
+            </Section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** `12.4 MB · 214 pages · PDF 1.7 · PDF/A-2b · tagged` — the size is known from the upload before the analysis lands. */
+function Facts({ analysis, size }: { analysis: PdfAnalysis | null; size: number | null }) {
+  const parts = [
+    bytes(analysis?.bytes ?? size ?? NaN),
+    analysis ? `${analysis.pages} ${analysis.pages === 1 ? "page" : "pages"}` : null,
+    analysis?.version ? `PDF ${analysis.version}` : null,
+    analysis?.flags?.pdfa
+      ? /^pdf/i.test(analysis.flags.pdfa)
+        ? analysis.flags.pdfa
+        : `PDF/A-${analysis.flags.pdfa}`
+      : null,
+    analysis?.flags?.tagged ? "tagged" : null,
+  ].filter(Boolean);
+  return <span className="text-label text-label font-mono tabular-nums tracking-normal">{parts.join(" · ")}</span>;
+}
+
+/** What the file is carrying, in the order the eye asks: where the bytes go, then the images, then the fonts. */
+function Analysis({ analysis }: { analysis: PdfAnalysis }) {
+  const notes = flagNotes(analysis);
+  return (
+    <>
+      {analysis.truncated || notes.length ? (
+        <div className="border-edge rounded-xs flex flex-col gap-1.5 border px-4 py-3">
+          {analysis.truncated ? (
+            <p className="text-ink text-body font-sans normal-case">
+              The analysis stopped early — this file is larger than one pass reads, so the figures below cover only part
+              of it.
+            </p>
+          ) : null}
+          {notes.map((n) => (
+            <p key={n} className="text-prose text-body font-sans normal-case">
+              {n}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      <Section title="where the bytes go">
+        <SizeBreakdown analysis={analysis} />
+      </Section>
+
+      <Section title={`images · ${analysis.images.length}`}>
+        <ImageTable images={analysis.images} total={analysis.bytes} />
+      </Section>
+
+      <Section title={`fonts · ${analysis.fonts.length}`}>
+        <FontTable fonts={analysis.fonts} />
+      </Section>
+    </>
+  );
+}
+
+/**
+ * The flags #15 fills in that change what compressing will do, as sentences.
+ * PDF/A and tagging are facts about the file, not cautions, so they sit in the
+ * header line instead.
+ */
+function flagNotes({ flags }: PdfAnalysis): string[] {
+  if (!flags) return [];
+  const notes: string[] = [];
+  if (flags.encrypted) notes.push("This file is encrypted.");
+  if (flags.signed?.length)
+    notes.push(`Signed by ${flags.signed.join(", ")} — compressing it changes the bytes the signature covers.`);
+  else if (flags.signed)
+    notes.push("This file carries a digital signature. Compressing it changes the bytes it covers.");
+  if (flags.repaired > 0)
+    notes.push(`Repaired ${flags.repaired} broken ${flags.repaired === 1 ? "object" : "objects"} while reading it.`);
+  return notes;
+}
+
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-wash rounded-card flex min-h-64 items-center justify-center border px-6 py-10">
+      {children}
     </div>
   );
 }
