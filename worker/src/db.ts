@@ -26,7 +26,10 @@ db.exec(`
     tool       TEXT NOT NULL,
     caller     TEXT NOT NULL,
     touched_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    -- An encrypted input's password (#15): the worker needs it in the clear, so
+    -- it lives only here and goes when the job does.
+    password   TEXT
   );
   CREATE INDEX IF NOT EXISTS pdf_jobs_touched ON pdf_jobs(touched_at);
 
@@ -59,3 +62,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS pdf_tasks_queue ON pdf_tasks(state, priority, created_at);
   CREATE INDEX IF NOT EXISTS pdf_tasks_job ON pdf_tasks(job_id);
 `);
+
+// Jobs predate the password column (#15); add it in place. The API and the
+// worker both try, so the loser of that race sees "duplicate column".
+const jobColumns = db.query<{ name: string }, []>("PRAGMA table_info(pdf_jobs)").all().map((c) => c.name);
+if (!jobColumns.includes("password")) {
+  try {
+    db.exec("ALTER TABLE pdf_jobs ADD COLUMN password TEXT");
+  } catch (err) {
+    if (!String(err).includes("duplicate column")) throw err;
+  }
+}

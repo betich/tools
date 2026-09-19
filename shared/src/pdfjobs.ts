@@ -83,4 +83,6 @@ export type PdfAnalysis = {
   flags: { encrypted: boolean; signed: string[] | null; pdfa: string | null; tagged: boolean; repaired: number };
   /** True when the analysis caps (pages/bytes read) stopped the walk early. */
   truncated: boolean;
+  /** Encrypted with a user password we don't have yet: inventories are empty until `unlock` succeeds. */
+  locked?: boolean;
 };
