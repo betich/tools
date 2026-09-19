@@ -6,6 +6,7 @@ import {
   expandRuns,
   formatPageRange,
   isDefaultOrder,
+  joinRuns,
   MAX_MERGE_RUNS,
   mergePagesProblem,
   parsePageRange,
@@ -113,6 +114,11 @@ describe("toRuns and expandRuns", () => {
   test("empty in, empty out", () => {
     expect(toRuns([])).toEqual([]);
     expect(expandRuns([])).toEqual([]);
+  });
+  test("joinRuns joins runs that continue one another, and nothing else", () => {
+    const runs: MergePageRun[] = [[0, 0, 2], [0, 3, 5], [1, 0, 0], [1, 2, 2], [0, 6, 6]];
+    expect(joinRuns(runs)).toEqual([[0, 0, 5], [1, 0, 0], [1, 2, 2], [0, 6, 6]]);
+    expect(runs[0]).toEqual([0, 0, 2]);
   });
 });
 

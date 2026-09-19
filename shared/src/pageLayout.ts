@@ -247,16 +247,9 @@ export function formatPageRange(pages: readonly number[]): string {
     .join(", ");
 }
 
-/** Packs a page list into runs,joining a page onto the run before it when it is the next page of the same item. */
-export function toRuns(refs: readonly MergePageRef[]): MergePageRun[] {
-  const runs: MergePageRun[] = [];
-  for (const { item, page } of refs) {
-    const last = runs[runs.length - 1];
-    if (last && last[0] === item && last[2] + 1 === page) last[2] = page;
-    else runs.push([item, page, page]);
-  }
-  return runs;
-}
+/** Packs a page list into runs, joining a page onto the run before it when it is the next page of the same item. */
+export const toRuns = (refs: readonly MergePageRef[]): MergePageRun[] =>
+  joinRuns(refs.map(({ item, page }): MergePageRun => [item, page, page]));
 
 /** The page list the runs stand for, in output order. */
 export function expandRuns(runs: readonly MergePageRun[]): MergePageRef[] {
@@ -265,11 +258,15 @@ export function expandRuns(runs: readonly MergePageRun[]): MergePageRef[] {
   return refs;
 }
 
-/** Joins runs that continue one another, so equal page lists compare equal as runs. */
-function joined(runs: readonly MergePageRun[]): MergePageRun[] {
+/**
+ * Joins runs that continue one another (same item, `from` the page after the
+ * last run's `to`), so equal page lists compare equal as runs and each run is
+ * one bookmark and one join part. Leaves `runs` as it was.
+ */
+export function joinRuns(runs: readonly MergePageRun[]): MergePageRun[] {
   const out: MergePageRun[] = [];
   for (const [item, from, to] of runs) {
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last && last[0] === item && last[2] + 1 === from) last[2] = to;
     else out.push([item, from, to]);
   }
@@ -295,7 +292,7 @@ export function defaultRuns(items: readonly MergeItem[], count: ItemPageCount): 
 export function isDefaultOrder(runs: readonly MergePageRun[], items: readonly MergeItem[], count: ItemPageCount): boolean {
   const whole = defaultRuns(items, count);
   if (!whole) return false;
-  const mine = joined(runs);
+  const mine = joinRuns(runs);
   return mine.length === whole.length && mine.every((r, i) => r.every((v, k) => v === whole[i]![k]));
 }
 

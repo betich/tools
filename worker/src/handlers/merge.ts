@@ -7,6 +7,7 @@ import {
   PAPER_IDS,
   pageLayout,
   toPdfRect,
+  joinRuns,
   mergePagesProblem,
   type ImageDpi,
   type MergeItem,
@@ -148,17 +149,6 @@ function optionsOf(raw: unknown, inputs: TaskInput[]): Options {
 /** The items as `mergePagesProblem` reads them, with the sniffed kind. */
 const asMergeItems = (items: Item[]): MergeItem[] =>
   items.map((it) => ({ upload: it.input.id, name: it.name, kind: it.input.kind, layout: it.layout }));
-
-/** Joins runs that continue one another: each is then one bookmark and one join part. */
-function joinRuns(runs: readonly MergePageRun[]): MergePageRun[] {
-  const out: MergePageRun[] = [];
-  for (const [item, from, to] of runs) {
-    const last = out.at(-1);
-    if (last && last[0] === item && last[2] + 1 === from) last[2] = to;
-    else out.push([item, from, to]);
-  }
-  return out;
-}
 
 /** 1-based pages as a reader says them: "page 2", "pages 4–20". */
 const pagesSaid = (from: number, to: number) => (from === to ? `page ${from + 1}` : `pages ${from + 1}–${to + 1}`);
