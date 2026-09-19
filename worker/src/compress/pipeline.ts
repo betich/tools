@@ -105,10 +105,7 @@ export function registeredSteps(): Step[] {
 
 /** Why a wanted pass was not done, when no step performed it. */
 const NOT_YET: Partial<Record<PassId, string>> = {
-  downsample: "Downsampling isn't available yet — images keep their resolution.",
-  "reencode-images": "Re-encoding isn't available yet — images keep their encoding.",
   "subset-fonts": "Font subsetting isn't available yet.",
-  grayscale: "Converting to grayscale isn't available yet.",
 };
 
 function notYet(engine: EngineId, pass: PassId): string {
