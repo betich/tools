@@ -6,7 +6,7 @@ import { registry } from "@/tools/registry";
 
 /**
  * The console chrome: a hairline bar at the top carrying the wordmark and the
- * live state, and a rail pinned to the bottom carrying the three destinations.
+ * live state, and a rail pinned to the bottom carrying the index and every tool.
  * Navigation is always within reach and never scrolls away — the page is an
  * instrument, not a document.
  */
@@ -31,7 +31,7 @@ export function TopBar() {
           status === "online"
             ? "api reachable — save, share and batch render available"
             : status === "offline"
-              ? "api unreachable — both tools still run in this browser"
+              ? "api unreachable — squoosh and mail merge still run in this browser; the pdf tools wait for it"
               : "checking api"
         }
       >
@@ -48,7 +48,7 @@ export function TopBar() {
 }
 
 /**
- * Three destinations, equal weight, pinned to the floor of the screen. `inFlow`
+ * The index and each tool, equal weight, pinned to the floor of the screen. `inFlow`
  * lets a full-height workspace lay it out as its last row from a laptop up, so
  * the room ends where the rail begins instead of running underneath it.
  */
@@ -60,7 +60,11 @@ export function TabRail({ inFlow = false }: { inFlow?: boolean }) {
         inFlow && "lg:static lg:shrink-0",
       )}
     >
-      <nav aria-label="tools" className="grid grid-cols-3">
+      <nav
+        aria-label="tools"
+        className="grid"
+        style={{ gridTemplateColumns: `repeat(${registry.length + 1}, minmax(0, 1fr))` }}
+      >
         <RailTab to="/" end>
           index
         </RailTab>
