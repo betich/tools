@@ -180,7 +180,7 @@ export async function faceFile(family: string, face: GoogleFace): Promise<string
     const res = await upstream(face.url);
     if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_FACE_BYTES) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength > MAX_FACE_BYTES || !(await diskHasRoom(buf.byteLength))) return null;
+    if (buf.byteLength > MAX_FACE_BYTES || !(await diskHasRoom(paths.fonts, buf.byteLength))) return null;
     await mkdir(paths.fonts, { recursive: true });
     await writeFile(file, buf);
     return file;

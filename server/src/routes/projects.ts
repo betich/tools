@@ -52,7 +52,7 @@ async function guard({ projectId, headers, ...ctx }: Guard) {
 async function storeProblem(body: { doc: unknown; data: unknown }, set: Ctx["set"]) {
   const bytes = Buffer.byteLength(JSON.stringify(body.doc)) + Buffer.byteLength(JSON.stringify(body.data));
   if (bytes > env.maxProjectBytes) return refuse(set, 413, "this merge is too large to save — trim the sheet or the image");
-  if (!(await diskHasRoom(bytes))) return refuse(set, 507, DISK_FULL);
+  if (!(await diskHasRoom(env.dataDir, bytes))) return refuse(set, 507, DISK_FULL);
   return null;
 }
 

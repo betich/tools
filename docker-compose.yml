@@ -22,8 +22,12 @@ services:
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-12582912}
       # The rest of the guard rails (rate limits, disk reserve, render queue)
       # have defaults in server/src/env.ts; override any of them here.
+      # Uploads and font files live on the pooled USB drives (mergerfs at
+      # /mnt/media); SQLite stays on the named volume, on the SD card.
+      ASSETS_DIR: /bulk/assets
+      FONTS_DIR: /bulk/fonts
       MIN_FREE_BYTES: ${MIN_FREE_BYTES:-2147483648}
-      MAX_ASSET_BYTES: ${MAX_ASSET_BYTES:-2147483648}
+      MAX_ASSET_BYTES: ${MAX_ASSET_BYTES:-21474836480}
       RENDER_CONCURRENCY: ${RENDER_CONCURRENCY:-1}
     # This box runs other services too. A runaway render is killed and
     # restarted here instead of pushing its neighbours into swap.
@@ -36,6 +40,7 @@ services:
       options: { max-size: 10m, max-file: "3" }
     volumes:
       - tools-data:/data
+      - ${BULK_DIR:-/mnt/media/tools}:/bulk
     # Not published to the host: the tunnel reaches it over the compose network.
     expose:
       - "8787"

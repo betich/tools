@@ -27,7 +27,7 @@ export const env = {
   maxProjects: int(process.env.MAX_PROJECTS, 5000),
   /** Total bytes of uploaded assets across everyone. */
   maxAssetBytes: int(process.env.MAX_ASSET_BYTES, 2 * 1024 * 1024 * 1024),
-  /** Writes stop while the data volume has less than this free — it is shared with the rest of the box. */
+  /** Writes to a volume stop while it has less than this free — each is shared with the rest of the box. */
   minFreeBytes: int(process.env.MIN_FREE_BYTES, 2 * 1024 * 1024 * 1024),
   /** Matches the editor's own ceiling on a side. */
   maxCanvasSide: int(process.env.MAX_CANVAS_SIDE, 8000),
@@ -44,10 +44,15 @@ export const env = {
   fontCacheTtlMs: int(process.env.FONT_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
 };
 
+/**
+ * SQLite stays in the data dir — its WAL wants a real local filesystem. The
+ * bulky, write-once files (uploads, cached font faces) can live elsewhere, e.g.
+ * a pooled set of drives, via ASSETS_DIR and FONTS_DIR.
+ */
 export const paths = {
   db: resolve(env.dataDir, "tools.sqlite"),
-  assets: resolve(env.dataDir, "assets"),
-  fonts: resolve(env.dataDir, "fonts"),
+  assets: resolve(process.env.ASSETS_DIR || resolve(env.dataDir, "assets")),
+  fonts: resolve(process.env.FONTS_DIR || resolve(env.dataDir, "fonts")),
 };
 
 export function ensureDirs(): void {

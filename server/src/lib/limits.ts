@@ -8,8 +8,8 @@ import { env } from "../env";
  * otherwise — from taking the CPU, the memory or the disk from everyone else.
  */
 
-type Set = { status?: number | string; headers: Record<string, string | number> };
-type Ctx = { request: Request; server: { requestIP(req: Request): { address: string } | null } | null; set: Set };
+type Reply = { status?: number | string; headers: Record<string, string | number> };
+type Ctx = { request: Request; server: { requestIP(req: Request): { address: string } | null } | null; set: Reply };
 
 /**
  * The API is only reachable through the tunnel, and Cloudflare overwrites
@@ -49,7 +49,7 @@ function over(key: string, max: number): number | null {
   return Math.ceil((w.resetAt - Date.now()) / 1000);
 }
 
-function tooMany(set: Set, retryAfter: number) {
+function tooMany(set: Reply, retryAfter: number) {
   set.status = 429;
   set.headers["retry-after"] = String(retryAfter);
   return { error: `too many requests — try again in ${retryAfter}s`, retryAfter };
@@ -158,17 +158,17 @@ export function docProblem(doc: MergeDoc | undefined): string | null {
   return null;
 }
 
-export function refuse(set: Set, status: number, error: string) {
+export function refuse(set: Reply, status: number, error: string) {
   set.status = status;
   return { error };
 }
 
 // ── disk ───────────────────────────────────────────────────────────────────
 
-/** Whether `bytes` more can be written without eating into the box's reserve. */
-export async function diskHasRoom(bytes = 0): Promise<boolean> {
+/** Whether `bytes` more can be written to `dir`'s volume without eating into its reserve. */
+export async function diskHasRoom(dir: string, bytes = 0): Promise<boolean> {
   try {
-    const fs = await statfs(env.dataDir);
+    const fs = await statfs(dir);
     return fs.bavail * fs.bsize - bytes >= env.minFreeBytes;
   } catch {
     return true; // cannot tell — do not take the feature down over it

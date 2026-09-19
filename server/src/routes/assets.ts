@@ -35,7 +35,7 @@ export const assets = new Elysia({ prefix: "/api/assets" })
         return { error: `unsupported content type: ${type}` };
       }
       const stored = db.query<{ n: number | null }, []>("SELECT SUM(bytes) AS n FROM assets").get()?.n ?? 0;
-      if (stored + file.size > env.maxAssetBytes || !(await diskHasRoom(file.size))) return refuse(set, 507, DISK_FULL);
+      if (stored + file.size > env.maxAssetBytes || !(await diskHasRoom(paths.assets, file.size))) return refuse(set, 507, DISK_FULL);
 
       const assetId = id("as");
       await writeFile(join(paths.assets, assetId), Buffer.from(await file.arrayBuffer()));
