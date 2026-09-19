@@ -1,4 +1,4 @@
-import type { MergeData, MergeRow } from "./types";
+import type { ExportFormat, MergeData, MergeRow } from "./types";
 
 const TOKEN = /<([^<>]+)>/g;
 
@@ -56,5 +56,7 @@ export function fileNameFor(pattern: string, row: MergeRow, index: number, ext: 
     .replace(/^-+|-+$/g, "");
   return `${base || `row-${String(index + 1).padStart(3, "0")}`}.${ext}`;
 }
+
+export const extensionFor = (format: ExportFormat) => (format === "jpeg" ? "jpg" : format);
 
 export const emptyData: MergeData = { fields: [], rows: [] };

@@ -1,4 +1,4 @@
-import type { GoogleFont, MergeData, MergeDoc, Project, ToolMeta } from "@tools/shared";
+import type { ExportFormat, GoogleFont, MergeData, MergeDoc, PdfLayout, Project, ToolMeta } from "@tools/shared";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const url = (path: string) => `${BASE}${path}`;
@@ -105,12 +105,20 @@ export const api = {
     });
   },
 
-  /** Server-side batch render. Returns a ZIP so a 500-row merge never pins the tab. */
-  renderBatch: async (doc: MergeDoc, data: MergeData, namePattern: string): Promise<Blob> => {
+  /**
+   * Server-side batch render, so a 500-row merge never pins the tab. A ZIP of
+   * one file per row, or — for `pdf: "single"` — one PDF of every row.
+   */
+  renderBatch: async (
+    doc: MergeDoc,
+    data: MergeData,
+    namePattern: string,
+    options: { format: ExportFormat; quality: number; pdf: PdfLayout },
+  ): Promise<Blob> => {
     const res = await fetch(url("/api/render/batch"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ doc, data, namePattern }),
+      body: JSON.stringify({ doc, data, namePattern, ...options }),
     });
     if (!res.ok) {
       const detail = await res.json().catch(() => null);

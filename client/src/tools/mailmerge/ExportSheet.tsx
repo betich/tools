@@ -2,14 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { downloadZip } from "client-zip";
 import { FiDownload, FiServer, FiX } from "react-icons/fi";
-import { docForRow, fileNameFor, hasOverrides, type MergeData, type MergeDoc } from "@tools/shared";
+import {
+  docForRow,
+  extensionFor,
+  fileNameFor,
+  hasOverrides,
+  pdfFromJpegs,
+  type ExportFormat,
+  type MergeData,
+  type MergeDoc,
+  type PdfLayout,
+} from "@tools/shared";
 import { Button, Field, Input, Segmented, Slider, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { pad } from "@/lib/format";
 import { ensureDocFonts } from "./fonts";
 import { OwnMark } from "./OwnMark";
-import { extensionFor, renderThumbnail, renderToBlob, type ExportFormat } from "./render";
+import { renderThumbnail, renderToBlob } from "./render";
 
 /**
  * The export sheet: every row rendered small, the ones you want picked by
@@ -36,8 +46,8 @@ export function ExportSheet({
   onNamePattern: (pattern: string) => void;
   /** The page is already talking to the api — a save, a share, a server render. */
   serverBusy: boolean;
-  /** Every row, rendered by the api into one zip. */
-  onServerRender: () => void;
+  /** Every row, rendered by the api in the chosen format. */
+  onServerRender: (format: ExportFormat, quality: number, pdf: PdfLayout) => void;
   onClose: () => void;
 }) {
   // With no sheet loaded there is still exactly one thing to export: the
@@ -48,6 +58,7 @@ export function ExportSheet({
   const [thumbs, setThumbs] = useState<(string | null)[]>(() => rows.map(() => null));
   const [format, setFormat] = useState<ExportFormat>("png");
   const [quality, setQuality] = useState(92);
+  const [pdfLayout, setPdfLayout] = useState<PdfLayout>("single");
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
@@ -114,24 +125,33 @@ export function ExportSheet({
     setProgress({ done: 0, total: picks.length });
     try {
       await ensureDocFonts(doc, picks.map((i) => rows[i] ?? null));
-      const options = { format, quality: quality / 100 };
+      // A PDF page is the row drawn as a JPEG, laid into the file as-is.
+      const options = { format: format === "pdf" ? "jpeg" : format, quality: quality / 100 } as const;
+      const { width, height } = doc.canvas;
+      const page = async (blob: Blob) => pdfFromJpegs([{ jpeg: new Uint8Array(await blob.arrayBuffer()), width, height }], doc.name);
+
       const files: { name: string; input: Blob }[] = [];
+      const pages: Uint8Array[] = [];
       for (const i of picks) {
         const blob = await renderToBlob(docForRow(doc, data.keys?.[i]), rows[i] ?? null, base, options);
-        files.push({ name: names[i]!, input: blob });
+        if (format === "pdf" && pdfLayout === "single") pages.push(new Uint8Array(await blob.arrayBuffer()));
+        else files.push({ name: names[i]!, input: format === "pdf" ? new Blob([await page(blob)], { type: "application/pdf" }) : blob });
         if (!alive.current) return;
-        setProgress({ done: files.length, total: picks.length });
+        setProgress({ done: files.length + pages.length, total: picks.length });
         await new Promise((r) => setTimeout(r, 0));
       }
 
-      if (files.length === 1) download(files[0]!.input, files[0]!.name);
+      if (pages.length) {
+        const pdf = pdfFromJpegs(pages.map((jpeg) => ({ jpeg, width, height })), doc.name);
+        download(new Blob([pdf], { type: "application/pdf" }), `${doc.name || "merge"}.pdf`);
+      } else if (files.length === 1) download(files[0]!.input, files[0]!.name);
       else download(await downloadZip(files).blob(), `${doc.name || "merge"}.zip`);
       onClose();
     } finally {
       setBusy(false);
       setProgress(null);
     }
-  }, [base, data.keys, doc, format, names, onClose, quality, rows, selected]);
+  }, [base, data.keys, doc, format, names, onClose, pdfLayout, quality, rows, selected]);
 
   const rendered = thumbs.filter(Boolean).length;
 
@@ -240,11 +260,26 @@ export function ExportSheet({
                 options={[
                   { value: "png", label: "png" },
                   { value: "jpeg", label: "jpg" },
+                  { value: "webp", label: "webp" },
+                  { value: "pdf", label: "pdf" },
                 ]}
               />
             </Field>
 
-            <Field label={`quality · ${quality}%`} hint={format === "png" ? "png is lossless — quality applies to jpg" : undefined}>
+            {format === "pdf" ? (
+              <Field label="pages" hint="each row is a page, drawn at 96 pixels to the inch">
+                <Segmented
+                  value={pdfLayout}
+                  onChange={setPdfLayout}
+                  options={[
+                    { value: "single", label: "one pdf" },
+                    { value: "each", label: "one per row" },
+                  ]}
+                />
+              </Field>
+            ) : null}
+
+            <Field label={`quality · ${quality}%`} hint={format === "png" ? "png is lossless — quality applies to the others" : undefined}>
               <Slider min={40} max={100} value={quality} onChange={setQuality} disabled={format === "png"} />
             </Field>
 
@@ -259,7 +294,9 @@ export function ExportSheet({
                 ? "nothing selected"
                 : selected.size === 1
                   ? `one ${ext} · ${doc.canvas.width}×${doc.canvas.height}`
-                  : `${selected.size} ${ext} files · one zip`}
+                  : format === "pdf" && pdfLayout === "single"
+                    ? `one pdf · ${selected.size} pages`
+                    : `${selected.size} ${ext} files · one zip`}
             </p>
             <Button onClick={() => void run()} disabled={busy || selected.size === 0} className="w-full">
               <FiDownload className="size-3.5" aria-hidden />
@@ -270,12 +307,12 @@ export function ExportSheet({
             <div className="border-hairline-faint mt-3 flex flex-col gap-3 border-t pt-5">
               <p className="text-meta font-sans text-body leading-snug normal-case">
                 {data.rows.length > 0
-                  ? `Or have the server draw all ${data.rows.length} rows and send one zip — for a big set, or to keep this tab free.`
+                  ? `Or have the server draw all ${data.rows.length} rows in the same format — for a big set, or to keep this tab free.`
                   : "Load a sheet to render a whole set on the server."}
               </p>
               <Button
                 variant="outline"
-                onClick={onServerRender}
+                onClick={() => onServerRender(format, quality, pdfLayout)}
                 disabled={busy || serverBusy || data.rows.length === 0}
                 className="w-full"
               >

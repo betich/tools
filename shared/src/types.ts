@@ -181,3 +181,9 @@ export type ToolMeta = {
   index: string;
   status: "live" | "wip";
 };
+
+/** What an export writes. A PDF is one page per row, drawn as a JPEG. */
+export type ExportFormat = "png" | "jpeg" | "webp" | "pdf";
+
+/** A PDF export is either every row as a page of one file, or one file per row. */
+export type PdfLayout = "single" | "each";

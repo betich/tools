@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { emptyData, hasOverrides, newDoc, revert, strandedKeys, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
+import { emptyData, hasOverrides, newDoc, revert, strandedKeys, type ExportFormat, type MergeData, type MergeDoc, type MergeRow, type PdfLayout } from "@tools/shared";
 import { Shell } from "@/components/Shell";
 import { FiDownload, FiLink, FiLock, FiSave, FiShare2 } from "react-icons/fi";
 import { Button, Sections } from "@/components/ui";
@@ -202,11 +202,12 @@ export function MailMergePage() {
   // ── export ───────────────────────────────────────────────────────────────
   const rows = data.rows;
 
-  const exportAllServer = useCallback(async () => {
+  const exportAllServer = useCallback(async (format: ExportFormat, quality: number, pdf: PdfLayout) => {
     if (rows.length === 0) return;
     setBusy(`rendering ${rows.length} on the server`);
     try {
-      download(await api.renderBatch(doc, data, namePattern), `${doc.name || "merge"}.zip`);
+      const blob = await api.renderBatch(doc, data, namePattern, { format, quality, pdf });
+      download(blob, `${doc.name || "merge"}.${format === "pdf" && pdf === "single" ? "pdf" : "zip"}`);
       toast("rendered on the server");
     } catch (error) {
       toast(error instanceof Error ? error.message : "server render failed");
@@ -802,7 +803,7 @@ export function MailMergePage() {
           namePattern={namePattern}
           onNamePattern={setNamePattern}
           serverBusy={busy !== null}
-          onServerRender={() => void exportAllServer()}
+          onServerRender={(format, quality, pdf) => void exportAllServer(format, quality, pdf)}
           onClose={() => setExporting(false)}
         />
       ) : null}

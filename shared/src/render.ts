@@ -54,6 +54,10 @@ export type RenderOptions = {
 
 const TRANSPARENT = "transparent";
 
+/** What a format without alpha (JPEG, and so a PDF page) is laid on: the canvas colour, or white. */
+export const opaqueGround = (doc: { canvas: { background: string } }) =>
+  doc.canvas.background && doc.canvas.background !== TRANSPARENT ? doc.canvas.background : "#FFFFFF";
+
 export function renderDoc(ctx: Ctx2D, doc: MergeDoc, opts: RenderOptions = {}): void {
   const { width, height, background } = doc.canvas;
   const row = opts.row ?? null;

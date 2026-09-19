@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { zipSync } from "fflate";
-import { docForRow, fileNameFor, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
+import { docForRow, extensionFor, fileNameFor, pdfFromJpegs, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 import { env } from "../env";
 import { docProblem, rateLimit, refuse, withRenderSlot } from "../lib/limits";
 import { prepareFonts, renderRow, resolveImage } from "../lib/render";
@@ -15,6 +15,11 @@ const batchBody = t.Object({
   data: t.Any(),
   /** Template for each file name, e.g. `card-<name>`. */
   namePattern: t.Optional(t.String()),
+  format: t.Optional(t.Union([t.Literal("png"), t.Literal("jpeg"), t.Literal("webp"), t.Literal("pdf")])),
+  /** JPEG, WebP and PDF pages, 1–100. */
+  quality: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
+  /** One PDF with a page per row, or a ZIP of one PDF per row. */
+  pdf: t.Optional(t.Union([t.Literal("single"), t.Literal("each")])),
 });
 
 /** Yield to the event loop so health checks and other callers are answered mid-batch. */
@@ -40,7 +45,8 @@ export const render = new Elysia({ prefix: "/api/render" })
   )
 
   /**
-   * Renders every row server-side and returns one ZIP. The base image is
+   * Renders every row server-side and returns one ZIP — or one PDF, a page
+   * per row. The base image is
    * decoded once and the fonts registered once, so a 500-row merge costs one
    * setup and 500 draws rather than 500 of each.
    */
@@ -70,25 +76,42 @@ export const render = new Elysia({ prefix: "/api/render" })
         const missingFonts = await prepareFonts(doc);
         const base = doc.base ? await resolveImage(doc.base.src) : null;
         const pattern = body.namePattern?.trim() || "row";
+        const format = body.format ?? "png";
+        const single = format === "pdf" && body.pdf !== "each";
+        const encoding = { format: format === "pdf" ? "jpeg" : format, quality: Math.round(body.quality ?? 92) } as const;
+        const { width, height } = doc.canvas;
+        const name = safe(doc.name || "merge");
 
         const files: Record<string, Uint8Array> = {};
+        const pages: Uint8Array[] = [];
         const taken = new Set<string>();
         let bytes = 0;
         for (let i = 0; i < rows.length; i++) {
-          // Nobody is waiting for the ZIP any more; stop spending the CPU on it.
+          // Nobody is waiting for the file any more; stop spending the CPU on it.
           if (request.signal.aborted) return refuse(set, 499, "render cancelled");
           const row = rows[i]!;
-          const { buffer } = await renderRow(docForRow(doc, data.keys?.[i]), row, base);
+          const { buffer } = await renderRow(docForRow(doc, data.keys?.[i]), row, base, encoding);
           bytes += buffer.byteLength;
-          if (bytes > env.maxBatchBytes) return refuse(set, 413, "the images add up to too much for one ZIP — split the sheet");
-          files[unique(fileNameFor(pattern, row, i, "png"), taken)] = new Uint8Array(buffer);
+          if (bytes > env.maxBatchBytes) return refuse(set, 413, "the images add up to too much for one download — split the sheet");
+          const out = new Uint8Array(buffer);
+          if (single) pages.push(out);
+          else {
+            const file = format === "pdf" ? pdfFromJpegs([{ jpeg: out, width, height }], doc.name) : out;
+            files[unique(fileNameFor(pattern, row, i, extensionFor(format)), taken)] = file;
+          }
           await breathe();
         }
-
-        const zip = zipSync(files, { level: 0 }); // PNGs are already deflated
-        set.headers["content-type"] = "application/zip";
-        set.headers["content-disposition"] = `attachment; filename="${safe(doc.name || "merge")}.zip"`;
         if (missingFonts.length) set.headers["x-missing-fonts"] = missingFonts.join(",");
+
+        if (single) {
+          set.headers["content-type"] = "application/pdf";
+          set.headers["content-disposition"] = `attachment; filename="${name}.pdf"`;
+          return pdfFromJpegs(pages.map((jpeg) => ({ jpeg, width, height })), doc.name);
+        }
+        // PNG, JPEG, WebP and the PDFs around them are already compressed.
+        const zip = zipSync(files, { level: 0 });
+        set.headers["content-type"] = "application/zip";
+        set.headers["content-disposition"] = `attachment; filename="${name}.zip"`;
         return zip;
       });
     },

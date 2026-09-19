@@ -1,4 +1,4 @@
-import { renderDoc, type Ctx2D, type MergeDoc, type MergeRow } from "@tools/shared";
+import { opaqueGround, renderDoc, type Ctx2D, type ExportFormat, type MergeDoc, type MergeRow } from "@tools/shared";
 
 /** Draw the doc onto a canvas at 1:1 document pixels. */
 export function paint(canvas: HTMLCanvasElement, doc: MergeDoc, row: MergeRow | null, base: HTMLImageElement | null): void {
@@ -10,17 +10,16 @@ export function paint(canvas: HTMLCanvasElement, doc: MergeDoc, row: MergeRow | 
   renderDoc(ctx as unknown as Ctx2D, doc, { row, base });
 }
 
-export type ExportFormat = "png" | "jpeg";
+/** The raster a row is encoded as. A PDF page is a JPEG; the PDF itself is assembled by the caller. */
+export type RasterFormat = Exclude<ExportFormat, "pdf">;
 
 export type ExportOptions = {
-  format?: ExportFormat;
-  /** JPEG only, 0–1. */
+  format?: RasterFormat;
+  /** JPEG and WebP, 0–1. */
   quality?: number;
   /** Longest edge of the output in pixels; omitted renders at document size. */
   maxEdge?: number;
 };
-
-export const extensionFor = (format: ExportFormat) => (format === "jpeg" ? "jpg" : "png");
 
 /**
  * Render one row in the browser. Layout is always computed at document pixels
@@ -28,7 +27,7 @@ export const extensionFor = (format: ExportFormat) => (format === "jpeg" ? "jpg"
  * to is the real one — so a smaller output is a downscale of the full render,
  * never a smaller document.
  */
-export function renderToBlob(
+export async function renderToBlob(
   doc: MergeDoc,
   row: MergeRow | null,
   base: HTMLImageElement | null,
@@ -38,16 +37,26 @@ export function renderToBlob(
   paint(canvas, doc, row, base);
 
   // JPEG has no alpha: a transparent document would flatten to black.
-  const ground = format === "jpeg" ? doc.canvas.background || "#FFFFFF" : undefined;
+  const ground = format === "jpeg" ? opaqueGround(doc) : undefined;
   const out = maxEdge || ground ? resample(canvas, maxEdge ?? Math.max(canvas.width, canvas.height), ground) : canvas;
 
-  return new Promise((resolve, reject) => {
+  const type = `image/${format}`;
+  const blob = await new Promise<Blob>((resolve, reject) => {
     out.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("canvas export failed"))),
-      `image/${format}`,
-      format === "jpeg" ? quality : undefined,
+      (b) => (b ? resolve(b) : reject(new Error("canvas export failed"))),
+      type,
+      format === "png" ? undefined : quality,
     );
   });
+  if (blob.type === type) return blob;
+
+  // Safari cannot encode WebP from a canvas and quietly hands back a PNG;
+  // the squoosh tool's encoder does it instead.
+  const ctx = out.getContext("2d");
+  if (format !== "webp" || !ctx) throw new Error(`this browser cannot write ${format}`);
+  const { encode } = await import("@jsquash/webp");
+  const bytes = await encode(ctx.getImageData(0, 0, out.width, out.height), { quality: Math.round(quality * 100) });
+  return new Blob([bytes], { type });
 }
 
 /** A cheap preview of a row as a data URL — small enough to hold a gridful. */

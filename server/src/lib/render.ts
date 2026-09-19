@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createCanvas, loadImage, type Image } from "@napi-rs/canvas";
-import { renderDoc, type Ctx2D, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
+import { opaqueGround, renderDoc, type Ctx2D, type ExportFormat, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
 import { paths } from "../env";
 import { DEFAULT_FAMILY, registerFontBuffer, registerGoogleFamily } from "./fonts";
 
@@ -64,11 +64,25 @@ export async function resolveImage(src: string): Promise<Image | null> {
 
 export type RenderedRow = { buffer: Buffer; width: number; height: number };
 
-export async function renderRow(doc: MergeDoc, row: MergeRow | null, base: Image | null): Promise<RenderedRow> {
+/** A PDF page is a JPEG; the PDF itself is assembled by the caller. */
+export type RasterFormat = Exclude<ExportFormat, "pdf">;
+
+export async function renderRow(
+  doc: MergeDoc,
+  row: MergeRow | null,
+  base: Image | null,
+  { format = "png", quality = 92 }: { format?: RasterFormat; quality?: number } = {},
+): Promise<RenderedRow> {
   const { width, height } = doc.canvas;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
-  renderDoc(ctx as unknown as Ctx2D, doc, { row, base });
+  if (format === "jpeg") {
+    // JPEG has no alpha: lay the same ground the browser export does, or a transparent document goes black.
+    ctx.fillStyle = opaqueGround(doc);
+    ctx.fillRect(0, 0, width, height);
+  }
+  renderDoc(ctx as unknown as Ctx2D, doc, { row, base, skipClear: format === "jpeg" });
   // `encode` compresses off the main thread, so the API keeps answering mid-batch.
-  return { buffer: await canvas.encode("png"), width, height };
+  const buffer = format === "png" ? await canvas.encode("png") : await canvas.encode(format, quality);
+  return { buffer, width, height };
 }
