@@ -47,9 +47,13 @@ export function passwordFile(workDir: string, password: string): Promise<string>
   return secretFile(workDir, "password", [password]);
 }
 
-/** Why a compress cannot run on a locked input yet, or null. */
-export function lockedGuard(analysis: PdfAnalysis | null | undefined, password: string | null): string | null {
-  return analysis?.locked && !password ? NEEDS_PASSWORD : null;
+/**
+ * Why a compress cannot run on a locked input yet, or null. The latest
+ * analysis is the judge: after an unlock it was read with the job's
+ * password, so still locked means that password did not open it either.
+ */
+export function lockedGuard(analysis: PdfAnalysis | null | undefined): string | null {
+  return analysis?.locked ? NEEDS_PASSWORD : null;
 }
 
 /**
