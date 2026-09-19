@@ -25,6 +25,14 @@ export const pdfJobs = {
    */
   unlock: (id: string, password: string) =>
     request<JobInfo>(`${path(id)}/unlock`, { method: "POST", body: JSON.stringify({ password }) }),
+  /**
+   * Opens a compress job on a finished merge's output (#18). The server moves
+   * the file across as that job's upload — nothing passes back through the
+   * browser — and queues its analysis. The merge job stays until its own hour
+   * runs out or it is discarded.
+   */
+  handoff: (id: string, taskId: string) =>
+    request<JobInfo>(`${path(id)}/handoff`, { method: "POST", body: JSON.stringify({ task: taskId }) }),
   /** The output file of a compress/merge task — the latest finished one when `taskId` is left out. */
   resultUrl: (id: string, taskId?: string) =>
     url(`${path(id)}/result${taskId ? `?task=${encodeURIComponent(taskId)}` : ""}`),

@@ -92,8 +92,8 @@ describe("guards and notes", () => {
 
   test("specialNotes", () => {
     const a = analysis({ encrypted: true, signed: [], pdfa: "PDF/A-2b", repaired: 2 });
+    // The repair note is the compress handler's, not repeated here.
     expect(specialNotes({ stripMetadata: true, reencrypt: true }, a)).toEqual([
-      "Repaired 2 broken objects",
       "The signature by an unnamed signer is no longer valid.",
       "Kept the PDF/A-2b identification in the metadata.",
       "Encrypted with the same password (AES-256).",

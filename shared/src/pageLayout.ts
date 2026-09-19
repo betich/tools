@@ -13,6 +13,7 @@
  * must apply the same orientation before it places the pixels.
  */
 
+import type { EngineId } from "./pdfcaps";
 import type { UploadKind } from "./uploads";
 
 /** Dots per inch along the displayed x and y axes. */
@@ -150,8 +151,8 @@ export type MergeItem = { upload: string; name: string; kind: UploadKind; layout
 export type MergeOutput = { title: string | null; bookmarks: boolean; pageLabels: boolean; compressImages: boolean };
 export const DEFAULT_MERGE_OUTPUT: MergeOutput = { title: null, bookmarks: true, pageLabels: true, compressImages: false };
 
-/** Body of a `merge` task (TaskCreate.params). `engine` arrives with #18 (DEFAULT_ENGINE until then). */
-export type MergeParams = { items: MergeItem[]; output: MergeOutput };
+/** Body of a `merge` task (TaskCreate.params). */
+export type MergeParams = { items: MergeItem[]; output: MergeOutput; engine?: EngineId };  // DEFAULT_ENGINE when absent
 
 /** TaskInfo.result for kind "merge". */
 export type MergeResult = { bytes: number; pages: number; fileName: string; notes: string[] };

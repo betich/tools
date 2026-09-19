@@ -86,6 +86,8 @@ export type Step = {
   engines?: readonly EngineId[];
   /** Passes it performs; it runs when any is wanted. Empty = a hook that always runs. */
   passes: readonly PassId[];
+  /** A further condition, e.g. a hook that only concerns some inputs (#15); checked with the passes. */
+  when?(run: CompressRun): boolean;
   run(run: CompressRun): Promise<void>;
 };
 
@@ -194,7 +196,9 @@ export async function runPipeline(
   };
 
   const applies = (s: Step) =>
-    (!s.engines || s.engines.includes(params.engine)) && (s.passes.length === 0 || s.passes.some(run.wants));
+    (!s.engines || s.engines.includes(params.engine)) &&
+    (s.passes.length === 0 || s.passes.some(run.wants)) &&
+    (!s.when || s.when(run));
   const list = (opts.steps ?? registeredSteps()).filter(applies);
 
   for (const [i, step] of list.entries()) {

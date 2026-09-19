@@ -11,6 +11,7 @@ import {
   type EngineId,
   type PassId,
   type RunResult,
+  type TaskKind,
 } from "@tools/shared";
 
 /**
@@ -40,7 +41,7 @@ function taskDirs() {
   return { dir, workDir, outDir };
 }
 
-function context(dir: { workDir: string; outDir: string }, kind: string, params: unknown, inputs: { path: string; name: string }[]) {
+function context(dir: { workDir: string; outDir: string }, kind: TaskKind, params: unknown, inputs: { path: string; name: string }[]) {
   const stages: string[] = [];
   const signal = new AbortController().signal;
   const ctx = {
@@ -187,6 +188,18 @@ describe.skipIf(!hasTools)("engines", () => {
     expect(result.skipped).toContainEqual({ pass: "dedupe", reason: "qpdf can't deduplicate objects." });
   }, 60_000);
 
+  test("qpdf: the edits hold on a file whose objects sit in object streams", async () => {
+    // MuPDF packs bloated.pdf into object streams; extras and metadata stay (print, no opt-ins).
+    const packed = await compress(join(fixtures, "bloated.pdf"), defaultCompressParams("print"));
+    expect(show(packed.out, "grep")).toContain("/ObjStm");
+    const { result, out } = await compress(packed.out, { ...defaultCompressParams("ebook"), engine: "qpdf", advanced: ["remove-extras"] });
+    expect(result.notes.some((n) => n.startsWith("Removed 1 attachment"))).toBe(true);
+    const catalog = show(out, "Root");
+    for (const key of ["/Names", "/Outlines", "/AcroForm", "/Metadata"]) expect(catalog).not.toContain(key);
+    expect(show(out, "trailer/Info")).not.toContain("Someone Private");
+    expectValid(out);
+  }, 60_000);
+
   test("qpdf: re-encoding is kept only when the file gets smaller", async () => {
     // deck.pdf shares its photo between pages; qpdf writes it once per page.
     const deck = await compress(join(fixtures, "deck.pdf"), { ...defaultCompressParams("print"), engine: "qpdf" });
@@ -234,23 +247,26 @@ describe.skipIf(!hasTools)("engines", () => {
   }, 60_000);
 
   test("Ghostscript: codecs it can't write fall back to JPEG with a note", async () => {
-    const { result } = await compress(join(fixtures, "deck.pdf"), {
+    const { result } = await compress(join(fixtures, "scan.pdf"), {
       ...defaultCompressParams("ebook"),
       engine: "ghostscript",
       codec: "openjpeg",
     });
+    expect(result.keptOriginal).toBe(false);
     expect(result.notes).toContain("Ghostscript can't write JPEG 2000 (OpenJPEG). Images were written as JPEG instead.");
   }, 60_000);
 
   describe("merge join", () => {
     for (const engine of Object.keys(ENGINES) as EngineId[]) {
       test(`${engine}: joins every page in order into a valid PDF`, async () => {
-        const { joinPdfs } = await import("../src/engines");
+        const { mergeJoinFor } = await import("../src/mergeEngines");
         const parts = ["bloated.pdf", "deck.pdf", "scan.pdf", "tagged.pdf"].map((n) => join(fixtures, n));
         const dirs = taskDirs();
         const { ctx } = context(dirs, "merge", {}, []);
         const out = join(dirs.workDir, "joined.pdf");
-        await joinPdfs(ctx, engine, parts, out);
+        const chosen = mergeJoinFor(engine);
+        expect(chosen).toMatchObject({ engine, note: null });
+        await chosen.join(ctx, parts, out);
         expectValid(out);
         const expected = parts.reduce((n, p) => n + pageCount(p), 0);
         expect(pageCount(out)).toBe(expected);

@@ -1,11 +1,12 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { ENGINES, type EngineId } from "@tools/shared";
 import { TaskError, type TaskContext } from "./jobs";
+import { registerMergeJoin } from "./mergeEngines";
 
 /**
  * Engine plumbing shared by Compress and Merge (#13): running pdf-lib, and
- * joining PDFs with the engine the user picked.
+ * Merge's join for Ghostscript and pdf-lib (MuPDF and qpdf join with qpdf,
+ * see ./mergeEngines.ts).
  */
 
 const PDFLIB_SCRIPT = join(import.meta.dir, "..", "scripts", "pdflib.ts");
@@ -36,64 +37,50 @@ export async function runPdfLib(ctx: TaskContext, args: string[], where: string)
 }
 
 /**
- * Joins whole PDFs, in order, into `out` with the given engine — Merge's join
- * step (#18 wires `MergeParams.engine` to it). Page order and count are kept;
- * what else survives is the engine's `tools.merge` note in the capability
- * table:
+ * Merge's join (#18's `registerMergeJoin`) for the engines that don't join
+ * with qpdf. What survives each is the engine's `tools.merge` note in the
+ * capability table; outlines are rebuilt afterwards from the sources by
+ * scripts/merge-finish.js whatever the engine.
  *
- *   mupdf, qpdf   qpdf `--empty --pages`: reads each source lazily and writes as
- *                 it goes, keeping annotations and form fields. MuPDF's own graft
- *                 would hold every stream of every input in memory until the
- *                 save, so the MuPDF engine joins with qpdf too (#17's pipeline:
- *                 MuPDF places images and writes bookmarks around this join).
- *   ghostscript   pdfwrite re-distills every page, losslessly here (JPEGs pass
- *                 through, other images Flate, no downsampling). Links survive;
- *                 form fields and tagged structure do not.
- *   pdf-lib       copyPages into a new document: pages and what they reference;
- *                 form fields (the AcroForm) are dropped.
- *
- * Outlines are dropped by every engine — Merge rebuilds them afterwards from
- * the sources (scripts/merge-finish.js).
+ *   ghostscript   pdfwrite re-distills every page, losslessly here: JPEGs pass
+ *                 through, other images are Flate, nothing is downsampled.
+ *                 Links survive; form fields and tagged structure do not.
+ *   pdf-lib       copyPages into a new document: pages and what they
+ *                 reference; form fields (the AcroForm) are dropped.
  */
-export async function joinPdfs(ctx: TaskContext, engine: EngineId, parts: string[], out: string): Promise<void> {
-  const where = "while joining the files";
-  const hint = "Try merging fewer files at once.";
-  switch (engine) {
-    case "mupdf":
-    case "qpdf":
-      await ctx.run("qpdf", ["--warning-exit-0", "--empty", "--pages", ...parts, "--", out], { label: "qpdf", where, hint });
-      return;
-    case "ghostscript":
-      await ctx.run(
-        "gs",
-        [
-          "-q",
-          "-dSAFER",
-          "-dBATCH",
-          "-dNOPAUSE",
-          "-sDEVICE=pdfwrite",
-          `-sOutputFile=${out}`,
-          "-dCompatibilityLevel=1.7",
-          "-dAutoRotatePages=/None",
-          "-dDetectDuplicateImages=true",
-          "-dPassThroughJPEGImages=true",
-          "-dPassThroughJPXImages=true",
-          ...["Color", "Gray", "Mono"].flatMap((k) => [`-dDownsample${k}Images=false`]),
-          ...["Color", "Gray"].flatMap((k) => [`-dAutoFilter${k}Images=false`, `-d${k}ImageFilter=/FlateEncode`]),
-          ...parts,
-        ],
-        { label: "Ghostscript", where, hint },
-      );
-      return;
-    case "pdf-lib": {
-      let total = 0;
-      for (const p of parts) total += (await stat(p)).size;
-      const big = tooBigForPdfLib(total, "these add up to");
-      if (big) throw new TaskError(`${big} Pick MuPDF or qpdf for this merge.`);
-      await runPdfLib(ctx, ["join", out, ...parts], where);
-      return;
-    }
-    default:
-      throw new TaskError(`${ENGINES[engine as EngineId]?.label ?? "That engine"} can't merge files.`);
-  }
+const where = "while joining the files";
+const hint = "Try merging fewer files at once.";
+
+export async function ghostscriptJoin(ctx: TaskContext, parts: string[], out: string): Promise<void> {
+  await ctx.run(
+    "gs",
+    [
+      "-q",
+      "-dSAFER",
+      "-dBATCH",
+      "-dNOPAUSE",
+      "-sDEVICE=pdfwrite",
+      `-sOutputFile=${out}`,
+      "-dCompatibilityLevel=1.7",
+      "-dAutoRotatePages=/None",
+      "-dDetectDuplicateImages=true",
+      "-dPassThroughJPEGImages=true",
+      "-dPassThroughJPXImages=true",
+      ...["Color", "Gray", "Mono"].map((k) => `-dDownsample${k}Images=false`),
+      ...["Color", "Gray"].flatMap((k) => [`-dAutoFilter${k}Images=false`, `-d${k}ImageFilter=/FlateEncode`]),
+      ...parts,
+    ],
+    { label: "Ghostscript", where, hint },
+  );
 }
+
+export async function pdfLibJoin(ctx: TaskContext, parts: string[], out: string): Promise<void> {
+  let total = 0;
+  for (const p of parts) total += (await stat(p)).size;
+  const big = tooBigForPdfLib(total, "these add up to");
+  if (big) throw new TaskError(`${big} Pick MuPDF or qpdf for this merge.`);
+  await runPdfLib(ctx, ["join", out, ...parts], where);
+}
+
+registerMergeJoin("ghostscript", ghostscriptJoin);
+registerMergeJoin("pdf-lib", pdfLibJoin);

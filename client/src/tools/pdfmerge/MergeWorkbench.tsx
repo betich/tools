@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { FiPlus } from "react-icons/fi";
-import { DEFAULT_MERGE_OUTPUT, type JobInfo, type MergeOutput, type MergeParams } from "@tools/shared";
+import { useNavigate } from "react-router-dom";
+import { FiChevronDown, FiPlus } from "react-icons/fi";
+import {
+  DEFAULT_ENGINE,
+  DEFAULT_MERGE_OUTPUT,
+  ENGINES,
+  type EngineId,
+  type JobInfo,
+  type MergeOutput,
+  type MergeParams,
+} from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
-import { Button, Empty, Section, Sections, TextButton } from "@/components/ui";
+import { EnginePicker } from "@/components/pdf/EnginePicker";
+import { Button, Empty, Section, Sections, TextButton, Toggle } from "@/components/ui";
 import { useJob } from "@/hooks/useJob";
 import { useToast } from "@/hooks/useToast";
+import { ApiError } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { bytes, pad } from "@/lib/format";
+import { pdfJobs } from "@/lib/pdfjobs";
 import { FileList } from "./FileList";
 import { latestMerge, MergeRun } from "./MergeRun";
 import { OutputOptions } from "./OutputOptions";
@@ -39,6 +52,23 @@ const remember = (id: string | null) => {
   }
 };
 
+/**
+ * Hands a job to the Compress page (#18): its own re-attach key, which it reads
+ * on mount, and its run labels cleared since they belonged to whatever job it
+ * had before. Mirrors `remember`/`rememberLabels` in CompressWorkbench.
+ */
+const COMPRESS_STORE = "tools.pdfcompress.job";
+const COMPRESS_RUNS = "tools.pdfcompress.runs";
+const rememberForCompress = (id: string) => {
+  try {
+    sessionStorage.setItem(COMPRESS_STORE, id);
+    sessionStorage.removeItem(COMPRESS_RUNS);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const sameSet = (a: string[], b: string[]) => {
   const x = new Set(a);
   const y = new Set(b);
@@ -61,11 +91,19 @@ export function MergeWorkbench() {
   const files = useMergeFiles();
   const job = useJob();
   const toast = useToast();
+  const navigate = useNavigate();
   const picker = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [output, setOutput] = useState<MergeOutput>(DEFAULT_MERGE_OUTPUT);
   const [restoring, setRestoring] = useState(() => stored() !== null);
   const [starting, setStarting] = useState(false);
+  const [engine, setEngine] = useState<EngineId>(DEFAULT_ENGINE);
+  const [compressAfter, setCompressAfter] = useState(false);
+  // The merge task being handed to Compress, and why the last hand-off was refused.
+  const [handing, setHanding] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  // Merges asked for with "compress on export" on: each goes to Compress the moment it is done.
+  const onward = useRef(new Set<string>());
   // What each task of this page's asked for, to tell when the list has moved on since. Lost on reload, which reads as stale.
   const asked = useRef(new Map<string, string>());
 
@@ -93,7 +131,7 @@ export function MergeWorkbench() {
   const { entries } = files;
   const index = entries.findIndex((e) => e.key === selected);
   const entry = index >= 0 ? entries[index]! : null;
-  const params = mergeParams(entries, output);
+  const params = mergeParams(entries, output, engine);
   const task = latestMerge(job.job);
   const busy = starting || job.activeTask !== null;
   // The shown merge was asked for with exactly what the page holds now.
@@ -110,8 +148,44 @@ export function MergeWorkbench() {
     files.remove(key);
   };
 
+  /**
+   * Opens the finished merge in Compress: the server turns its output into a
+   * new compress job's upload and queues the analysis, and the Compress page
+   * re-attaches to that job on mount as it would after a reload. A refusal is
+   * shown under the merge as the server worded it, and the page stays put.
+   */
+  const compress = async (taskId: string) => {
+    const id = job.job?.id;
+    if (!id || handing) return;
+    setHanding(taskId);
+    setHandoffError(null);
+    try {
+      const next = await pdfJobs.handoff(id, taskId);
+      if (!rememberForCompress(next.id)) {
+        setHandoffError("This browser won't let the page remember the job, so Compress can't pick it up. Download the file and drop it there instead.");
+        return;
+      }
+      navigate("/pdf-compress");
+    } catch (error) {
+      setHandoffError(error instanceof ApiError ? error.message : "The API could not be reached. Try again in a moment.");
+    } finally {
+      setHanding(null);
+    }
+  };
+
+  // With "compress on export" on, a merge this page asked for goes straight on to Compress once it is done.
+  useEffect(() => {
+    if (!task || !onward.current.has(task.id)) return;
+    if (task.state === "done") {
+      onward.current.delete(task.id);
+      void compress(task.id);
+    } else if (task.state === "failed") onward.current.delete(task.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on the task's state, not on `compress`'s identity
+  }, [task?.id, task?.state]);
+
   const merge = async (request: MergeParams) => {
     setStarting(true);
+    setHandoffError(null);
     try {
       const uploads = [...new Set(request.items.map((i) => i.upload))];
       let open: JobInfo | null = job.job;
@@ -121,7 +195,10 @@ export function MergeWorkbench() {
         remember(open.id);
       }
       const created = await job.addTask({ kind: "merge", params: request }, open.id);
-      if (created) asked.current.set(created.id, JSON.stringify(request));
+      if (created) {
+        asked.current.set(created.id, JSON.stringify(request));
+        if (compressAfter) onward.current.add(created.id);
+      }
     } finally {
       setStarting(false);
     }
@@ -134,12 +211,21 @@ export function MergeWorkbench() {
     files.clear();
     setSelected(null);
     asked.current.clear();
+    onward.current.clear();
+    setHandoffError(null);
   };
 
   const startOver = () => {
     job.reset();
     remember(null);
+    setHandoffError(null);
   };
+
+  const onwardProps = (t: typeof task) => ({
+    onCompress: () => t && void compress(t.id),
+    handing: t !== null && handing === t.id,
+    compressNext: t !== null && onward.current.has(t.id),
+  });
 
   if (restoring) {
     return (
@@ -154,7 +240,14 @@ export function MergeWorkbench() {
       <div className="flex flex-col gap-8">
         {job.job ? (
           <Reopened info={job.job} onStartOver={startOver}>
-            <MergeRun job={job.job} task={task} stale={false} error={job.error} onDiscard={discard} />
+            <MergeRun
+              job={job.job}
+              task={task}
+              stale={false}
+              error={handoffError ?? job.error}
+              onDiscard={discard}
+              {...onwardProps(task)}
+            />
           </Reopened>
         ) : job.expired ? (
           <p className="text-meta text-body font-sans normal-case">
@@ -241,6 +334,14 @@ export function MergeWorkbench() {
           onMerge={() => params && void merge(params)}
           // Once there is a current file, download is the action; merging again steps back to outline.
           quiet={current && task?.state === "done"}
+          options={
+            <MergeOptions
+              engine={engine}
+              onEngine={setEngine}
+              compressAfter={compressAfter}
+              onCompressAfter={setCompressAfter}
+            />
+          }
         />
 
         {job.job ? (
@@ -248,8 +349,9 @@ export function MergeWorkbench() {
             job={job.job}
             task={task}
             stale={task !== null && !current}
-            error={job.error}
+            error={handoffError ?? job.error}
             onDiscard={discard}
+            {...onwardProps(task)}
           />
         ) : job.error ? (
           <p className="text-meta text-body font-sans normal-case">{job.error}</p>
@@ -292,6 +394,54 @@ function MergeBar({
           {label}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What goes in MergeBar's options slot (#18): whether the merged file goes on
+ * to Compress, and the engine that joins the files, folded to one line since
+ * MuPDF is right for nearly every merge.
+ */
+function MergeOptions({
+  engine,
+  onEngine,
+  compressAfter,
+  onCompressAfter,
+}: {
+  engine: EngineId;
+  onEngine: (engine: EngineId) => void;
+  compressAfter: boolean;
+  onCompressAfter: (on: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Toggle checked={compressAfter} onChange={onCompressAfter} label="compress on export" />
+        {compressAfter ? (
+          <p className="text-meta text-body font-sans normal-case">
+            The merged file opens in Compress, analysed, when it is done.
+          </p>
+        ) : null}
+      </div>
+      <section className="flex flex-col gap-4">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="group flex min-h-5 cursor-pointer items-center justify-between gap-3 text-left"
+        >
+          <span className="text-meta text-meta group-hover:text-indigo font-mono uppercase transition-colors duration-200">
+            engine · {ENGINES[engine].label}
+          </span>
+          <FiChevronDown
+            aria-hidden
+            className={cn("text-meta group-hover:text-indigo size-3.5 transition-[transform,color] duration-200", open && "rotate-180")}
+          />
+        </button>
+        {open ? <EnginePicker tool="merge" value={engine} onChange={onEngine} /> : null}
+      </section>
     </div>
   );
 }
