@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { UPLOAD_PART_BYTES } from "@tools/shared";
 
 const int = (v: string | undefined, fallback: number) => {
   const n = Number(v);
@@ -20,8 +21,14 @@ export const env = {
   /** Guard rails so a runaway merge cannot exhaust the box. */
   maxBatchRows: int(process.env.MAX_BATCH_ROWS, 500),
   maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 12 * 1024 * 1024),
-  /** Anything bigger is refused by Bun before it is buffered. */
+  /** Anything bigger is refused before it is read — except an upload part, which streams to disk. */
   maxBodyBytes: int(process.env.MAX_BODY_BYTES, 16 * 1024 * 1024),
+  /** Bun's own ceiling, refused before it is buffered: room for one upload part and its framing. */
+  maxPartBodyBytes: UPLOAD_PART_BYTES + 1024 * 1024,
+  /** Upload sessions (and the jobs built on them) not touched for this long are swept. */
+  jobTtlMs: int(process.env.JOB_TTL_MS, 60 * 60 * 1000),
+  /** Unfinished uploads one caller may hold open at once. */
+  maxOpenUploads: int(process.env.MAX_OPEN_UPLOADS, 8),
   /** A saved project's doc + data, serialized. */
   maxProjectBytes: int(process.env.MAX_PROJECT_BYTES, 8 * 1024 * 1024),
   maxProjects: int(process.env.MAX_PROJECTS, 5000),
@@ -55,8 +62,10 @@ export const paths = {
   db: resolve(env.dataDir, "tools.sqlite"),
   assets: resolve(process.env.ASSETS_DIR || resolve(env.dataDir, "assets")),
   fonts: resolve(process.env.FONTS_DIR || resolve(env.dataDir, "fonts")),
+  /** Scratch space for the PDF tools: upload parts, assembled inputs, job outputs. */
+  jobs: resolve(process.env.JOBS_DIR || resolve(env.dataDir, "jobs")),
 };
 
 export function ensureDirs(): void {
-  for (const dir of [env.dataDir, paths.assets, paths.fonts]) mkdirSync(dir, { recursive: true });
+  for (const dir of [env.dataDir, paths.assets, paths.fonts, paths.jobs]) mkdirSync(dir, { recursive: true });
 }
