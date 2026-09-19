@@ -19,6 +19,15 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server's own words when it turned a request away on purpose — too
+ * large, too often, too busy, out of room. They say what to do next, which
+ * "is the api running?" does not. `null` for anything else.
+ */
+export function refusal(error: unknown): string | null {
+  return error instanceof ApiError && [413, 429, 503, 507].includes(error.status) ? error.message : null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url(path), {
     ...init,

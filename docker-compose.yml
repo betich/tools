@@ -20,6 +20,20 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://tools.betich.me,https://betich-tools.pages.dev,http://localhost:5173}
       MAX_BATCH_ROWS: ${MAX_BATCH_ROWS:-500}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-12582912}
+      # The rest of the guard rails (rate limits, disk reserve, render queue)
+      # have defaults in server/src/env.ts; override any of them here.
+      MIN_FREE_BYTES: ${MIN_FREE_BYTES:-2147483648}
+      MAX_ASSET_BYTES: ${MAX_ASSET_BYTES:-2147483648}
+      RENDER_CONCURRENCY: ${RENDER_CONCURRENCY:-1}
+    # This box runs other services too. A runaway render is killed and
+    # restarted here instead of pushing its neighbours into swap.
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 2
+    pids_limit: 256
+    logging: &logs
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
     volumes:
       - tools-data:/data
     # Not published to the host: the tunnel reaches it over the compose network.
@@ -34,6 +48,8 @@ services:
     # image's default non-root user cannot read them.
     user: "0:0"
     command: tunnel --config /etc/cloudflared/config.yml run
+    mem_limit: 256m
+    logging: *logs
     volumes:
       - ./deploy/tunnel.yml:/etc/cloudflared/config.yml:ro
       - ./deploy/tunnel-credentials.json:/etc/cloudflared/credentials.json:ro

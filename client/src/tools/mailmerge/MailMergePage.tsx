@@ -6,7 +6,7 @@ import { FiDownload, FiLink, FiLock, FiSave, FiShare2 } from "react-icons/fi";
 import { Button, Sections } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
 import { useToast } from "@/hooks/useToast";
-import { api, ApiError, assetUrl, type ShareState } from "@/lib/api";
+import { api, ApiError, assetUrl, refusal, type ShareState } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { CanvasStage } from "./CanvasStage";
@@ -128,7 +128,9 @@ export function MailMergePage() {
         setGate(null);
       } catch (error) {
         const status = error instanceof ApiError ? error.status : 0;
-        if (status === 401) setGate({ error: password ? "wrong password" : null, target: { kind: "share", slug: shareSlugToOpen } });
+        const target = { kind: "share", slug: shareSlugToOpen } as const;
+        if (status === 401) setGate({ error: password ? "wrong password" : null, target });
+        else if (status === 429) setGate({ error: refusal(error), target });
         else toast("that share link is not valid");
       } finally {
         setBusy(null);
@@ -375,7 +377,7 @@ export function MailMergePage() {
       if (error instanceof ApiError && error.status === 401) {
         if (projectId) forget(projectId);
         toast("this merge is locked — reopen it with its password");
-      } else toast("could not save — is the api running?");
+      } else toast(refusal(error) ?? "could not save — is the api running?");
     } finally {
       setBusy(null);
     }
@@ -410,7 +412,7 @@ export function MailMergePage() {
         toast(
           error instanceof ApiError && error.status === 401
             ? "this merge is locked — reopen it with its password"
-            : "could not share — is the api running?",
+            : (refusal(error) ?? "could not share — is the api running?"),
         );
         return null;
       } finally {
@@ -439,7 +441,8 @@ export function MailMergePage() {
           // A remembered password that no longer works is dropped, not retried.
           forget(id);
           setGate({ error: password ? "wrong password" : null, target: { kind: "project", id } });
-        } else toast("could not open that project");
+        } else if (error instanceof ApiError && error.status === 429) setGate({ error: refusal(error), target: { kind: "project", id } });
+        else toast(refusal(error) ?? "could not open that project");
         // Nothing opened, so the next change of address is not a visit.
         if (!password) pushNext.current = false;
       } finally {

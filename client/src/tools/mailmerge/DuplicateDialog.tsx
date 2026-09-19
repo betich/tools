@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiCopy, FiX } from "react-icons/fi";
 import { Button, Field, Input, TextButton } from "@/components/ui";
-import { api, ApiError, type ProjectSummary } from "@/lib/api";
+import { api, ApiError, refusal, type ProjectSummary } from "@/lib/api";
 import { remember, unlockFor } from "./unlocks";
 
 /**
@@ -59,7 +59,7 @@ export function DuplicateDialog({
       if (e instanceof ApiError && e.status === 401) {
         setNeedsPassword(true);
         setError(password ? "wrong password" : "this merge is locked — enter its password");
-      } else setError("could not duplicate — is the api running?");
+      } else setError(refusal(e) ?? "could not duplicate — is the api running?");
       setBusy(false);
     }
   };

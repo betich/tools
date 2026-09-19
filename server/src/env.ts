@@ -20,6 +20,27 @@ export const env = {
   /** Guard rails so a runaway merge cannot exhaust the box. */
   maxBatchRows: int(process.env.MAX_BATCH_ROWS, 500),
   maxUploadBytes: int(process.env.MAX_UPLOAD_BYTES, 12 * 1024 * 1024),
+  /** Anything bigger is refused by Bun before it is buffered. */
+  maxBodyBytes: int(process.env.MAX_BODY_BYTES, 16 * 1024 * 1024),
+  /** A saved project's doc + data, serialized. */
+  maxProjectBytes: int(process.env.MAX_PROJECT_BYTES, 8 * 1024 * 1024),
+  maxProjects: int(process.env.MAX_PROJECTS, 5000),
+  /** Total bytes of uploaded assets across everyone. */
+  maxAssetBytes: int(process.env.MAX_ASSET_BYTES, 2 * 1024 * 1024 * 1024),
+  /** Writes stop while the data volume has less than this free — it is shared with the rest of the box. */
+  minFreeBytes: int(process.env.MIN_FREE_BYTES, 2 * 1024 * 1024 * 1024),
+  /** Matches the editor's own ceiling on a side. */
+  maxCanvasSide: int(process.env.MAX_CANVAS_SIDE, 8000),
+  maxLayers: int(process.env.MAX_LAYERS, 100),
+  /** Distinct font families a doc may pull in; each one is a whole family of TTFs. */
+  maxFamilies: int(process.env.MAX_FAMILIES, 12),
+  /** rows × width × height across one batch. */
+  maxBatchPixels: int(process.env.MAX_BATCH_PIXELS, 2_000_000_000),
+  /** The ZIP is held in memory until it is sent. */
+  maxBatchBytes: int(process.env.MAX_BATCH_BYTES, 512 * 1024 * 1024),
+  /** Renders running at once, and how many may wait behind them before the rest are turned away. */
+  renderConcurrency: int(process.env.RENDER_CONCURRENCY, 1),
+  renderQueue: int(process.env.RENDER_QUEUE, 3),
   fontCacheTtlMs: int(process.env.FONT_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
 };
 

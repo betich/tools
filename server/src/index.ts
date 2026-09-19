@@ -2,6 +2,7 @@ import { cors } from "@elysiajs/cors";
 import { swagger } from "@elysiajs/swagger";
 import { Elysia } from "elysia";
 import { env, ensureDirs } from "./env";
+import { rateLimit } from "./lib/limits";
 import { assets } from "./routes/assets";
 import { fonts } from "./routes/fonts";
 import { health } from "./routes/health";
@@ -11,8 +12,12 @@ import { tools } from "./routes/tools";
 
 ensureDirs();
 
-export const app = new Elysia()
+const everyCall = rateLimit("all", 300);
+
+export const app = new Elysia({ serve: { maxRequestBodySize: env.maxBodyBytes } })
   .use(cors({ origin: env.origins, credentials: true }))
+  // A ceiling on everything but the container's own probe; the costly routes add tighter ones.
+  .onBeforeHandle({ as: "global" }, (ctx) => (new URL(ctx.request.url).pathname === "/health" ? undefined : everyCall(ctx)))
   .use(swagger({ path: "/api/docs", documentation: { info: { title: "betich's tools", version: "0.1.0" } } }))
   .onError(({ code, error, set }) => {
     if (code === "NOT_FOUND") {

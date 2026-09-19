@@ -5,8 +5,18 @@ import { GlobalFonts } from "@napi-rs/canvas";
 import type { GoogleFont } from "@tools/shared";
 import { env, paths } from "../env";
 import { cacheGet, cacheSet } from "./db";
+import { diskHasRoom } from "./limits";
 
 const CATALOGUE_KEY = "google-fonts:catalogue";
+
+/** Upstream calls give up rather than hold a request open. */
+const UPSTREAM_TIMEOUT_MS = 10_000;
+/** No real font face is this big; anything larger is not one. */
+const MAX_FACE_BYTES = 20 * 1024 * 1024;
+/** A family Google does not know is remembered briefly, so a typo is not re-fetched on every render. */
+const UNKNOWN_FAMILY_TTL_MS = 60 * 60 * 1000;
+
+const upstream = (url: string, init?: RequestInit) => fetch(url, { ...init, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
 
 /**
  * A small hand-picked catalogue used when no API key is configured, so the
@@ -49,7 +59,7 @@ async function googleCatalogue(): Promise<{ fonts: GoogleFont[]; source: "google
 
   try {
     const url = `https://www.googleapis.com/webfonts/v1/webfonts?sort=popularity&key=${encodeURIComponent(env.googleFontsKey)}`;
-    const res = await fetch(url);
+    const res = await upstream(url);
     if (!res.ok) throw new Error(`webfonts ${res.status}`);
     const json = (await res.json()) as WebfontsResponse;
     const fonts: GoogleFont[] = (json.items ?? []).map((f) => ({
@@ -92,7 +102,7 @@ export async function familyFaces(family: string): Promise<GoogleFace[]> {
 
   let faces: GoogleFace[] = [];
   try {
-    const res = await fetch(url, { headers: { "user-agent": "Mozilla/5.0" } });
+    const res = await upstream(url, { headers: { "user-agent": "Mozilla/5.0" } });
     if (res.ok) faces = parseFaces(await res.text());
   } catch {
     /* fall through to the catalogue */
@@ -105,7 +115,7 @@ export async function familyFaces(family: string): Promise<GoogleFace[]> {
     faces = Object.entries(font?.files ?? {}).map(([variant, file]) => ({ ...parseVariant(variant), url: file }));
   }
 
-  if (faces.length) cacheSet(key, faces, env.fontCacheTtlMs);
+  cacheSet(key, faces, faces.length ? env.fontCacheTtlMs : UNKNOWN_FAMILY_TTL_MS);
   return faces;
 }
 
@@ -150,21 +160,33 @@ export function registerGoogleFamily(family: string): Promise<boolean> {
 }
 
 async function registerFace(family: string, face: GoogleFace): Promise<boolean> {
-  const file = join(paths.fonts, `${slugify(family)}-${face.weight}${face.italic ? "italic" : ""}.ttf`);
+  const file = await faceFile(family, face);
+  if (!file) return false;
   if (registered.has(file)) return true;
-  if (!existsSync(file)) {
-    try {
-      const res = await fetch(face.url);
-      if (!res.ok) return false;
-      await mkdir(paths.fonts, { recursive: true });
-      await writeFile(file, Buffer.from(await res.arrayBuffer()));
-    } catch {
-      return false;
-    }
-  }
   const ok = Boolean(GlobalFonts.registerFromPath(file, family));
   if (ok) registered.add(file);
   return ok;
+}
+
+/**
+ * The face's TTF on disk, downloaded once and kept. `null` when it cannot be
+ * had — upstream is down, the file is implausibly large, or the disk is low.
+ */
+export async function faceFile(family: string, face: GoogleFace): Promise<string | null> {
+  const file = join(paths.fonts, `${slugify(family)}-${face.weight}${face.italic ? "italic" : ""}.ttf`);
+  if (existsSync(file)) return file;
+  if (!/^https?:\/\/fonts\.gstatic\.com\//.test(face.url)) return null;
+  try {
+    const res = await upstream(face.url);
+    if (!res.ok || Number(res.headers.get("content-length") ?? 0) > MAX_FACE_BYTES) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > MAX_FACE_BYTES || !(await diskHasRoom(buf.byteLength))) return null;
+    await mkdir(paths.fonts, { recursive: true });
+    await writeFile(file, buf);
+    return file;
+  } catch {
+    return null;
+  }
 }
 
 /** Register an uploaded face (TTF/OTF/WOFF) under an arbitrary family name. */

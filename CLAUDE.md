@@ -13,6 +13,7 @@ Bun workspace: `shared/`, `client/`, `server/`. `@tools/shared` is consumed as T
 - **Filenames keep Unicode.** `fileNameFor` slugs on `\p{L}\p{N}\p{M}` — stripping to `[a-z0-9]` erases Thai entirely and every file becomes `row-001`.
 - **Asset URLs must be absolute** (`assetUrl()` in `client/src/lib/api.ts`). Client and API are different origins in production.
 - **The server is optional.** Every feature that needs it degrades with a message; nothing throws. `useServerStatus` drives the top-bar dot.
+- **Every costly route carries a guard** from `server/src/lib/limits.ts`: a `rateLimit` hook, `withRenderSlot` for anything that draws, `diskHasRoom` before anything that writes, `docProblem` before a doc is rendered. Callers are keyed on `cf-connecting-ip`. Refusals are 413/429/503/507 with a sentence the client shows as-is (`refusal()` in `api.ts`). The renderer never fetches remote URLs.
 - **Font faces used by a doc must be registered before rendering.** `prepareFonts` walks `font.source` *and* `font.fallbacks` — Thai text needs the fallback registered or it renders as boxes.
 
 ## Design

@@ -44,14 +44,18 @@ export async function prepareFonts(doc: MergeDoc): Promise<string[]> {
   return [...new Set(missing.filter((m): m is string => m !== null))];
 }
 
-/** `asset:<id>`, a data URL, or an absolute http(s) URL. */
+/**
+ * `asset:<id>` or a data URL. Remote URLs are not fetched: the editor never
+ * sends one, and fetching whatever a caller names would let them point this
+ * box at its neighbours.
+ */
 export async function resolveImage(src: string): Promise<Image | null> {
   try {
     if (src.startsWith("asset:")) {
       const buf = await readFile(join(paths.assets, src.slice("asset:".length)));
       return await loadImage(buf);
     }
-    if (src.startsWith("data:") || /^https?:\/\//.test(src)) return await loadImage(src);
+    if (src.startsWith("data:")) return await loadImage(src);
     return null;
   } catch {
     return null;
@@ -65,5 +69,6 @@ export async function renderRow(doc: MergeDoc, row: MergeRow | null, base: Image
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext("2d");
   renderDoc(ctx as unknown as Ctx2D, doc, { row, base });
-  return { buffer: canvas.toBuffer("image/png"), width, height };
+  // `encode` compresses off the main thread, so the API keeps answering mid-batch.
+  return { buffer: await canvas.encode("png"), width, height };
 }

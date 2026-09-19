@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Elysia, t } from "elysia";
 import { env, paths } from "../env";
 import { db, id, nowIso } from "../lib/db";
+import { DISK_FULL, diskHasRoom, rateLimit, refuse } from "../lib/limits";
 
 const ALLOWED = new Set([
   "image/png",
@@ -33,6 +34,8 @@ export const assets = new Elysia({ prefix: "/api/assets" })
         set.status = 415;
         return { error: `unsupported content type: ${type}` };
       }
+      const stored = db.query<{ n: number | null }, []>("SELECT SUM(bytes) AS n FROM assets").get()?.n ?? 0;
+      if (stored + file.size > env.maxAssetBytes || !(await diskHasRoom(file.size))) return refuse(set, 507, DISK_FULL);
 
       const assetId = id("as");
       await writeFile(join(paths.assets, assetId), Buffer.from(await file.arrayBuffer()));
@@ -46,7 +49,7 @@ export const assets = new Elysia({ prefix: "/api/assets" })
       set.status = 201;
       return { id: assetId, ref: `asset:${assetId}`, contentType: type, bytes: file.size };
     },
-    { body: t.Object({ file: t.File() }) },
+    { body: t.Object({ file: t.File() }), beforeHandle: rateLimit("upload", 20) },
   )
   .get("/:id", async ({ params, set }) => {
     const row = db
