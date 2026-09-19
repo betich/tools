@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { db } from "../lib/db";
+import { workerStatus } from "../lib/worker";
 
 const startedAt = Date.now();
 
@@ -10,6 +11,7 @@ function report() {
     service: "betich-tools",
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     projects,
+    pdfWorker: workerStatus().up ? "up" : "down",
   };
 }
 

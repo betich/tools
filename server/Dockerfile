@@ -5,6 +5,7 @@ COPY package.json bun.lock ./
 COPY shared/package.json ./shared/
 COPY server/package.json ./server/
 COPY client/package.json ./client/
+COPY worker/package.json ./worker/
 RUN bun install --frozen-lockfile --filter '@tools/server' --filter '@tools/shared'
 
 FROM oven/bun:1-slim AS runtime

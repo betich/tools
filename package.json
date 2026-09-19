@@ -4,13 +4,14 @@
   "type": "module",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
-  "workspaces": ["shared", "client", "server"],
+  "workspaces": ["shared", "client", "server", "worker"],
   "scripts": {
     "dev": "bun run --filter '*' dev",
     "dev:client": "bun run --cwd client dev",
     "dev:server": "bun run --cwd server dev",
+    "dev:worker": "bun run --cwd worker dev",
     "build": "bun run --cwd client build",
-    "typecheck": "bun run --cwd shared typecheck && bun run --cwd client typecheck && bun run --cwd server typecheck",
+    "typecheck": "bun run --cwd shared typecheck && bun run --cwd client typecheck && bun run --cwd server typecheck && bun run --cwd worker typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,css,json,md}\"",
     "up": "docker compose up -d --build",
     "down": "docker compose down"
