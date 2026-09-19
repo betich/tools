@@ -1,4 +1,4 @@
-import type { PdfAnalysis, PdfImage, SizeCategory } from "@tools/shared";
+import type { PdfAnalysis, PdfImage, RunResult, SizeCategory } from "@tools/shared";
 
 /** The breakdown's categories in the order the bar draws them — the usual heaviest first. */
 export const CATEGORIES: { key: SizeCategory; label: string }[] = [
@@ -19,6 +19,14 @@ export function asAnalysis(value: unknown): PdfAnalysis | null {
   const a = value as Partial<PdfAnalysis>;
   if (typeof a.bytes !== "number" || !a.breakdown || !Array.isArray(a.images) || !Array.isArray(a.fonts)) return null;
   return a as PdfAnalysis;
+}
+
+/** A compress task's `result`, checked the same way; its `analysis` must pass `asAnalysis` too. */
+export function asRunResult(value: unknown): RunResult | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Partial<RunResult>;
+  if (typeof r.bytes !== "number" || typeof r.inputBytes !== "number" || !asAnalysis(r.analysis)) return null;
+  return { ...r, skipped: Array.isArray(r.skipped) ? r.skipped : [], notes: Array.isArray(r.notes) ? r.notes : [] } as RunResult;
 }
 
 /** `1–3, 7, 9–12` — consecutive pages folded into ranges; past `max` parts the rest is counted, not listed. */
@@ -65,4 +73,14 @@ export function share(part: number, whole: number): string {
   if (!whole || part <= 0) return "0%";
   const pct = (part / whole) * 100;
   return pct < 0.1 ? "<0.1%" : `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
+}
+
+/**
+ * `−74%` / `+3%` / `±0%` — a size change with a real minus sign, rounded to
+ * whole percent, since a tenth of a percent says nothing about a file.
+ */
+export function change(before: number, after: number): string {
+  if (!before) return after ? "new" : "—";
+  const pct = Math.round(((after - before) / before) * 100);
+  return pct === 0 ? "±0%" : pct < 0 ? `−${-pct}%` : `+${pct}%`;
 }

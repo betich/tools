@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { JobInfo, PdfAnalysis } from "@tools/shared";
+import type { CompressParams, JobInfo, PdfAnalysis } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { QueueNotice } from "@/components/QueueNotice";
 import { RetentionNote } from "@/components/RetentionNote";
@@ -12,7 +12,8 @@ import { bytes } from "@/lib/format";
 import { asAnalysis } from "./analysis";
 import { FontTable } from "./FontTable";
 import { ImageTable } from "./ImageTable";
-import { RunPanel } from "./RunPanel";
+import { RunResults } from "./RunResults";
+import { describeParams, RunPanel } from "./RunPanel";
 import { SizeBreakdown } from "./SizeBreakdown";
 
 /**
@@ -35,6 +36,29 @@ const remember = (id: string | null) => {
     else sessionStorage.removeItem(STORE);
   } catch {
     // Storage blocked: the page still works, it just forgets on reload.
+  }
+};
+
+/**
+ * Each run's settings in one line, by task id. The queue keeps a task's params
+ * to itself, so this tab remembers what it asked for; after a reload in another
+ * tab the history falls back to run numbers.
+ */
+const RUNS = "tools.pdfcompress.runs";
+
+const storedLabels = (): Record<string, string> => {
+  try {
+    return JSON.parse(sessionStorage.getItem(RUNS) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+const rememberLabels = (labels: Record<string, string> | null) => {
+  try {
+    if (labels) sessionStorage.setItem(RUNS, JSON.stringify(labels));
+    else sessionStorage.removeItem(RUNS);
+  } catch {
+    // As above: only the history's labels are lost.
   }
 };
 
@@ -64,7 +88,10 @@ export function CompressWorkbench() {
   }, []);
 
   useEffect(() => {
-    if (job.expired) remember(null);
+    if (job.expired) {
+      remember(null);
+      rememberLabels(null);
+    }
   }, [job.expired]);
 
   const open = useCallback(
@@ -72,7 +99,10 @@ export function CompressWorkbench() {
       setCreating(true);
       const created = await job.createJob({ tool: "compress", uploads: [uploadId] });
       setCreating(false);
-      if (created) remember(created.id);
+      if (created) {
+        remember(created.id);
+        rememberLabels(null);
+      }
     },
     [job],
   );
@@ -91,6 +121,7 @@ export function CompressWorkbench() {
   const discard = useCallback(async () => {
     if (!(await job.discard())) return;
     remember(null);
+    rememberLabels(null);
     upload.reset();
   }, [job, upload]);
 
@@ -163,13 +194,36 @@ export function CompressWorkbench() {
   );
 }
 
-/** The job is on the server: its file, the analyse task until it lands, then the analysis. */
+/**
+ * The job is on the server: its file, the analyse task until it lands, then
+ * the analysis with the settings beside it. Each RUN adds a compress task to
+ * the same job, so trying other settings needs no new upload; the runs appear
+ * above the analysis, newest shown in full.
+ */
 function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeof useJob>; onDiscard: () => unknown }) {
   const input = info.inputs[0];
   const analysis = asAnalysis(info.analysis);
   const analyse = info.tasks.find((t) => t.kind === "analyse") ?? null;
-  // Anything else the queue is doing for this job (a run, a crop) — #9 onward shows it by the run panel.
+  const runs = info.tasks.filter((t) => t.kind === "compress");
+  // Anything the queue is doing for this job — the analysis, a run, a crop. One task at a time per caller.
   const busy = job.activeTask !== null;
+  const [labels, setLabels] = useState(storedLabels);
+  const [picked, setPicked] = useState<string | null>(null);
+  const shown = runs.find((t) => t.id === picked) ?? runs[runs.length - 1] ?? null;
+
+  const run = useCallback(
+    async (params: CompressParams) => {
+      const task = await job.addTask({ kind: "compress", params });
+      if (!task) return;
+      setPicked(null);
+      setLabels((l) => {
+        const next = { ...l, [task.id]: describeParams(params) };
+        rememberLabels(next);
+        return next;
+      });
+    },
+    [job],
+  );
 
   return (
     <div className="flex flex-col gap-10">
@@ -185,11 +239,14 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
       </header>
 
       <div className="grid items-start gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
-        <aside className="order-last lg:sticky lg:top-20 lg:order-none">
-          <RunPanel analysis={analysis} busy={busy} />
+        <aside className="order-last lg:sticky lg:top-20 lg:order-none lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1">
+          <RunPanel analysis={analysis} busy={busy} onRun={run} />
         </aside>
 
         <div className="flex min-w-0 flex-col gap-10">
+          {analysis && shown ? (
+            <RunResults jobId={info.id} runs={runs} labels={labels} input={analysis} shown={shown} onShow={setPicked} />
+          ) : null}
           {analysis ? (
             <Analysis analysis={analysis} />
           ) : analyse ? (
