@@ -11,7 +11,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import { bytes } from "@/lib/format";
-import { describeOptions, FORMATS, MAX_TOLERANCE, type AnimFormat, type EncodeOptions } from "./types";
+import { describeOptions, FORMATS, MAX_TOLERANCE, QUALITY_FORMATS, type AnimFormat, type EncodeOptions } from "./types";
 
 /** A hit is "on target" when it is at most this far under. */
 export const CLOSE_ENOUGH = 0.05;
@@ -19,7 +19,7 @@ export const MAX_TRIES = 12;
 
 /** Past this, frame-diff tolerance starts to smear motion, so the ladder only goes there after the cheap cuts. */
 const SOFT_TOLERANCE = 24;
-/** gifski's quality is lowered to here before tolerance is raised, then the rest of the way. */
+/** Quality (gifski's, WebP's) is lowered to here before tolerance is raised, then the rest of the way. */
 const SOFT_QUALITY = 30;
 /** A palette is cut to here before tolerance is raised, then the rest of the way. */
 const SOFT_COLOURS = 32;
@@ -49,7 +49,7 @@ export function ladder(format: AnimFormat, start: EncodeOptions): EncodeOptions[
     for (const t of range(rungs[rungs.length - 1]!.tolerance + 1, to)) push({ tolerance: t });
   };
 
-  if (format === "gif") {
+  if (QUALITY_FORMATS.includes(format)) {
     for (const q of range(o.quality - 1, Math.min(o.quality - 1, SOFT_QUALITY))) push({ quality: q });
     tolerance(SOFT_TOLERANCE);
     for (const q of range(rungs[rungs.length - 1]!.quality - 1, 1)) push({ quality: q });

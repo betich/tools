@@ -19,6 +19,7 @@ import {
 const ENCODERS: Record<AnimFormat, () => Promise<Encoder>> = {
   gif: () => import("./gifski").then((m) => m.gifski),
   apng: () => import("./apng").then((m) => m.apng),
+  webp: () => import("./webp").then((m) => m.webp),
 };
 
 export type EncodeRequest = {
