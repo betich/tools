@@ -14,7 +14,18 @@ const GUTTER = 24;
  * shown here is what the PDF holds. A PDF shows the server's render of its
  * first page, or says what it is when there is none yet.
  */
-export function PagePreview({ entry, index, count }: { entry: MergeEntry | null; index: number; count: number }) {
+export function PagePreview({
+  entry,
+  index,
+  count,
+  kept,
+}: {
+  entry: MergeEntry | null;
+  index: number;
+  count: number;
+  /** For a PDF whose pages were picked (#37): how many of how many go in. */
+  kept?: { pages: number; of: number } | null;
+}) {
   const source = entry?.source;
   const options = entry?.layout;
   // Memoised on the source and options alone, so upload progress elsewhere never redraws the page.
@@ -47,14 +58,14 @@ export function PagePreview({ entry, index, count }: { entry: MergeEntry | null;
 
       <p className="text-meta flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-meta uppercase tabular-nums">
         <span>{entry ? `page ${pad(index + 1)} / ${pad(count)}` : "preview"}</span>
-        <span>{entry ? caption(entry, layout) : null}</span>
+        <span>{entry ? caption(entry, layout, kept ?? null) : null}</span>
       </p>
     </div>
   );
 }
 
-function caption(entry: MergeEntry, layout: PageLayout | null): string {
-  if (entry.kind === "pdf") return "pages kept as they are";
+function caption(entry: MergeEntry, layout: PageLayout | null, kept: { pages: number; of: number } | null): string {
+  if (entry.kind === "pdf") return kept ? `${pad(kept.pages)} of ${pad(kept.of)} pages` : "pages kept as they are";
   const { mode, paper } = entry.layout;
   const where = mode === "image" ? "image size" : `${PAPER_SIZES[paper].label} ${entry.layout.fit}`;
   if (!layout) return where;

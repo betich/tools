@@ -12,7 +12,8 @@ import {
 } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { EnginePicker } from "@/components/pdf/EnginePicker";
-import { Button, Empty, Section, Sections, TextButton, Toggle } from "@/components/ui";
+import { Button, Empty, Section, Sections, Segmented, TextButton, Toggle } from "@/components/ui";
+import { useHotkey } from "@/hooks/useHotkey";
 import { useJob } from "@/hooks/useJob";
 import { useToast } from "@/hooks/useToast";
 import { ApiError } from "@/lib/api";
@@ -22,11 +23,20 @@ import { pdfJobs } from "@/lib/pdfjobs";
 import { FileList } from "./FileList";
 import { latestMerge, MergeRun } from "./MergeRun";
 import { OutputOptions } from "./OutputOptions";
-import { PageOptions } from "./PageOptions";
+import { PageGrid } from "./PageGrid";
+import { filePages, orderRequest } from "./pageOrder";
+import { PageOptions, type FilePages } from "./PageOptions";
 import { PagePreview } from "./PagePreview";
-import { ACCEPT, defaultTitle, mergeParams, useMergeFiles } from "./useMergeFiles";
+import { ACCEPT, defaultTitle, mergeItems, mergeParams, useMergeFiles } from "./useMergeFiles";
+import { usePageOrder } from "./usePageOrder";
 
 const FORMATS = "pdf · jpg · png · webp · avif · gif · heic · tiff";
+
+type View = "files" | "pages";
+const VIEWS: { value: View; label: string }[] = [
+  { value: "files", label: "files" },
+  { value: "pages", label: "pages" },
+];
 
 /**
  * The open merge job's id, per tab. A reload re-attaches to it while the
@@ -94,6 +104,9 @@ export function MergeWorkbench() {
   const navigate = useNavigate();
   const picker = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // File-level merge is the default; the page view is a toggle (#37).
+  const [view, setView] = useState<View>("files");
+  const pages = usePageOrder(files.entries, { all: view === "pages", focus: selected });
   const [output, setOutput] = useState<MergeOutput>(DEFAULT_MERGE_OUTPUT);
   const [restoring, setRestoring] = useState(() => stored() !== null);
   const [starting, setStarting] = useState(false);
@@ -131,7 +144,17 @@ export function MergeWorkbench() {
   const { entries } = files;
   const index = entries.findIndex((e) => e.key === selected);
   const entry = index >= 0 ? entries[index]! : null;
-  const params = mergeParams(entries, output, engine);
+  const items = mergeItems(entries);
+  // What the page view adds: nothing while untouched, so that request is the file-level one.
+  const request = items ? orderRequest(pages.order, pages.files, items) : null;
+  const params =
+    request?.state === "whole"
+      ? mergeParams(entries, output, engine)
+      : request?.state === "pages"
+        ? mergeParams(entries, output, engine, request.pages)
+        : null;
+  // How many pages come out, once every file's count is known.
+  const outputPages = pages.slots.every((s) => s.kind === "page") ? pages.slots.length : null;
   const task = latestMerge(job.job);
   const busy = starting || job.activeTask !== null;
   // The shown merge was asked for with exactly what the page holds now.
@@ -139,6 +162,44 @@ export function MergeWorkbench() {
   const stopped = entries.filter((e) => e.upload.phase === "failed").length;
   const waiting = entries.filter((e) => e.upload.phase === "queued" || e.upload.phase === "uploading").length;
   const images = entries.filter((e) => e.kind !== "pdf").length;
+
+  // The selected PDF's pages, for its range box and the preview's caption.
+  const entryCount = entry ? pages.files[index]?.pages : undefined;
+  const kept = entry && typeof entryCount === "number" ? filePages(pages.slots, entry.key) : null;
+  const filePagesOf: FilePages | null =
+    entry?.kind === "pdf" && (entry.upload.phase === "done" || entry.upload.phase === "failed")
+      ? {
+          count: entryCount,
+          kept: kept ?? [],
+          onApply: (list) => pages.setPages(entry.key, list),
+          onReset: () => pages.reset(entry.key),
+        }
+      : null;
+
+  // Page view keys: delete takes the picked pages out, escape lets go of them, mod+A picks every page.
+  const picking = view === "pages" && pages.selection.ids.size > 0;
+  useHotkey("Delete", pages.removePicked, { enabled: picking });
+  useHotkey("Backspace", pages.removePicked, { enabled: picking });
+  useHotkey("Escape", pages.clearPicked, { enabled: picking });
+  const { pickAll } = pages;
+  const onPickAll = useCallback(
+    (e: KeyboardEvent) => {
+      e.preventDefault();
+      pickAll();
+    },
+    [pickAll],
+  );
+  useHotkey("mod+a", onPickAll, { enabled: view === "pages" });
+
+  // A file moved in the list takes its pages with it when the page order has been edited.
+  const moveTo = (key: string, to: number) => {
+    files.moveTo(key, to);
+    pages.fileMoved(key, to);
+  };
+  const move = (key: string, by: -1 | 1) => {
+    const at = entries.findIndex((e) => e.key === key);
+    if (at >= 0) moveTo(key, at + by);
+  };
 
   const remove = (key: string) => {
     if (key === selected) {
@@ -209,6 +270,7 @@ export function MergeWorkbench() {
     if (!(await job.discard())) return;
     remember(null);
     files.clear();
+    pages.clear();
     setSelected(null);
     asked.current.clear();
     onward.current.clear();
@@ -269,15 +331,24 @@ export function MergeWorkbench() {
   }
 
   return (
-    <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div
+      className={cn(
+        "grid items-start gap-10",
+        // The page view takes the wide column: the pages are where the work is.
+        view === "pages" ? "lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]" : "lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]",
+      )}
+    >
       <Sections>
         <Section
-          title={`files · ${pad(entries.length)}`}
+          title={view === "pages" && outputPages !== null ? `pages · ${pad(outputPages)}` : `files · ${pad(entries.length)}`}
           aside={
-            <Button variant="outline" size="sm" onClick={() => picker.current?.click()}>
-              <FiPlus className="size-3" aria-hidden />
-              add
-            </Button>
+            <span className="flex items-center gap-5">
+              <Segmented value={view} onChange={setView} options={VIEWS} />
+              <Button variant="outline" size="sm" onClick={() => picker.current?.click()}>
+                <FiPlus className="size-3" aria-hidden />
+                add
+              </Button>
+            </span>
           }
         >
           <input
@@ -292,21 +363,26 @@ export function MergeWorkbench() {
               e.target.value = "";
             }}
           />
-          <FileList
-            entries={entries}
-            selected={selected}
-            onSelect={setSelected}
-            onMove={files.move}
-            onMoveTo={files.moveTo}
-            onRemove={remove}
-            onRetry={files.retry}
-          />
+          {view === "pages" ? (
+            <PageGrid state={pages} entries={entries} onFocusFile={setSelected} />
+          ) : (
+            <FileList
+              entries={entries}
+              selected={selected}
+              onSelect={setSelected}
+              onMove={move}
+              onMoveTo={moveTo}
+              onRemove={remove}
+              onRetry={files.retry}
+            />
+          )}
           <Dropzone onFiles={add} accept={ACCEPT} label="drop more files here" className="py-5" />
         </Section>
 
         <PageOptions
           entry={entry}
           images={images}
+          pages={filePagesOf}
           onChange={(change) => entry && files.setLayout(entry.key, change)}
           onApplyToAll={() => entry && files.layoutToAll(entry.key)}
         />
@@ -319,7 +395,12 @@ export function MergeWorkbench() {
       </Sections>
 
       <div className="flex flex-col gap-6 lg:sticky lg:top-20">
-        <PagePreview entry={entry} index={index} count={entries.length} />
+        <PagePreview
+          entry={entry}
+          index={index}
+          count={entries.length}
+          kept={kept && typeof entryCount === "number" && !pages.untouched ? { pages: kept.length, of: entryCount } : null}
+        />
 
         <MergeBar
           status={
@@ -327,8 +408,15 @@ export function MergeWorkbench() {
               ? `${pad(stopped)} ${stopped === 1 ? "upload" : "uploads"} stopped`
               : waiting
                 ? `${pad(waiting)} ${waiting === 1 ? "file" : "files"} still uploading`
-                : `${pad(entries.length)} ${entries.length === 1 ? "file" : "files"} · one pdf`
+                : request?.state === "counting"
+                  ? "counting pages…"
+                  : request?.state === "problem"
+                    ? "nothing to merge yet"
+                    : request?.state === "pages" && outputPages !== null
+                      ? `${pad(outputPages)} ${outputPages === 1 ? "page" : "pages"} · ${pad(entries.length)} ${entries.length === 1 ? "file" : "files"} · one pdf`
+                      : `${pad(entries.length)} ${entries.length === 1 ? "file" : "files"} · one pdf`
           }
+          problem={!stopped && !waiting && request?.state === "problem" ? request.message : null}
           disabled={!params || busy}
           label={starting ? "starting…" : job.activeTask ? "merging…" : "merge"}
           onMerge={() => params && void merge(params)}
@@ -375,8 +463,11 @@ function MergeBar({
   onMerge,
   quiet,
   options,
+  problem,
 }: {
   status: string;
+  /** Why the merge can't go as it stands, as a sentence to show as-is. */
+  problem?: string | null;
   disabled: boolean;
   label: string;
   onMerge: () => void;
@@ -386,6 +477,7 @@ function MergeBar({
   return (
     <div className="border-hairline-faint flex flex-col gap-4 border-t pt-5">
       {options}
+      {problem ? <p className="text-prose font-sans text-body normal-case">{problem}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-meta font-mono text-meta uppercase tabular-nums" aria-live="polite">
           {status}

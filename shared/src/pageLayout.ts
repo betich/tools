@@ -229,7 +229,25 @@ export function parsePageRange(text: string, count: number): PageRangeResult {
   return { ok: true, pages };
 }
 
-/** Packs a page list into runs, joining a page onto the run before it when it is the next page of the same item. */
+/**
+ * The inverse of `parsePageRange`: 0-based pages, in order, as the text a
+ * person would type for them — "1-3, 5, 8-10". Consecutive pages fold in
+ * either direction. Ends are always written, so a whole file reads "1-10".
+ */
+export function formatPageRange(pages: readonly number[]): string {
+  const runs: [number, number][] = [];
+  for (const p of pages) {
+    const last = runs[runs.length - 1];
+    const step = last ? (last[0] === last[1] ? p - last[1] : Math.sign(last[1] - last[0])) : 0;
+    if (last && (step === 1 || step === -1) && p === last[1] + step) last[1] = p;
+    else runs.push([p, p]);
+  }
+  return runs
+    .map(([a, b]) => (a === b ? `${a + 1}` : `${a + 1}-${b + 1}`))
+    .join(", ");
+}
+
+/** Packs a page list into runs,joining a page onto the run before it when it is the next page of the same item. */
 export function toRuns(refs: readonly MergePageRef[]): MergePageRun[] {
   const runs: MergePageRun[] = [];
   for (const { item, page } of refs) {
