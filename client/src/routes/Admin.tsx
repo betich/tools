@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { PageHead, Shell } from "@/components/Shell";
-import { Button, Card, Empty, Field, Input, Section, Sections, Stat, TextButton } from "@/components/ui";
+import { Button, Empty, Field, Input, TextButton } from "@/components/ui";
 import { ApiError, api, type AdminStats } from "@/lib/api";
-import { bytes, stamp } from "@/lib/format";
+import { bytes } from "@/lib/format";
+import { cn } from "@/lib/cn";
 
 const KEY = "tools.admin";
 
@@ -24,9 +25,10 @@ const remember = (password: string) => {
 };
 
 /**
- * Usage at a glance: what the API has seen. Page views and everything that
- * happens only in the browser (squoosh never calls the server) are in Google
- * Analytics instead.
+ * One question, answered before anything is read: is anyone using this? The
+ * count for today is the headline, the month is the one picture, and where
+ * people went is a ranked list in plain words. Page views and anything that
+ * never calls the server (all of squoosh) are in Google Analytics.
  */
 export function Admin() {
   const [password, setPassword] = useState(remembered);
@@ -68,7 +70,7 @@ export function Admin() {
   if (!stats) {
     return (
       <Shell>
-        <PageHead title="admin" note="Usage of the tools and the API behind them." />
+        <PageHead title="admin" />
         <form onSubmit={submit} className="flex max-w-sm flex-col gap-4">
           <Field label="password">
             <Input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -82,111 +84,170 @@ export function Admin() {
     );
   }
 
-  const week = stats.series.slice(-7);
-  const sum = (rows: { hits: number; visitors: number }[], k: "hits" | "visitors") => rows.reduce((n, r) => n + r[k], 0);
-  const today = stats.series.at(-1);
+  const today = stats.series.at(-1) ?? { day: "", hits: 0, visitors: 0 };
+  const before = stats.series.slice(-8, -1);
+  const usual = before.reduce((n, d) => n + d.visitors, 0) / Math.max(1, before.length);
+  const month = stats.series.reduce((n, d) => n + d.hits, 0);
 
   return (
     <Shell width="page">
-      <PageHead
-        title="admin"
-        note="What the API has seen. Page views, and squoosh — which never calls the server — are in Google Analytics."
-        actions={
-          <>
-            <TextButton onClick={() => void load(password)} disabled={busy}>
-              {busy ? "loading…" : "refresh"}
-            </TextButton>
-            <a className="text-meta hover:text-indigo font-mono text-meta uppercase transition-colors duration-200" href="https://analytics.google.com/" target="_blank" rel="noreferrer">
-              analytics ↗
-            </a>
-            <TextButton onClick={signOut}>sign out</TextButton>
-          </>
-        }
-      />
+      <header className="mb-12 flex items-center justify-between gap-6">
+        <h1 className="text-meta font-mono text-meta uppercase">admin</h1>
+        <nav className="flex items-center gap-5">
+          <a
+            className="text-meta hover:text-indigo font-mono text-meta uppercase transition-colors duration-200"
+            href="https://analytics.google.com/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            page views
+          </a>
+          <TextButton onClick={() => void load(password)} disabled={busy}>
+            {busy ? "loading…" : "refresh"}
+          </TextButton>
+          <TextButton onClick={signOut}>sign out</TextButton>
+        </nav>
+      </header>
 
-      <Sections>
-        <Section title="traffic">
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-            <Stat label="callers today" value={today?.visitors ?? 0} accent />
-            <Stat label="callers · 7d (daily sum)" value={sum(week, "visitors")} />
-            <Stat label="requests today" value={today?.hits ?? 0} />
-            <Stat label="requests · 30d" value={sum(stats.series, "hits")} />
-          </div>
-          <Card>
-            <Bars series={stats.series} />
-          </Card>
-        </Section>
+      {/* The answer, as a sentence. */}
+      <p className="text-ink font-mono text-[clamp(5rem,11vw,7.25rem)] leading-[0.9] font-bold tracking-[-0.035em] uppercase tabular-nums">
+        {today.visitors}
+        <span className="text-meta block pt-4 text-display font-bold">
+          {today.visitors === 1 ? "caller today" : "callers today"}
+        </span>
+      </p>
+      <p className="text-label mt-5 max-w-xl font-sans text-body">{trend(today.visitors, usual, month)}</p>
 
-        <Section title="stored">
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-            <Stat label="projects" value={stats.projects} />
-            <Stat label="share links" value={`${stats.shares} · ${stats.lockedShares} locked`} />
-            <Stat label="uploads" value={`${stats.assets} · ${bytes(stats.assetBytes)}`} />
-            <Stat label="uptime" value={uptime(stats.uptimeSeconds)} />
-            <Stat label="free · data" value={stats.freeBytes.data === null ? "—" : bytes(stats.freeBytes.data)} />
-            <Stat label="free · uploads" value={stats.freeBytes.assets === null ? "—" : bytes(stats.freeBytes.assets)} />
-          </div>
-        </Section>
+      <Month series={stats.series} />
 
-        <Section title="routes · 30 days">
-          {stats.routes.length === 0 ? (
-            <Empty>no requests yet</Empty>
-          ) : (
-            <Rows rows={stats.routes.map((r) => [r.route, r.hits.toLocaleString()])} />
-          )}
-        </Section>
+      <section className="mt-20">
+        <h2 className="text-ink mb-7 font-mono text-title font-bold uppercase">where they went</h2>
+        {stats.routes.length === 0 ? <Empty>no requests yet</Empty> : <Ranked routes={stats.routes} />}
+      </section>
 
-        <Section title="recently saved projects">
-          {stats.recentProjects.length === 0 ? (
-            <Empty>no projects yet</Empty>
-          ) : (
-            <Rows rows={stats.recentProjects.map((p) => [p.name || p.id, stamp(p.updatedAt)])} />
-          )}
-        </Section>
-      </Sections>
+      {/* Housekeeping, in one line — it matters only when it is wrong. */}
+      <footer className="border-hairline-faint text-meta mt-20 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 font-mono text-meta uppercase">
+        <span>{count(stats.projects, "project")} saved</span>
+        <span>
+          {count(stats.shares, "link")} shared{stats.lockedShares ? ` · ${stats.lockedShares} locked` : ""}
+        </span>
+        <span>
+          {count(stats.assets, "upload")} · {bytes(stats.assetBytes)}
+        </span>
+        <span>{free(stats.freeBytes)}</span>
+        <span>up {uptime(stats.uptimeSeconds)}</span>
+      </footer>
     </Shell>
   );
 }
 
-/** Callers per day as bars; the day's request count rides in the tooltip. */
-function Bars({ series }: { series: AdminStats["series"] }) {
+/** Today against the seven days before it, then the month in one clause. */
+function trend(today: number, usual: number, month: number): string {
+  const avg = Math.round(usual);
+  const vs =
+    avg === 0
+      ? today
+        ? "Nobody came in the week before."
+        : "Quiet all week."
+      : today >= avg * 1.25
+        ? `Busier than usual — the week before averaged ${avg} a day.`
+        : today <= avg * 0.75
+          ? `Quieter than usual — the week before averaged ${avg} a day.`
+          : `About usual — the week before averaged ${avg} a day.`;
+  return `${vs} ${month.toLocaleString()} requests in the last 30 days.`;
+}
+
+/**
+ * Thirty days, one bar each. Today is the only bar in the accent, and the
+ * busiest day carries its own number so the scale needs no axis.
+ */
+function Month({ series }: { series: AdminStats["series"] }) {
   const max = Math.max(1, ...series.map((d) => d.visitors));
+  const peak = series.findIndex((d) => d.visitors === max && max > 0);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex h-32 items-end gap-1" role="img" aria-label="callers per day, last 30 days">
-        {series.map((d) => (
-          <div
-            key={d.day}
-            className="tooltip group flex h-full flex-1 items-end"
-            data-tip={`${d.day} · ${d.visitors} callers · ${d.hits} requests`}
-          >
-            <span
-              className="bg-ink/55 group-hover:bg-indigo block w-full rounded-t-[2px] transition-colors duration-200"
-              style={{ height: `${Math.max(d.visitors ? 4 : 1, (d.visitors / max) * 100)}%` }}
-            />
-          </div>
-        ))}
+    <figure className="mt-14">
+      <div className="flex h-56 items-end gap-[3px] sm:h-72 sm:gap-1.5" role="img" aria-label="callers per day, last 30 days">
+        {series.map((d, i) => {
+          const last = i === series.length - 1;
+          return (
+            <div
+              key={d.day}
+              className="tooltip group relative flex h-full flex-1 items-end"
+              data-tip={`${d.day} · ${d.visitors} callers · ${d.hits} requests`}
+              data-tip-pos={i < series.length / 2 ? "top-left" : "top-right"}
+            >
+              {i === peak && !last ? (
+                <span className="text-label absolute inset-x-0 text-center font-mono text-meta tracking-normal tabular-nums" style={{ bottom: `calc(${(d.visitors / max) * 100}% + 6px)` }}>
+                  {d.visitors}
+                </span>
+              ) : null}
+              <span
+                className={cn(
+                  "block w-full rounded-t-[2px] transition-colors duration-200",
+                  last ? "bg-indigo" : "bg-ink/25 group-hover:bg-ink/60",
+                )}
+                style={{ height: `${d.visitors ? Math.max(3, (d.visitors / max) * 100) : 0.75}%` }}
+              />
+            </div>
+          );
+        })}
       </div>
-      <div className="text-meta flex justify-between font-mono text-meta uppercase">
-        <span>{series[0]?.day}</span>
-        <span>callers per day · peak {max}</span>
-        <span>{series.at(-1)?.day}</span>
-      </div>
-    </div>
+      <figcaption className="border-hairline text-meta flex justify-between border-t pt-3 font-mono text-meta uppercase">
+        <span>{short(series[0]?.day)}</span>
+        <span>callers per day</span>
+        <span className="text-indigo">today</span>
+      </figcaption>
+    </figure>
   );
 }
 
-function Rows({ rows }: { rows: [string, string][] }) {
+/** Routes by use, in the words of the thing people did. The raw route is a hover away. */
+function Ranked({ routes }: { routes: AdminStats["routes"] }) {
+  const max = routes[0]?.hits || 1;
   return (
-    <ul className="flex flex-col">
-      {rows.map(([name, value], i) => (
-        <li key={`${name}-${i}`} className="border-hairline-faint flex items-baseline justify-between gap-4 border-b py-2 last:border-b-0">
-          <span className="text-label min-w-0 truncate font-mono text-label tracking-normal">{name}</span>
-          <span className="text-ink shrink-0 font-mono text-label tabular-nums tracking-normal">{value}</span>
+    <ol className="flex flex-col gap-5">
+      {routes.map((r) => (
+        <li key={r.route} className="flex flex-col gap-2" title={r.route}>
+          <span className="flex items-baseline justify-between gap-4">
+            <span className="text-ink min-w-0 truncate font-sans text-body">{ROUTES[r.route.replace(/\/$/, "")] ?? r.route}</span>
+            <span className="text-ink shrink-0 font-mono text-label font-bold tracking-normal tabular-nums">{r.hits.toLocaleString()}</span>
+          </span>
+          <span className="bg-ink/[0.07] block h-[3px] rounded-full" aria-hidden>
+            <span className="bg-ink/55 block h-full rounded-full" style={{ width: `${Math.max(1, (r.hits / max) * 100)}%` }} />
+          </span>
         </li>
       ))}
-    </ul>
+    </ol>
   );
+}
+
+const ROUTES: Record<string, string> = {
+  "GET /api/tools": "Opened the launchpad",
+  "GET /api/fonts": "Browsed fonts",
+  "GET /api/fonts/:family/:variant": "Loaded a font",
+  "POST /api/assets": "Uploaded an image",
+  "GET /api/assets/:id": "Loaded an uploaded image",
+  "GET /api/projects": "Listed projects",
+  "POST /api/projects": "Saved a new project",
+  "GET /api/projects/:id": "Opened a project",
+  "PUT /api/projects/:id": "Saved a project",
+  "DELETE /api/projects/:id": "Deleted a project",
+  "POST /api/projects/:id/share": "Made a share link",
+  "DELETE /api/projects/:id/share": "Removed a share link",
+  "GET /api/share/:slug/meta": "Followed a share link",
+  "GET /api/share/:slug": "Opened a shared project",
+  "POST /api/render": "Rendered a preview on the server",
+  "POST /api/render/batch": "Exported a batch",
+};
+
+const count = (n: number, noun: string) => `${n.toLocaleString()} ${noun}${n === 1 ? "" : "s"}`;
+const short = (day?: string) => (day ? day.slice(5).replace("-", ".") : "");
+
+function free({ data, assets }: AdminStats["freeBytes"]): string {
+  if (data === null && assets === null) return "disk —";
+  if (data === assets || assets === null) return `${bytes(data ?? 0)} free`;
+  if (data === null) return `${bytes(assets)} free`;
+  return `${bytes(data)} free · ${bytes(assets)} free for uploads`;
 }
 
 function uptime(s: number): string {
