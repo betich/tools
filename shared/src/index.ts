@@ -9,3 +9,4 @@ export * from "./uploads";
 export * from "./worker";
 export * from "./pageLayout";
 export * from "./pdfjobs";
+export * from "./pdfcompress";
