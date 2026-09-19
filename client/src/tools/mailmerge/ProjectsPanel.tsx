@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiArrowUpRight, FiLink, FiLock, FiTrash2 } from "react-icons/fi";
-import { Empty, Field, IconButton, Input, Section, TextButton } from "@/components/ui";
+import { FiArrowRight, FiCopy, FiLink, FiLock, FiPlus, FiSave, FiTrash2 } from "react-icons/fi";
+import { Button, Empty, Field, IconButton, Input, Section, TextButton } from "@/components/ui";
 import { api, ApiError, type ProjectSummary } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { pad, stamp } from "@/lib/format";
 import { useToast } from "@/hooks/useToast";
+import { DuplicateDialog } from "./DuplicateDialog";
 import { copyText, shareUrl } from "./ShareDialog";
 import { unlockFor } from "./unlocks";
 
@@ -25,8 +26,14 @@ export function ProjectsPanel({
   onOpen,
   onNew,
   onDeleted,
+  onSave,
+  onDuplicated,
 }: {
+  /** A copy was made; the page opens it. */
+  onDuplicated: (id: string) => void;
   currentId: string | null;
+  /** The one thing to do with an empty shelf: put this merge on it. */
+  onSave: () => void;
   /** Bumped by the page after a save, so a new row appears without a reload. */
   refreshKey: number;
   onOpen: (id: string) => void;
@@ -38,6 +45,7 @@ export function ProjectsPanel({
   const [items, setItems] = useState<ProjectSummary[] | null>(null);
   const [offline, setOffline] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);
+  const [copying, setCopying] = useState<ProjectSummary | null>(null);
   const disarm = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -80,72 +88,116 @@ export function ProjectsPanel({
 
   return (
     <Section
-      title="projects"
-      aside={
-        <span className="flex items-center gap-4">
-          <NewMergeMenu onCreate={onNew} />
-          <span className="text-meta text-meta font-mono tabular-nums">{items ? pad(items.length) : "—"}</span>
-        </span>
-      }
+      title={items && items.length > 0 ? `projects · ${pad(items.length)}` : "projects"}
+      aside={<NewMergeMenu onCreate={onNew} />}
     >
       {offline ? (
-        <Empty>server offline — saved projects need the api</Empty>
+        <div className="flex flex-col gap-1.5">
+          <Empty>server offline</Empty>
+          <p className="text-meta font-sans text-body normal-case">Saved projects need the api. This merge still works here.</p>
+        </div>
       ) : items === null ? (
         <Empty>reading the shelf…</Empty>
       ) : items.length === 0 ? (
-        <Empty>nothing saved yet</Empty>
+        <div className="border-wash flex flex-col items-start gap-3 rounded-card border border-dashed px-4 py-4">
+          <p className="text-prose font-sans text-body normal-case">Nothing saved yet. Saving puts this merge here, ready to reopen or share.</p>
+          <Button variant="outline" size="sm" onClick={onSave}>
+            <FiSave className="size-3" aria-hidden />
+            save this merge
+          </Button>
+        </div>
       ) : (
-        <ul className="flex flex-col">
-          {items.map((project) => (
-            <li key={project.id} className="border-wash group flex items-center gap-2 border-b py-2 last:border-b-0">
-              <button
-                type="button"
-                onClick={() => onOpen(project.id)}
-                className={cn(
-                  "flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 text-left transition-colors duration-200",
-                  project.id === currentId ? "text-ink" : "text-label hover:text-indigo",
-                )}
-              >
-                <span className="flex w-full min-w-0 items-center gap-1.5">
-                  <span className="text-label truncate font-mono tracking-normal">{project.name || "untitled"}</span>
-                  {project.locked ? (
-                    <FiLock className="text-meta size-3 shrink-0" aria-label="locked" role="img" />
-                  ) : null}
-                  <FiArrowUpRight
-                    className="size-3 shrink-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                    aria-hidden
-                  />
-                </span>
-                <span className="text-meta text-meta font-mono tabular-nums">{stamp(project.updatedAt)}</span>
-              </button>
-
-              {project.slug ? (
-                <IconButton
-                  label="copy link"
-                  onClick={() => {
-                    const slug = project.slug!;
-                    void copyText(shareUrl(slug)).then((ok) => toast(ok ? "link copied" : "could not copy the link"));
-                  }}
-                  className="shrink-0"
+        // Each project is one row you can press: the name and when it was last
+        // touched, the open arrow on approach, and its two actions at the end.
+        <ul className="-mx-1.5 flex max-h-72 flex-col gap-0.5 overflow-y-auto overscroll-contain">
+          {items.map((project) => {
+            const here = project.id === currentId;
+            return (
+              <li key={project.id} className="group relative flex items-center">
+                <button
+                  type="button"
+                  onClick={() => onOpen(project.id)}
+                  aria-current={here || undefined}
+                  className={cn(
+                    "flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 rounded-xs py-2 pl-2.5 text-left transition-colors duration-200",
+                    project.slug ? "pr-24" : "pr-16",
+                    here ? "bg-surface-high" : "hover:bg-hover-wash",
+                  )}
                 >
-                  <FiLink className="size-3.5" />
-                </IconButton>
-              ) : null}
+                  <span className="flex w-full min-w-0 items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "truncate font-mono text-label tracking-normal transition-colors duration-200",
+                        here ? "text-ink" : "text-label group-hover:text-indigo",
+                      )}
+                    >
+                      {project.name || "untitled"}
+                    </span>
+                    {project.locked ? <FiLock className="text-meta size-3 shrink-0" aria-label="locked" role="img" /> : null}
+                  </span>
+                  <span className="text-meta flex items-center gap-2 font-mono text-meta tabular-nums">
+                    {here ? <span className="text-indigo uppercase">open</span> : null}
+                    {stamp(project.updatedAt)}
+                    {!here ? (
+                      <FiArrowRight
+                        className="text-indigo size-3 -translate-x-1 opacity-0 transition-[opacity,translate] duration-200 group-hover:translate-x-0 group-hover:opacity-100"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </span>
+                </button>
 
-              <IconButton
-                label={armed === project.id ? "delete for good" : "delete"}
-                // Last control in the row: its tip opens leftward so it cannot
-                // hang off the edge of a phone and widen the page.
-                data-tip-pos="top-right"
-                onClick={() => void remove(project.id)}
-                className={cn("shrink-0", armed === project.id && "text-indigo")}
-              >
-                <FiTrash2 className="size-3.5" />
-              </IconButton>
-            </li>
-          ))}
+                <span
+                  className={cn(
+                    "absolute right-2 flex items-center gap-3 transition-opacity duration-200",
+                    here || armed === project.id
+                      ? "opacity-100"
+                      : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100",
+                  )}
+                >
+                  {project.slug ? (
+                    <IconButton
+                      label="copy link"
+                      onClick={() => {
+                        const slug = project.slug!;
+                        void copyText(shareUrl(slug)).then((ok) => toast(ok ? "link copied" : "could not copy the link"));
+                      }}
+                    >
+                      <FiLink className="size-3.5" />
+                    </IconButton>
+                  ) : null}
+                  <IconButton label="duplicate" onClick={() => setCopying(project)}>
+                    <FiCopy className="size-3.5" />
+                  </IconButton>
+                  <IconButton
+                    label={armed === project.id ? "delete for good" : "delete"}
+                    // Last control in the row: its tip opens leftward so it cannot
+                    // hang off the edge of a phone and widen the page.
+                    data-tip-pos="top-right"
+                    onClick={() => void remove(project.id)}
+                    className={cn(armed === project.id && "text-indigo")}
+                  >
+                    <FiTrash2 className="size-3.5" />
+                  </IconButton>
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      {copying ? (
+        <DuplicateDialog
+          project={copying}
+          isOpen={copying.id === currentId}
+          onClose={() => setCopying(null)}
+          onDone={(id) => {
+            setCopying(null);
+            toast(`duplicated as a new project`);
+            onDuplicated(id);
+          }}
+        />
+      ) : null}
     </Section>
   );
 }
@@ -184,9 +236,10 @@ function NewMergeMenu({ onCreate }: { onCreate: (name: string, password: string)
 
   return (
     <div ref={box} className="relative">
-      <TextButton onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <Button variant="outline" size="sm" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={cn(open && "border-indigo text-indigo")}>
+        <FiPlus className="size-3" aria-hidden />
         new
-      </TextButton>
+      </Button>
 
       {open ? (
         <div
@@ -217,9 +270,12 @@ function NewMergeMenu({ onCreate }: { onCreate: (name: string, password: string)
             </Field>
           </div>
 
-          <div className="mt-4 flex items-center justify-between gap-4">
-            <TextButton onClick={create}>create</TextButton>
+          <div className="mt-5 flex items-center justify-between gap-4">
             <TextButton onClick={() => setOpen(false)}>cancel</TextButton>
+            <Button onClick={create} size="sm">
+              {password ? <FiLock className="size-3" aria-hidden /> : null}
+              {password ? "create locked" : "create"}
+            </Button>
           </div>
         </div>
       ) : null}

@@ -1,4 +1,4 @@
-import type { DataEdit, DataStep, MergeData, MergeDoc, MergeRow } from "@tools/shared";
+import { matchKeys, newRowKey, withKeys, type DataEdit, type DataStep, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 
 /**
  * The data's edit timeline. Every step stores enough to be undone, so rolling
@@ -30,24 +30,42 @@ export function changeRow(data: MergeData, row: number, values: MergeRow): Merge
 }
 
 export function addRow(data: MergeData, values: MergeRow): MergeData {
+  const keyed = withKeys(data);
   const row = data.rows.length;
+  const key = newRowKey();
   const clean = Object.fromEntries(data.fields.map((f) => [f, values[f] ?? ""]));
-  return record(data, { kind: "add", row, values: clean }, { ...data, rows: [...data.rows, clean] });
+  return record(
+    data,
+    { kind: "add", row, values: clean, key },
+    { ...keyed, rows: [...data.rows, clean], keys: [...keyed.keys!, key] },
+  );
 }
 
+/** The row's key rides in the step, so rolling the removal back reattaches its layout. */
 export function removeRow(data: MergeData, row: number): MergeData {
   const values = data.rows[row];
   if (!values) return data;
-  return record(data, { kind: "remove", row, values }, { ...data, rows: data.rows.filter((_, i) => i !== row) });
+  const keyed = withKeys(data);
+  return record(
+    data,
+    { kind: "remove", row, values, key: keyed.keys![row] },
+    { ...keyed, rows: data.rows.filter((_, i) => i !== row), keys: keyed.keys!.filter((_, i) => i !== row) },
+  );
 }
 
-/** A new version of the sheet. The old one is kept in the step, so this rolls back too. */
+/**
+ * A new version of the sheet. The old one is kept in the step, so this rolls
+ * back too. Each incoming row inherits the key of the old row it matches, so a
+ * row's own layout survives the reload.
+ */
 export function reloadSheet(data: MergeData, incoming: MergeData): MergeData {
-  const before = { fields: data.fields, rows: data.rows, source: data.source };
+  const keyed = withKeys(data);
+  const before = { fields: data.fields, rows: data.rows, source: data.source, keys: keyed.keys };
+  const keys = matchKeys({ fields: data.fields, rows: data.rows, keys: keyed.keys! }, incoming);
   return record(
     data,
     { kind: "reload", before, source: incoming.source, count: incoming.rows.length },
-    { fields: incoming.fields, rows: incoming.rows, source: incoming.source },
+    { fields: incoming.fields, rows: incoming.rows, source: incoming.source, keys },
   );
 }
 
@@ -74,6 +92,7 @@ export function rollback(doc: MergeDoc, data: MergeData, entryId: string): { doc
 
   let fields = data.fields;
   let rows = [...data.rows];
+  let keys = [...withKeys(data).keys!];
   let source = data.source;
   let nextDoc = doc;
 
@@ -87,13 +106,16 @@ export function rollback(doc: MergeDoc, data: MergeData, entryId: string): { doc
       }
       case "add":
         rows.splice(step.row, 1);
+        keys.splice(step.row, 1);
         break;
       case "remove":
         rows.splice(step.row, 0, step.values);
+        keys.splice(step.row, 0, step.key ?? newRowKey());
         break;
       case "reload":
         fields = step.before.fields;
         rows = [...step.before.rows];
+        keys = step.before.keys ? [...step.before.keys] : rows.map(() => newRowKey());
         source = step.before.source;
         break;
       case "remap":
@@ -102,7 +124,7 @@ export function rollback(doc: MergeDoc, data: MergeData, entryId: string): { doc
     }
   }
 
-  return { doc: nextDoc, data: { fields, rows, source, history: history.slice(0, index) } };
+  return { doc: nextDoc, data: { fields, rows, source, keys, history: history.slice(0, index) } };
 }
 
 /** How many steps rolling back to this entry would undo. */

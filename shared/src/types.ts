@@ -91,6 +91,22 @@ export type MergeDoc = {
   canvas: { width: number; height: number; background: string };
   base: BaseImage | null;
   layers: Layer[];
+  /**
+   * One row's own layout, laid over the main design the way an instance
+   * overrides a component: row key → layer id → only the fields that row
+   * changed. Everything a row has not changed follows the main design.
+   */
+  overrides?: Record<string, Record<string, LayerOverride>>;
+};
+
+/** What a single row may change about a layer: where it sits, and its type size. */
+export type LayerOverride = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  size?: number;
 };
 
 export type MergeRow = Record<string, string>;
@@ -102,6 +118,12 @@ export type MergeData = {
   source?: string;
   /** Newest last. Each step carries what it needs to be undone. */
   history?: DataEdit[];
+  /**
+   * A stable key per row, parallel to `rows`, so a row's own layout stays with
+   * that row when others are added, removed or the sheet is reloaded. Absent on
+   * data saved before it existed; `withKeys` fills it in.
+   */
+  keys?: string[];
 };
 
 /**
@@ -111,9 +133,14 @@ export type MergeData = {
  */
 export type DataStep =
   | { kind: "change"; row: number; changes: Record<string, [from: string, to: string]> }
-  | { kind: "add"; row: number; values: MergeRow }
-  | { kind: "remove"; row: number; values: MergeRow }
-  | { kind: "reload"; before: { fields: string[]; rows: MergeRow[]; source?: string }; source?: string; count: number }
+  | { kind: "add"; row: number; values: MergeRow; key?: string }
+  | { kind: "remove"; row: number; values: MergeRow; key?: string }
+  | {
+      kind: "reload";
+      before: { fields: string[]; rows: MergeRow[]; source?: string; keys?: string[] };
+      source?: string;
+      count: number;
+    }
   /** Template tokens rewritten to follow a renamed column: `<from>` became `<to>`. */
   | { kind: "remap"; map: Record<string, string> };
 

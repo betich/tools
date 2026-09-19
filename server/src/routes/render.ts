@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { zipSync } from "fflate";
-import { fileNameFor, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
+import { docForRow, fileNameFor, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 import { env } from "../env";
 import { prepareFonts, renderRow, resolveImage } from "../lib/render";
 
@@ -59,7 +59,7 @@ export const render = new Elysia({ prefix: "/api/render" })
       const taken = new Set<string>();
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]!;
-        const { buffer } = await renderRow(doc, row, base);
+        const { buffer } = await renderRow(docForRow(doc, data.keys?.[i]), row, base);
         files[unique(fileNameFor(pattern, row, i, "png"), taken)] = new Uint8Array(buffer);
       }
 

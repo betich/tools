@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-import { emptyData, newDoc, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
-import { Dropzone } from "@/components/Dropzone";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { emptyData, hasOverrides, newDoc, revert, strandedKeys, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 import { Shell } from "@/components/Shell";
 import { FiDownload, FiLink, FiLock, FiSave, FiShare2 } from "react-icons/fi";
-import { Button, Field, Input, NumberInput, Section, Sections, Segmented, TextButton } from "@/components/ui";
+import { Button, Sections } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
 import { useToast } from "@/hooks/useToast";
 import { api, ApiError, assetUrl, type ShareState } from "@/lib/api";
@@ -13,10 +12,12 @@ import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { CanvasStage } from "./CanvasStage";
 import { ExportSheet } from "./ExportSheet";
 import { DataPanel } from "./DataPanel";
+import { DesignMode } from "./DesignMode";
 import { LayersPanel } from "./Panels";
+import { BaseImageSection, DocumentSection } from "./SetupSections";
 import { ReconcileDialog } from "./ReconcileDialog";
 import { RowEditor } from "./RowEditor";
-import { addRow, changeRow, record, reloadSheet, remapTokens, removeRow, rollback, severed } from "./rows";
+import { addRow, changeRow, record, reloadSheet, remapTokens, removeRow, rollback, rowTitle, severed } from "./rows";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { ensureDocFonts, loadGoogleFont } from "./fonts";
@@ -26,15 +27,11 @@ import { forget, remember, unlockFor } from "./unlocks";
 import { parseSheet, sampleData } from "./sheet";
 import { useMerge } from "./useMerge";
 
-const PRESETS: { label: string; width: number; height: number }[] = [
-  { label: "square", width: 1080, height: 1080 },
-  { label: "story", width: 1080, height: 1920 },
-  { label: "landscape", width: 1200, height: 630 },
-  { label: "a4", width: 2480, height: 3508 },
-];
 
 export function MailMergePage() {
-  const { slug } = useParams();
+  const { slug, id: routeId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const merge = useMerge();
   const [base, setBase] = useState<HTMLImageElement | null>(null);
@@ -73,6 +70,26 @@ export function MailMergePage() {
 
   const { doc, setDoc, replaceDoc, data, setData, selected, selectedId, setSelectedId } = merge;
 
+  // Decoded artwork by source, so undoing a removal or a replacement puts the
+  // picture back at once instead of leaving the document pointing at nothing.
+  const baseCache = useRef(new Map<string, HTMLImageElement>());
+  const baseSrc = doc.base?.src ?? null;
+  useEffect(() => {
+    if (!baseSrc) return setBase(null);
+    const cached = baseCache.current.get(baseSrc);
+    if (cached) return setBase(cached);
+    let live = true;
+    void loadImage(baseSrc.startsWith("asset:") ? assetUrl(baseSrc) : baseSrc)
+      .then((img) => {
+        baseCache.current.set(baseSrc, img);
+        if (live) setBase(img);
+      })
+      .catch(() => live && setBase(null));
+    return () => {
+      live = false;
+    };
+  }, [baseSrc]);
+
   // ── loading ──────────────────────────────────────────────────────────────
   const hydrate = useCallback(
     async (incoming: MergeDoc) => {
@@ -83,7 +100,9 @@ export function MailMergePage() {
       await ensureDocFonts(incoming, []);
       if (incoming.base) {
         const src = incoming.base.src.startsWith("asset:") ? assetUrl(incoming.base.src) : incoming.base.src;
-        setBase(await loadImage(src).catch(() => null));
+        const img = await loadImage(src).catch(() => null);
+        if (img) baseCache.current.set(incoming.base.src, img);
+        setBase(img);
       } else {
         setBase(null);
       }
@@ -118,10 +137,30 @@ export function MailMergePage() {
     [hydrate, setData, setSelectedId, toast],
   );
 
+  // The address follows the open merge — its link when it has one, its id
+  // otherwise — and opening an address opens that merge. `shown` is the path
+  // the editor already reflects, so the page's own navigation never re-opens
+  // what it just opened.
+  const shown = useRef<string | null>(null);
+  // Opening a merge from the shelf is a place to come back to; saving or
+  // sharing the one you are in only corrects the address.
+  const pushNext = useRef(false);
+  const go = useCallback(
+    (path: string, replace = false) => {
+      shown.current = path;
+      if (path !== location.pathname) navigate(path, { replace });
+    },
+    [location.pathname, navigate],
+  );
+
+  const openers = useRef({ openShared, openProject: (_: string) => {} });
+  openers.current.openShared = openShared;
   useEffect(() => {
-    if (!slug) return;
-    void openShared(slug);
-  }, [slug, openShared]);
+    if (location.pathname === shown.current) return;
+    shown.current = location.pathname;
+    if (slug) void openers.current.openShared(slug);
+    else if (routeId) void openers.current.openProject(routeId);
+  }, [location.pathname, slug, routeId]);
 
   // The default Roboto Mono face must be present before the first paint.
   useEffect(() => {
@@ -137,6 +176,7 @@ export function MailMergePage() {
         toast("could not read that image");
         return;
       }
+      baseCache.current.set(dataUrl, img);
       setBase(img);
       // Match the canvas to the artwork the first time one is dropped in.
       setDoc((prev) => ({
@@ -148,6 +188,7 @@ export function MailMergePage() {
       // Hand the bytes to the server as well so batch rendering has the artwork.
       try {
         const asset = await api.uploadAsset(file);
+        baseCache.current.set(asset.ref, img);
         setDoc((prev) => (prev.base ? { ...prev, base: { ...prev.base, src: asset.ref } } : prev));
       } catch {
         toast("image kept locally — server render will skip it");
@@ -399,6 +440,8 @@ export function MailMergePage() {
           forget(id);
           setGate({ error: password ? "wrong password" : null, target: { kind: "project", id } });
         } else toast("could not open that project");
+        // Nothing opened, so the next change of address is not a visit.
+        if (!password) pushNext.current = false;
       } finally {
         setBusy(null);
       }
@@ -421,6 +464,7 @@ export function MailMergePage() {
       setShareSlug(null);
       setShareProtected(false);
       setGate(null);
+      go("/mail-merge");
       if (!password) return;
 
       setBusy("creating a locked merge");
@@ -439,8 +483,33 @@ export function MailMergePage() {
         setBusy(null);
       }
     },
-    [hydrate, setData, setSelectedId, toast],
+    [go, hydrate, setData, setSelectedId, toast],
   );
+
+  openers.current.openProject = (id: string) => void openProject(id);
+
+  useEffect(() => {
+    if (!projectId) return;
+    go(shareSlug ? `/mail-merge/s/${shareSlug}` : `/mail-merge/p/${projectId}`, !pushNext.current);
+    pushNext.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, shareSlug]);
+
+  // ── one row's own layout ────────────────────────────────────────────────
+  const currentIndex = Math.min(merge.rowIndex, Math.max(0, data.rows.length - 1));
+  const titleFields = [
+    ...data.fields.filter((f) => merge.usedFields.some((u) => u.toLowerCase() === f.toLowerCase())),
+    ...data.fields,
+  ];
+  const enterRowMode = useCallback(
+    (on: boolean) => {
+      merge.setRowMode(on);
+      // A row's layout is laid out against that row's words.
+      if (on) merge.setShowValues(true);
+    },
+    [merge],
+  );
+  const stranded = strandedKeys(doc, data);
 
   useHotkey("mod+z", (e) => {
     e.preventDefault();
@@ -457,19 +526,8 @@ export function MailMergePage() {
   // The row editor owns the arrows while it is open.
   useHotkey("ArrowLeft", () => merge.step(-1), { enabled: !editing });
   useHotkey("ArrowRight", () => merge.step(1), { enabled: !editing });
+  useHotkey("Escape", () => merge.setRowMode(false), { enabled: merge.rowMode && !editing && !exporting && !sharing && !reconciling });
 
-  const canvasField = (key: "width" | "height") => (
-    <Field label={key}>
-      <NumberInput
-        value={doc.canvas[key]}
-        min={16}
-        max={8000}
-        onChange={(e) =>
-          setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, [key]: Math.max(16, Number(e.target.value) || 16) } }))
-        }
-      />
-    </Field>
-  );
 
   return (
     <Shell width="workspace">
@@ -559,78 +617,22 @@ export function MailMergePage() {
             pane === "setup" ? "flex" : "hidden md:flex",
           )}
         >
-          <ProjectsPanel
-            currentId={projectId}
-            refreshKey={shelf}
-            onOpen={(id) => void openProject(id)}
-            onNew={(name, password) => void startNew(name, password)}
-            onDeleted={(id) => {
-              forget(id);
-              setProjectId((current) => (current === id ? null : current));
-            }}
+          <BaseImageSection
+            base={doc.base}
+            image={base}
+            canvas={doc.canvas}
+            onFile={(file) => void pickBase(file)}
+            onRemove={() => setDoc((prev) => ({ ...prev, base: null }))}
+            onFit={(fit) => setDoc((prev) => (prev.base ? { ...prev, base: { ...prev.base, fit } } : prev))}
+            onMatch={(size) => setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, ...size } }))}
           />
 
-          <Section title="document">
-            <Field label="name">
-              <Input value={doc.name} onChange={(e) => setDoc((prev) => ({ ...prev, name: e.target.value }))} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              {canvasField("width")}
-              {canvasField("height")}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {PRESETS.map((preset) => (
-                <TextButton
-                  key={preset.label}
-                  active={doc.canvas.width === preset.width && doc.canvas.height === preset.height}
-                  onClick={() =>
-                    setDoc((prev) => ({
-                      ...prev,
-                      canvas: { ...prev.canvas, width: preset.width, height: preset.height },
-                    }))
-                  }
-                >
-                  {preset.label}
-                </TextButton>
-              ))}
-            </div>
-          </Section>
-
-          <Section
-            title="base image"
-            aside={
-              doc.base ? (
-                <TextButton
-                  onClick={() => {
-                    setBase(null);
-                    setDoc((prev) => ({ ...prev, base: null }));
-                  }}
-                >
-                  remove
-                </TextButton>
-              ) : null
-            }
-          >
-            {doc.base ? (
-              <Segmented
-                value={doc.base.fit}
-                onChange={(fit) => setDoc((prev) => (prev.base ? { ...prev, base: { ...prev.base, fit } } : prev))}
-                options={[
-                  { value: "cover", label: "cover" },
-                  { value: "contain", label: "contain" },
-                  { value: "stretch", label: "stretch" },
-                ]}
-              />
-            ) : (
-              <Dropzone
-                onFiles={(files) => files[0] && void pickBase(files[0])}
-                accept="image/*"
-                multiple={false}
-                label="drop a base image"
-                className="py-6"
-              />
-            )}
-          </Section>
+          <DocumentSection
+            name={doc.name}
+            canvas={doc.canvas}
+            onName={(name) => setDoc((prev) => ({ ...prev, name }))}
+            onCanvas={(patch) => setDoc((prev) => ({ ...prev, canvas: { ...prev.canvas, ...patch } }))}
+          />
 
           <LayersPanel
             layers={doc.layers}
@@ -672,8 +674,37 @@ export function MailMergePage() {
               setData(emptyData);
             }}
             onEdit={openRow}
+            rowMode={merge.rowMode}
+            onRowMode={enterRowMode}
+            ownAt={(i) => hasOverrides(doc, data.keys?.[i])}
+            stranded={stranded.length}
+            onDiscardStranded={() => setDoc((prev) => stranded.reduce((d, key) => revert(d, key), prev))}
             onRollback={rollBack}
             onReconcile={() => setReconciling(true)}
+          />
+
+          <ProjectsPanel
+            currentId={projectId}
+            refreshKey={shelf}
+            onOpen={(id) => {
+              pushNext.current = id !== projectId;
+              void openProject(id);
+            }}
+            onNew={(name, password) => void startNew(name, password)}
+            onSave={() => void save()}
+            onDuplicated={(id) => {
+              setShelf((n) => n + 1);
+              pushNext.current = true;
+              void openProject(id);
+            }}
+            onDeleted={(id) => {
+              forget(id);
+              if (id === projectId) {
+                setProjectId(null);
+                setShareSlug(null);
+                go("/mail-merge", true);
+              }
+            }}
           />
           <input
             ref={sheetInput}
@@ -702,13 +733,23 @@ export function MailMergePage() {
         <div className="contents md:order-1 md:col-span-2 md:flex md:min-w-0 md:flex-col lg:order-2 lg:col-span-1 lg:min-h-0 lg:p-6 xl:p-8">
           <div className="bg-paper/92 sticky top-12 z-30 order-first -mx-5 px-5 pb-3 backdrop-blur-xl sm:-mx-8 sm:px-8 md:static md:mx-0 md:bg-transparent md:px-0 md:pb-0 md:backdrop-blur-none lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             <CanvasStage
-              doc={doc}
+              doc={merge.view}
               row={editing && draft ? draft : merge.currentRow}
               base={base}
               selectedId={selectedId}
               onSelect={setSelectedId}
               onPreview={merge.previewLayer}
               onSnapshot={merge.snapshot}
+              own={merge.rowMode}
+              mode={
+                <DesignMode
+                  rowMode={merge.rowMode}
+                  index={currentIndex}
+                  hasRows={data.rows.length > 0}
+                  own={hasOverrides(doc, merge.currentKey)}
+                  onChange={enterRowMode}
+                />
+              }
             />
 
             <PaneTabs value={pane} onChange={showPane} />
@@ -724,6 +765,22 @@ export function MailMergePage() {
           )}
         >
           <Inspector
+            row={
+              merge.editKey
+                ? {
+                    index: currentIndex,
+                    title: rowTitle(data.rows[currentIndex], titleFields) || "empty row",
+                    own: selectedId ? doc.overrides?.[merge.editKey]?.[selectedId] : undefined,
+                    changes: Object.values(doc.overrides?.[merge.editKey] ?? {}).reduce((n, ov) => n + Object.keys(ov).length, 0),
+                    onRevertField: (field) => selectedId && merge.revertRow(merge.editKey!, selectedId, field),
+                    onRevertRow: () => {
+                      merge.revertRow(merge.editKey!);
+                      toast(`row ${String(currentIndex + 1).padStart(2, "0")} follows the main design again`);
+                    },
+                    onExit: () => merge.setRowMode(false),
+                  }
+                : null
+            }
             layer={selected}
             fields={data.fields}
             canvas={doc.canvas}

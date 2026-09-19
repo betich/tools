@@ -14,6 +14,7 @@ import { Dropzone } from "@/components/Dropzone";
 import { Button, Chip, IconButton, Section, TextButton, Toggle } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
+import { OwnMark } from "./OwnMark";
 import { rowTitle, severed as severedTokens, stepsFrom, TIMELINE_LIMIT } from "./rows";
 
 /**
@@ -43,7 +44,20 @@ export function DataPanel({
   onEdit,
   onRollback,
   onReconcile,
+  rowMode,
+  onRowMode,
+  ownAt,
+  stranded,
+  onDiscardStranded,
 }: {
+  /** The current row's own layout is what the stage is editing. */
+  rowMode: boolean;
+  onRowMode: (on: boolean) => void;
+  /** Row `i` has a layout of its own. */
+  ownAt: (index: number) => boolean;
+  /** Row layouts whose row is gone — after a reload or a delete. */
+  stranded: number;
+  onDiscardStranded: () => void;
   data: MergeData;
   usedFields: string[];
   rowIndex: number;
@@ -68,6 +82,8 @@ export function DataPanel({
   const [over, setOver] = useState(false);
   const [armedClear, setArmedClear] = useState(false);
   useDisarm(armedClear, () => setArmedClear(false));
+  const [armedDiscard, setArmedDiscard] = useState(false);
+  useDisarm(armedDiscard, () => setArmedDiscard(false));
 
   const loaded = data.fields.length > 0;
   const total = data.rows.length;
@@ -228,10 +244,20 @@ export function DataPanel({
                   ))}
                 </ul>
 
-                <div className="border-hairline-faint border-t p-2.5">
-                  <Button variant="outline" className="w-full" onClick={(e) => onEdit(current, e.currentTarget)}>
+                {/* the row's two edits: what it says, and — on its own — how it sits */}
+                <div className="border-hairline-faint flex flex-col gap-2 border-t p-2.5">
+                  <Button variant="outline" onClick={(e) => onEdit(current, e.currentTarget)}>
                     <FiEdit2 className="size-3.5" aria-hidden />
-                    edit row {pad(current + 1)}
+                    edit values
+                  </Button>
+                  <Button
+                    variant="outline"
+                    aria-pressed={rowMode}
+                    onClick={() => onRowMode(!rowMode)}
+                    className={cn(rowMode && "border-indigo text-indigo bg-surface-high")}
+                  >
+                    <OwnMark className={cn(!rowMode && "text-current")} title="" />
+                    {rowMode ? "own layout · on" : `own layout for row ${pad(current + 1)}`}
                   </Button>
                 </div>
               </div>
@@ -278,6 +304,7 @@ export function DataPanel({
                         <span className="min-w-0 truncate font-mono text-label tracking-normal">
                           {rowTitle(r, titleFields) || <span className="text-meta">empty row</span>}
                         </span>
+                        {ownAt(i) ? <OwnMark className="self-center" /> : null}
                       </button>
                       <IconButton
                         label={`edit row ${i + 1}`}
@@ -294,6 +321,22 @@ export function DataPanel({
                   );
                 })}
               </ol>
+            </div>
+          ) : null}
+
+          {stranded > 0 ? (
+            <div className="border-edge flex items-start gap-3 rounded-card border px-3.5 py-3">
+              <OwnMark className="text-ink mt-1" title="" />
+              <p className="text-prose min-w-0 flex-1 font-sans text-body normal-case">
+                {stranded === 1 ? "One row layout belongs" : `${stranded} row layouts belong`} to a row that is no longer in
+                the sheet. Rolling back brings {stranded === 1 ? "it" : "them"} back.
+              </p>
+              <TextButton
+                onClick={() => (armedDiscard ? (setArmedDiscard(false), onDiscardStranded()) : setArmedDiscard(true))}
+                className={cn("shrink-0 pt-1", armedDiscard && "text-indigo")}
+              >
+                {armedDiscard ? "discard?" : "discard"}
+              </TextButton>
             </div>
           ) : null}
 

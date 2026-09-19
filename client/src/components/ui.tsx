@@ -43,20 +43,27 @@ export function TextButton({
 export function Button({
   className,
   variant = "primary",
+  size = "md",
   ...props
-}: ComponentProps<"button"> & { variant?: "primary" | "outline" | "ghost" }) {
+}: ComponentProps<"button"> & {
+  variant?: "primary" | "outline" | "ghost";
+  /** `sm` is a section's own action, set in its header: 28px, the same voice at half the weight. */
+  size?: "md" | "sm";
+}) {
   return (
     <button
       type="button"
       {...props}
       className={cn(
-        "inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xs px-4 font-mono text-meta whitespace-nowrap uppercase",
+        "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-meta whitespace-nowrap uppercase",
+        size === "sm" ? "h-7 gap-1.5 px-2.5" : "h-9 gap-2 px-4",
         "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
         "disabled:cursor-not-allowed disabled:opacity-35",
         variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
         variant === "outline" &&
           "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
-        variant === "ghost" && "text-label px-3 hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
+        variant === "ghost" && size === "md" && "px-3",
+        variant === "ghost" && "text-label hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
         className,
       )}
     />
@@ -169,15 +176,26 @@ export function Field({
   hint,
   children,
   className,
+  changed,
+  action,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   className?: string;
+  /** The value differs from where it came from — the label arrives at periwinkle. */
+  changed?: boolean;
+  /** A small control at the end of the label line, such as a put-back glyph. */
+  action?: ReactNode;
 }) {
   return (
     <label className={cn("flex flex-col gap-2", className)}>
-      <span className="text-meta font-mono text-meta uppercase">{label}</span>
+      <span className="flex min-h-4 items-center justify-between gap-2">
+        <span className={cn("font-mono text-meta uppercase transition-colors duration-200", changed ? "text-indigo" : "text-meta")}>
+          {label}
+        </span>
+        {action}
+      </span>
       {children}
       {hint ? <span className="text-meta font-mono text-meta normal-case tracking-normal opacity-80">{hint}</span> : null}
     </label>
@@ -190,7 +208,7 @@ const control =
   "focus:border-indigo focus:bg-surface-high focus:outline-none " +
   "disabled:cursor-not-allowed disabled:opacity-40";
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input {...props} className={cn(control, className)} />;
 }
 

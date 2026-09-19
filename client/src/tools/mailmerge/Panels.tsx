@@ -1,6 +1,6 @@
-import { FiChevronDown, FiChevronUp, FiCopy, FiEye, FiEyeOff, FiTrash2 } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp, FiCopy, FiEye, FiEyeOff, FiPlus, FiTrash2 } from "react-icons/fi";
 import type { TextLayer } from "@tools/shared";
-import { Empty, IconButton, Section, TextButton } from "@/components/ui";
+import { Button, IconButton, Section } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
 
@@ -23,58 +23,82 @@ export function LayersPanel({
   onRemove: (id: string) => void;
   onReorder: (id: string, direction: -1 | 1) => void;
 }) {
+  const addText = (
+    <Button variant="outline" size="sm" onClick={onAdd}>
+      <FiPlus className="size-3" aria-hidden />
+      add text
+    </Button>
+  );
+
   return (
-    <Section title="layers" aside={<TextButton onClick={onAdd}>add text</TextButton>}>
+    <Section title={layers.length ? `layers · ${pad(layers.length)}` : "layers"} aside={layers.length ? addText : undefined}>
       {layers.length === 0 ? (
-        <Empty>no layers yet</Empty>
+        <div className="border-wash flex flex-col items-start gap-3 rounded-card border border-dashed px-4 py-4">
+          <p className="text-prose font-sans text-body normal-case">A text layer is where a column lands on the poster.</p>
+          {addText}
+        </div>
       ) : (
-        <ul className="flex flex-col">
+        <ul className="-mx-1.5 flex flex-col gap-0.5">
           {/* Topmost layer paints last, so the list reads top-down like the stack. */}
-          {[...layers].reverse().map((layer, i) => (
-            <li
-              key={layer.id}
-              className={cn(
-                "border-wash flex items-center gap-2 border-b py-2 last:border-b-0",
-                layer.id === selectedId && "text-indigo",
-              )}
-            >
-              <IconButton
-                label={layer.visible ? "hide" : "show"}
-                onClick={() => onToggle(layer.id, !layer.visible)}
-                className="shrink-0"
-              >
-                {layer.visible ? <FiEye className="size-3.5" /> : <FiEyeOff className="size-3.5" />}
-              </IconButton>
+          {[...layers].reverse().map((layer, i) => {
+            const here = layer.id === selectedId;
+            const n = layers.length - i;
+            return (
+              <li key={layer.id} className="group relative flex items-center">
+                <IconButton
+                  label={layer.visible ? "hide" : "show"}
+                  onClick={() => onToggle(layer.id, !layer.visible)}
+                  className={cn("absolute left-2 z-10", !layer.visible && "text-ink")}
+                >
+                  {layer.visible ? <FiEye className="size-3.5" /> : <FiEyeOff className="size-3.5" />}
+                </IconButton>
 
-              <button
-                type="button"
-                onClick={() => onSelect(layer.id)}
-                className={cn(
-                  "text-label min-w-0 flex-1 cursor-pointer truncate text-left font-mono tracking-normal transition-colors duration-200",
-                  layer.id === selectedId ? "text-ink" : "text-label hover:text-indigo",
-                  !layer.visible && "opacity-50",
-                )}
-              >
-                <span className="text-meta text-meta mr-2.5 tabular-nums">{pad(layers.length - i)}</span>
-                {layer.text.trim() ? layer.text.replace(/\n/g, " ").slice(0, 28) : layer.name}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelect(layer.id)}
+                  aria-current={here || undefined}
+                  className={cn(
+                    "flex min-w-0 flex-1 cursor-pointer items-baseline gap-2.5 rounded-xs py-2 pr-2.5 pl-8 text-left transition-colors duration-200",
+                    here ? "bg-surface-high" : "hover:bg-hover-wash",
+                    // Room for the controls only where they show.
+                    "group-hover:pr-28 group-focus-within:pr-28 [@media(pointer:coarse)]:pr-28",
+                    here && "pr-28",
+                  )}
+                >
+                  <span className={cn("shrink-0 font-mono text-meta tabular-nums", here ? "text-indigo" : "text-meta")}>{pad(n)}</span>
+                  <span
+                    className={cn(
+                      "min-w-0 truncate font-mono text-label tracking-normal transition-colors duration-200",
+                      here ? "text-ink" : "text-label group-hover:text-indigo",
+                      !layer.visible && "opacity-50",
+                    )}
+                  >
+                    {layer.text.trim() ? layer.text.replace(/\n/g, " ") : layer.name}
+                  </span>
+                </button>
 
-              <span className="flex shrink-0 items-center gap-2">
-                <IconButton label="move up" onClick={() => onReorder(layer.id, 1)}>
-                  <FiChevronUp className="size-3.5" />
-                </IconButton>
-                <IconButton label="move down" onClick={() => onReorder(layer.id, -1)}>
-                  <FiChevronDown className="size-3.5" />
-                </IconButton>
-                <IconButton label="duplicate" onClick={() => onDuplicate(layer.id)}>
-                  <FiCopy className="size-3.5" />
-                </IconButton>
-                <IconButton label="delete" data-tip-pos="top-right" onClick={() => onRemove(layer.id)}>
-                  <FiTrash2 className="size-3.5" />
-                </IconButton>
-              </span>
-            </li>
-          ))}
+                <span
+                  className={cn(
+                    "absolute right-2 flex items-center gap-2.5 transition-opacity duration-200",
+                    here ? "opacity-100" : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100",
+                  )}
+                >
+                  <IconButton label="move up" onClick={() => onReorder(layer.id, 1)} disabled={n === layers.length}>
+                    <FiChevronUp className="size-3.5" />
+                  </IconButton>
+                  <IconButton label="move down" onClick={() => onReorder(layer.id, -1)} disabled={n === 1}>
+                    <FiChevronDown className="size-3.5" />
+                  </IconButton>
+                  <IconButton label="duplicate" onClick={() => onDuplicate(layer.id)}>
+                    <FiCopy className="size-3.5" />
+                  </IconButton>
+                  <IconButton label="delete" data-tip-pos="top-right" onClick={() => onRemove(layer.id)}>
+                    <FiTrash2 className="size-3.5" />
+                  </IconButton>
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Section>

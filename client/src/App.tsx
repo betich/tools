@@ -20,6 +20,7 @@ export function App() {
             <Route path="/squoosh" element={<Squoosh />} />
             <Route path="/mail-merge" element={<MailMerge />} />
             <Route path="/mail-merge/s/:slug" element={<MailMerge />} />
+            <Route path="/mail-merge/p/:id" element={<MailMerge />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

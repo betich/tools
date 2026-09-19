@@ -1,6 +1,19 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { newDoc, newTextLayer, tokensInAll, type MergeData, type MergeDoc, type TextLayer } from "@tools/shared";
-import { emptyData } from "@tools/shared";
+import { useCallback, useMemo, useRef, useState, type SetStateAction } from "react";
+import {
+  docForRow,
+  emptyData,
+  newDoc,
+  newTextLayer,
+  patchLayer,
+  pruneLayer,
+  revert,
+  tokensInAll,
+  withKeys,
+  type MergeData,
+  type MergeDoc,
+  type OverrideField,
+  type TextLayer,
+} from "@tools/shared";
 
 const HISTORY_LIMIT = 40;
 
@@ -13,7 +26,13 @@ const HISTORY_LIMIT = 40;
  */
 export function useMerge(initial?: MergeDoc) {
   const [doc, setDoc] = useState<MergeDoc>(() => initial ?? newDoc());
-  const [data, setData] = useState<MergeData>(emptyData);
+  const [data, setRawData] = useState<MergeData>(emptyData);
+  // Every row has a key, always — the per-row layout hangs off it.
+  const setData = useCallback((next: SetStateAction<MergeData>) => {
+    setRawData((prev) => withKeys(typeof next === "function" ? next(prev) : next));
+  }, []);
+  // Editing one row's own layout rather than the main design.
+  const [rowMode, setRowMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(() => doc.layers[0]?.id ?? null);
   const [rowIndex, setRowIndex] = useState(0);
   const [showValues, setShowValues] = useState(true);
@@ -51,14 +70,21 @@ export function useMerge(initial?: MergeDoc) {
     });
   }, []);
 
-  const selected = useMemo(() => doc.layers.find((l) => l.id === selectedId) ?? null, [doc.layers, selectedId]);
+  const clampedRow = Math.min(rowIndex, Math.max(0, data.rows.length - 1));
+  const currentKey = data.rows.length > 0 ? (data.keys?.[clampedRow] ?? null) : null;
+  // Row mode needs a row to be about.
+  const editKey = rowMode ? currentKey : null;
+  const editKeyRef = useRef(editKey);
+  editKeyRef.current = editKey;
 
+  /** The document as the stage and inspector should show it: the row's own layout in row mode. */
+  const view = useMemo(() => docForRow(doc, editKey), [doc, editKey]);
+  const selected = useMemo(() => view.layers.find((l) => l.id === selectedId) ?? null, [view.layers, selectedId]);
+
+  /** An edit — to the main design, or in row mode, the layout part of it to this row. */
   const updateLayer = useCallback(
     (id: string, patch: Partial<TextLayer> | ((layer: TextLayer) => Partial<TextLayer>)) => {
-      commit((prev) => ({
-        ...prev,
-        layers: prev.layers.map((l) => (l.id === id ? { ...l, ...(typeof patch === "function" ? patch(l) : patch) } : l)),
-      }));
+      commit((prev) => patchLayer(prev, id, patch, editKeyRef.current));
     },
     [commit],
   );
@@ -68,8 +94,14 @@ export function useMerge(initial?: MergeDoc) {
    * write through and the caller snapshots once on gesture start.
    */
   const previewLayer = useCallback((id: string, patch: Partial<TextLayer>) => {
-    setDoc((prev) => ({ ...prev, layers: prev.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
+    setDoc((prev) => patchLayer(prev, id, patch, editKeyRef.current));
   }, []);
+
+  /** Back to the main design: one field of one layer, one layer, or the whole row. */
+  const revertRow = useCallback(
+    (key: string, layerId?: string, field?: OverrideField) => commit((prev) => revert(prev, key, layerId, field)),
+    [commit],
+  );
 
   const snapshot = useCallback(() => {
     setDoc((prev) => {
@@ -103,7 +135,7 @@ export function useMerge(initial?: MergeDoc) {
 
   const removeLayer = useCallback(
     (id: string) => {
-      commit((prev) => ({ ...prev, layers: prev.layers.filter((l) => l.id !== id) }));
+      commit((prev) => pruneLayer({ ...prev, layers: prev.layers.filter((l) => l.id !== id) }, id));
       setSelectedId((current) => (current === id ? null : current));
     },
     [commit],
@@ -126,9 +158,10 @@ export function useMerge(initial?: MergeDoc) {
   const usedFields = useMemo(() => tokensInAll(doc.layers.map((l) => l.text)), [doc.layers]);
 
   const currentRow = useMemo(() => {
-    if (!showValues || data.rows.length === 0) return null;
-    return data.rows[Math.min(rowIndex, data.rows.length - 1)] ?? null;
-  }, [showValues, data.rows, rowIndex]);
+    // A row's own layout is only meaningful drawn with that row's values.
+    if ((!showValues && !editKey) || data.rows.length === 0) return null;
+    return data.rows[clampedRow] ?? null;
+  }, [showValues, editKey, data.rows, clampedRow]);
 
   const step = useCallback(
     (direction: -1 | 1) => {
@@ -143,6 +176,12 @@ export function useMerge(initial?: MergeDoc) {
 
   return {
     doc,
+    view,
+    currentKey,
+    editKey,
+    rowMode: editKey !== null,
+    setRowMode,
+    revertRow,
     setDoc: commit,
     replaceDoc: setDoc,
     data,

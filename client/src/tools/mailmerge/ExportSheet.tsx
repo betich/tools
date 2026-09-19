@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { downloadZip } from "client-zip";
 import { FiDownload, FiServer, FiX } from "react-icons/fi";
-import { fileNameFor, type MergeData, type MergeDoc } from "@tools/shared";
+import { docForRow, fileNameFor, hasOverrides, type MergeData, type MergeDoc } from "@tools/shared";
 import { Button, Field, Input, Segmented, Slider, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { pad } from "@/lib/format";
 import { ensureDocFonts } from "./fonts";
+import { OwnMark } from "./OwnMark";
 import { extensionFor, renderThumbnail, renderToBlob, type ExportFormat } from "./render";
 
 /**
@@ -67,7 +68,7 @@ export function ExportSheet({
       await ensureDocFonts(doc, rows);
       for (let i = 0; i < rows.length; i++) {
         if (cancelled) return;
-        const url = renderThumbnail(doc, rows[i] ?? null, base);
+        const url = renderThumbnail(docForRow(doc, data.keys?.[i]), rows[i] ?? null, base);
         setThumbs((prev) => {
           const next = [...prev];
           next[i] = url;
@@ -116,7 +117,7 @@ export function ExportSheet({
       const options = { format, quality: quality / 100 };
       const files: { name: string; input: Blob }[] = [];
       for (const i of picks) {
-        const blob = await renderToBlob(doc, rows[i] ?? null, base, options);
+        const blob = await renderToBlob(docForRow(doc, data.keys?.[i]), rows[i] ?? null, base, options);
         files.push({ name: names[i]!, input: blob });
         if (!alive.current) return;
         setProgress({ done: files.length, total: picks.length });
@@ -130,7 +131,7 @@ export function ExportSheet({
       setBusy(false);
       setProgress(null);
     }
-  }, [base, doc, format, names, onClose, quality, rows, selected]);
+  }, [base, data.keys, doc, format, names, onClose, quality, rows, selected]);
 
   const rendered = thumbs.filter(Boolean).length;
 
@@ -221,6 +222,7 @@ export function ExportSheet({
                     >
                       {names[i]}
                     </span>
+                    {hasOverrides(doc, data.keys?.[i]) ? <OwnMark className="ml-auto" /> : null}
                   </span>
                 </button>
               </li>

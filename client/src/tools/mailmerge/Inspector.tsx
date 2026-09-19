@@ -1,11 +1,22 @@
-import { Fragment, type ReactNode } from "react";
-import { FiType } from "react-icons/fi";
-import { textCaseOf, type Align, type Fill, type TextCase, type TextLayer, type VAlign } from "@tools/shared";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { FiRotateCcw, FiType } from "react-icons/fi";
 import {
+  textCaseOf,
+  type Align,
+  type Fill,
+  type LayerOverride,
+  type OverrideField,
+  type TextCase,
+  type TextLayer,
+  type VAlign,
+} from "@tools/shared";
+import {
+  Button,
   Chip,
   ColorInput,
   Empty,
   Field,
+  IconButton,
   IconSegmented,
   NumberInput,
   Section,
@@ -17,7 +28,23 @@ import {
   TextButton,
   Toggle,
 } from "@/components/ui";
+import { cn } from "@/lib/cn";
+import { pad } from "@/lib/format";
 import { FontPicker } from "./FontPicker";
+import { OwnMark } from "./OwnMark";
+
+/** Row mode: which row this layer is being laid out for, and how to put it back. */
+export type RowContext = {
+  index: number;
+  title: string;
+  /** This layer's own fields on this row. */
+  own: LayerOverride | undefined;
+  /** Fields changed across every layer of the row. */
+  changes: number;
+  onRevertField: (field: OverrideField) => void;
+  onRevertRow: () => void;
+  onExit: () => void;
+};
 
 const DEFAULT_GRADIENT: Fill = {
   type: "linear",
@@ -40,7 +67,9 @@ export function Inspector({
   onChange,
   onPreview,
   onSnapshot,
+  row = null,
 }: {
+  row?: RowContext | null;
   layer: TextLayer | null;
   fields: string[];
   /** The page the layer is aligned against. */
@@ -51,17 +80,42 @@ export function Inspector({
 }) {
   if (!layer) {
     return (
-      <Section title="layer">
-        <Empty>select a layer to edit it</Empty>
-      </Section>
+      <Sections>
+        {row ? <RowHeader row={row} /> : null}
+        <Section title="layer">
+          <Empty>select a layer to edit it</Empty>
+        </Section>
+      </Sections>
     );
   }
 
   const fill = layer.fill;
   const live = (patch: Partial<TextLayer>) => onPreview(patch);
+  /** Label props for a field a row can own: periwinkle and a put-back glyph when it does. */
+  const own = (field: OverrideField, label: string) => {
+    const changed = row?.own?.[field] !== undefined;
+    return {
+      changed,
+      action:
+        changed && row ? (
+          <IconButton
+            label={`${label} back to main design`}
+            data-tip-pos="top-right"
+            onClick={(e) => {
+              e.preventDefault();
+              row.onRevertField(field);
+            }}
+          >
+            <FiRotateCcw className="size-3" />
+          </IconButton>
+        ) : undefined,
+    };
+  };
+  const ownInput = (field: OverrideField) => (row?.own?.[field] !== undefined ? "border-indigo/60" : undefined);
 
   return (
     <Sections>
+      {row ? <RowHeader row={row} /> : null}
       <Section title="content">
         <Field label="text" hint="wrap a column name in angle brackets to merge it">
           <textarea
@@ -97,8 +151,9 @@ export function Inspector({
         <FontPicker font={layer.font} onChange={(patch) => onChange({ font: { ...layer.font, ...patch } })} />
 
         <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-          <Field label="size">
+          <Field label="size" {...own("size", "size")}>
             <NumberInput
+              className={ownInput("size")}
               value={layer.font.size}
               min={4}
               max={800}
@@ -262,21 +317,21 @@ export function Inspector({
         <AlignBar layer={layer} canvas={canvas} onChange={onChange} />
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="x">
-            <NumberInput value={Math.round(layer.x)} onChange={(e) => onChange({ x: Number(e.target.value) || 0 })} />
+          <Field label="x" {...own("x", "x")}>
+            <NumberInput className={ownInput("x")} value={Math.round(layer.x)} onChange={(e) => onChange({ x: Number(e.target.value) || 0 })} />
           </Field>
-          <Field label="y">
-            <NumberInput value={Math.round(layer.y)} onChange={(e) => onChange({ y: Number(e.target.value) || 0 })} />
+          <Field label="y" {...own("y", "y")}>
+            <NumberInput className={ownInput("y")} value={Math.round(layer.y)} onChange={(e) => onChange({ y: Number(e.target.value) || 0 })} />
           </Field>
-          <Field label="width">
-            <NumberInput value={Math.round(layer.width)} onChange={(e) => onChange({ width: Math.max(1, Number(e.target.value) || 1) })} />
+          <Field label="width" {...own("width", "width")}>
+            <NumberInput className={ownInput("width")} value={Math.round(layer.width)} onChange={(e) => onChange({ width: Math.max(1, Number(e.target.value) || 1) })} />
           </Field>
-          <Field label="height">
-            <NumberInput value={Math.round(layer.height)} onChange={(e) => onChange({ height: Math.max(1, Number(e.target.value) || 1) })} />
+          <Field label="height" {...own("height", "height")}>
+            <NumberInput className={ownInput("height")} value={Math.round(layer.height)} onChange={(e) => onChange({ height: Math.max(1, Number(e.target.value) || 1) })} />
           </Field>
         </div>
 
-        <Field label={`rotation · ${layer.rotation}°`}>
+        <Field label={`rotation · ${layer.rotation}°`} {...own("rotation", "rotation")}>
           <Slider onCommitStart={onSnapshot} min={-180} max={180} value={layer.rotation} onChange={(rotation) => live({ rotation })} />
         </Field>
         <Field label={`opacity · ${Math.round(layer.opacity * 100)}%`}>
@@ -284,6 +339,54 @@ export function Inspector({
         </Field>
       </Section>
     </Sections>
+  );
+}
+
+/* ── row mode ──────────────────────────────────────────────────────────────
+   Heads the inspector while one row is being laid out on its own: which row,
+   what a row can own, and the way back. Reverting is two taps, like delete —
+   it is undoable, but it is also the one button here that undoes a lot. */
+
+function RowHeader({ row }: { row: RowContext }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 3500);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+
+  return (
+    <section className="flex flex-col gap-3.5">
+      <header className="flex min-h-5 items-center justify-between gap-3">
+        <h2 className="text-indigo flex min-w-0 items-center gap-2 font-mono text-meta uppercase">
+          <OwnMark title="" />
+          <span className="shrink-0 tabular-nums">row {pad(row.index + 1)}</span>
+          <span className="text-ink min-w-0 truncate tracking-normal normal-case">{row.title}</span>
+        </h2>
+        <TextButton onClick={row.onExit} className="shrink-0">
+          done
+        </TextButton>
+      </header>
+      <p className="text-prose font-sans text-body normal-case">
+        Position, size, rotation and type size are this row's own. Everything else changes the main design.
+      </p>
+      {row.changes > 0 ? (
+        <Button
+          variant="outline"
+          className={cn("w-full", armed && "border-indigo text-indigo")}
+          onClick={() => {
+            if (!armed) return setArmed(true);
+            setArmed(false);
+            row.onRevertRow();
+          }}
+        >
+          <FiRotateCcw className="size-3.5" aria-hidden />
+          {armed ? `revert ${row.changes} ${row.changes === 1 ? "change" : "changes"}?` : "revert to main design"}
+        </Button>
+      ) : (
+        <p className="text-meta font-mono text-meta uppercase">matches the main design</p>
+      )}
+    </section>
   );
 }
 

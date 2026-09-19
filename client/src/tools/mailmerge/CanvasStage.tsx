@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { MergeDoc, MergeRow, TextLayer } from "@tools/shared";
 import { cn } from "@/lib/cn";
 import { ensureDocFonts, useFontEpoch } from "./fonts";
@@ -21,7 +21,13 @@ export function CanvasStage({
   onSelect,
   onPreview,
   onSnapshot,
+  mode,
+  own = false,
 }: {
+  /** The design-mode switch, set in the caption line beside the readout. */
+  mode?: ReactNode;
+  /** One row's own layout is being edited: the frame says so. */
+  own?: boolean;
   doc: MergeDoc;
   row: MergeRow | null;
   base: HTMLImageElement | null;
@@ -128,7 +134,11 @@ export function CanvasStage({
     <div className="flex h-[min(38vh,300px)] flex-col gap-2 md:h-[min(54vh,540px)] lg:h-full lg:min-h-0">
       <div ref={wrap} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
         <div
-          className="border-hairline checkers relative rounded-sm border"
+          className={cn(
+            "checkers relative rounded-sm border transition-colors duration-200",
+            // The frame itself turns periwinkle — the stage clips anything drawn outside it.
+            own ? "border-indigo" : "border-hairline",
+          )}
           style={{ width: w, height: h }}
           onPointerDown={() => onSelect(null)}
           onPointerMove={onPointerMove}
@@ -178,9 +188,12 @@ export function CanvasStage({
         </div>
       </div>
 
-      <span className="text-meta text-meta shrink-0 text-center font-mono uppercase tabular-nums md:text-left">
-        {doc.canvas.width}×{doc.canvas.height} · {Math.round(scale * 100)}%
-      </span>
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        {mode}
+        <span className="text-meta text-meta font-mono uppercase tabular-nums">
+          {doc.canvas.width}×{doc.canvas.height} · {Math.round(scale * 100)}%
+        </span>
+      </div>
     </div>
   );
 }

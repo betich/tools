@@ -283,7 +283,7 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 **The editor skeleton.** Both tools resolve to settings / stage / inspector.
 
-**The merge editor is a room.** From 1024 up it takes exactly the viewport between the top bar and the rail (`Shell width="workspace"`, which lays the rail out as the room's last row instead of floating it), and the page never scrolls. A toolbar row carries `MAIL MERGE / <document name>` and the share state on the left, `SAVE · SHARE` and the solid `EXPORT` button on the right. Beneath it, three panes separated by faint hairlines: the merge on the left (projects, document, base image, layers, data), the poster alone in the middle at every pixel it can take, the selected layer on the right. Within a pane, sections are separated by a full-width faint hairline *between* them (`Sections`), 28px either side; a stacked section drops the rule under its own title so there is only ever one line between two groups. **Each side pane scrolls on its own** (`overflow-y: auto`, `overscroll-behavior: contain`); the poster never moves. Output settings do not live in the room — they live in the export sheet, where the output is.
+**The merge editor is a room.** From 1024 up it takes exactly the viewport between the top bar and the rail (`Shell width="workspace"`, which lays the rail out as the room's last row instead of floating it), and the page never scrolls. The address follows the open merge — `/mail-merge/s/<link>` when it has a link, `/mail-merge/p/<id>` when it does not — and opening a merge from the shelf is a history entry, while saving or sharing only corrects the address. A toolbar row carries `MAIL MERGE / <document name>` and the share state on the left, `SAVE · SHARE` and the solid `EXPORT` button on the right. Beneath it, three panes separated by faint hairlines: the merge on the left (projects, document, base image, layers, data), the poster alone in the middle at every pixel it can take, the selected layer on the right. Within a pane, sections are separated by a full-width faint hairline *between* them (`Sections`), 28px either side; a stacked section drops the rule under its own title so there is only ever one line between two groups. **Each side pane scrolls on its own** (`overflow-y: auto`, `overscroll-behavior: contain`); the poster never moves. Output settings do not live in the room — they live in the export sheet, where the output is.
 
 | from | columns | stage |
 | ---- | ------- | ----- |
@@ -354,11 +354,21 @@ The index says nothing it does not have to. Under the bezel there is one door pe
 - **Hover:** the border moves to periwinkle at 45%, the fill lifts from 4% to 7%, the name turns periwinkle, the arrow translates 4px, and a 160px indigo wash rises from the floor of the door over 500ms.
 - **Keys:** `1`–`3` open the tools in slot order from the index.
 
-### Saved list (mail merge)
+### The setup pane (mail merge)
+
+Sections run in the order the work happens: **base image, document, layers, data, projects**. The artwork is the first thing in the pane because it is the first decision; the shelf of saved merges sits last, since the toolbar already carries save and share.
+
+**Every section's own action is a real button in its header** — `Button size="sm"`: 28px, outline, a 12px glyph, uppercase meta. `+ NEW` for projects, `+ ADD TEXT` for layers, `↻ REPLACE` for the base image. Text buttons remain for secondary moves (remove, clear, use the sample). A section with nothing in it swaps its header action for a dashed block holding one sentence of prose and the same button, so an empty section says what goes there.
+
+- **Base image.** Empty: the dropzone with `CHOOSE AN IMAGE`. Set: the picture itself in a 176px checkered card that also takes a click or a drop to replace, its pixel size, `REMOVE`, the fit segments, and `SIZE DOCUMENT TO IMAGE` when the two differ. Decoded images are cached by source, so undoing a removal or a replacement brings the picture straight back.
+- **Document size** is a dropdown like Figma's frame list: grouped `SOCIAL · RATIO · PRINT · 300 DPI`, every preset drawn as its own outline rectangle, named, with its ratio and pixels. It is portalled and fixed (the pane scrolls and would clip it), opens up when there is more room above, and is a real listbox — arrows, home/end, enter, escape. Beneath it, `W` and `H` fields and a circled swap.
+- **Rows you can press.** Layers and projects are rows with a 6px radius, a hover wash, and the chosen one at 7% fill. Their actions sit at the row's end and appear on approach, stay visible on the chosen row, and are always visible under a coarse pointer.
+
+
 
 Saved merges are a list, never a gallery: what separates two projects is a name and a timestamp, and a list puts both on one line. Each row is a hairline-separated two-line button — the name in normal tracking because the user typed it, the `YYYY.MM.DD HH:MM` stamp under it in meta — with the open arrow appearing on row hover and a delete button held to the right. The open project sits at full ink; everything else at 70% and periwinkle on hover.
 
-**Every project is listed, locked ones included.** A lock guards the contents, not the fact that the project exists: a locked row carries a 12px lock glyph after its name and asks for the password when opened. A row with a link carries a copy-link icon beside delete, so a link is one click from the shelf — the icon is the "shared" marker; there is no status word.
+**Every project is listed, locked ones included.** A lock guards the contents, not the fact that the project exists: a locked row carries a 12px lock glyph after its name and asks for the password when opened. **Duplicate** asks first: a panel-high dialog in the share dialog's frame at 28rem, naming what the copy carries and — for a locked or shared original — that the copy has no link and no password; a locked original asks for its password there. `DUPLICATE AND OPEN` makes the copy and opens it. A row with a link carries a copy-link icon beside duplicate and delete, so a link is one click from the shelf — the icon is the "shared" marker; there is no status word.
 
 **NEW opens a popover, not a blank document.** A name and an optional password, in the same panel-high surface the share dialog uses. Empty password — the usual answer — means the merge stays local until it is saved; a password creates and locks it in one gesture, so a link that is going to a group is never briefly open.
 
@@ -396,6 +406,15 @@ A full-bleed surface, portalled above the chrome, that replaces "render everythi
 ### Row editor (mail merge)
 
 A panel-high popover that docks beside the left pane, over the edge of the stage, so the poster it is changing stays in view; below `md` it is a sheet across the foot of the screen under the pinned stage. Every keystroke is drawn on the canvas as a draft. A changed field turns its label periwinkle, takes a periwinkle border, and shows `WAS` and the old value struck through, with a put-back glyph. `↵` applies, shift-`↵` breaks the line, escape discards, and a click outside keeps what was typed, because the timeline is the safety net. The header's arrows apply and move to the neighbouring row. Delete row is two taps.
+
+### Own layout (mail merge)
+
+A row can be laid out on its own the way a Figma instance overrides its component: position, size, rotation and type size, and nothing else. Everything a row has not changed follows the main design, so moving the main design's headline still moves it on every row except the ones that placed it themselves.
+
+- **The switch** sits under the poster in the stage's caption line: `MAIN DESIGN · ROW 07 ONLY`, text buttons with the active underline. The data card offers the same switch as a full-width outline button under `EDIT VALUES` (`◇ OWN LAYOUT FOR ROW 07`, pressed: `◇ OWN LAYOUT · ON` in periwinkle at 7% fill). Escape returns to the main design.
+- **In row mode** the stage frame turns periwinkle, and the inspector opens with the row's name, one sentence of prose saying what a row can own, and an outline `REVERT TO MAIN DESIGN` (two taps: `REVERT 3 CHANGES?`). A field this row owns takes the row editor's changed treatment — periwinkle label and border — with a put-back glyph on its label line. Edits to anything a row cannot own go to the main design, as the prose says.
+- **The diamond.** A hollow 10px periwinkle diamond marks a row with a layout of its own — in the row list, beside the switch, and on the export sheet's card. It marks where a row differs; it is not a status colour.
+- **Rows keep their layouts.** Each row carries a key (`data.keys`); a reload hands each new row the key of the old row with the same values, or failing that the same first value. A layout whose row has gone is kept, said in an edge-bordered block in the data section, and discarded only on two taps — rolling back brings its row back.
 
 ### Edit timeline (mail merge)
 
