@@ -1,4 +1,4 @@
-import { chmod, writeFile } from "node:fs/promises";
+import { chmod, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   NEEDS_PASSWORD,
@@ -12,16 +12,14 @@ import {
 import { TaskError, type TaskContext } from "./jobs";
 
 /**
- * Inputs that need more than a straight compress (#15). The compress handler
- * calls these at its hook points:
+ * Inputs that need more than a straight compress (#15). The compress steps in
+ * compress/special.ts call these:
  *
- * - before anything else: `lockedGuard` and `signatureGuard` (the API checked
- *   both when the task was queued; the analysis may have landed since)
- * - encrypted input: `decryptInput` → a plain copy every tool can read
- * - stripping metadata: `xmpPolicy` → keep the PDF/A identification with
- *   `requiredXmp` instead of dropping the XMP packet outright
- * - after writing the output: `reencryptOutput` when `reencrypt` is set
- * - RunResult.notes: `specialNotes`
+ * - `prepare`: `lockedGuard` and `signatureGuard` (the API checked both when
+ *   the task was queued; the analysis may have landed since), then
+ *   `prepareInput` — decrypted, and with the XMP cut down to `requiredXmp`
+ *   when `xmpPolicy` says so — a plain copy every later tool can read
+ * - `seal`: `reencryptOutput` when `reencrypt` is set; `specialNotes`
  *
  * Passwords only ever reach a tool through a 0600 file in the task's scratch
  * directory (`--password-file`, or a qpdf `@` argument file), never argv,
@@ -56,22 +54,50 @@ export function lockedGuard(analysis: PdfAnalysis | null | undefined): string | 
   return analysis?.locked ? NEEDS_PASSWORD : null;
 }
 
+const SCRIPT = join(import.meta.dir, "../scripts/special.js");
+/** scripts/special.js exits with this when the password does not open the file. */
+const WRONG_PASSWORD_EXIT = 3;
+
+async function mutoolSpecial(run: Run, args: string[], what: string) {
+  const r = await run("mutool", ["run", SCRIPT, ...args], { check: false, label: "MuPDF", where: `while ${what}` });
+  if (r.code === WRONG_PASSWORD_EXIT) throw new TaskError(WRONG_PASSWORD);
+  if (r.code !== 0 || r.signal) throw new TaskError(`The file could not be prepared (${what}).`);
+}
+
+/** The catalog's XMP packet, "" when there is none. */
+export async function readXmp(run: Run, input: string, password: string | null, workDir: string): Promise<string> {
+  const pw = password ? await passwordFile(workDir, password) : "-";
+  const out = join(workDir, "catalog.xmp");
+  await mutoolSpecial(run, ["xmp", input, pw, out], "reading the metadata");
+  return readFile(out, "utf8");
+}
+
 /**
- * A decrypted copy of `input` in `workDir`, so every later tool (mutool, gs,
- * vips over extracted images) reads it without knowing about the password.
- * The owner password works too: qpdf accepts either.
+ * A copy of `input` every later tool (mutool, qpdf, gs) reads without a
+ * password: opened with `password` (user or owner), its catalog XMP replaced
+ * by `xmp` when given, saved unencrypted. No garbage collection, so the
+ * input's object numbers — PdfImage.id, PdfFont.id — still hold.
  */
-export async function decryptInput(run: Run, input: string, password: string, workDir: string): Promise<string> {
-  const out = join(workDir, "decrypted.pdf");
-  const pw = await passwordFile(workDir, password);
-  const r = await run("qpdf", [`--password-file=${pw}`, "--decrypt", input, out], {
-    check: false,
-    label: "Decrypting",
-    where: "while decrypting the file",
-  });
-  if (/invalid password/i.test(r.stderr)) throw new TaskError(WRONG_PASSWORD);
-  if (r.code === null || !QPDF_OK.has(r.code)) throw new TaskError("The file could not be decrypted.");
+export async function prepareInput(
+  run: Run,
+  input: string,
+  opts: { password: string | null; xmp: string | null },
+  workDir: string,
+  out = join(workDir, "prepared.pdf"),
+): Promise<string> {
+  const pw = opts.password ? await passwordFile(workDir, opts.password) : "-";
+  let xmpFile = "-";
+  if (opts.xmp !== null) {
+    xmpFile = join(workDir, "required.xmp");
+    await writeFile(xmpFile, opts.xmp);
+  }
+  await mutoolSpecial(run, ["prepare", input, out, pw, xmpFile], opts.password ? "decrypting the file" : "keeping the PDF/A metadata");
   return out;
+}
+
+/** `prepareInput` for decryption alone. */
+export function decryptInput(run: Run, input: string, password: string, workDir: string): Promise<string> {
+  return prepareInput(run, input, { password, xmp: null }, workDir, join(workDir, "decrypted.pdf"));
 }
 
 /**
@@ -156,10 +182,13 @@ const escapeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").
  * A minimal XMP packet carrying only the conformance identification found in
  * `xmp` — PDF/A's `pdfaid:*` and PDF/UA's `pdfuaid:*` — in either element
  * (`<pdfaid:part>2</pdfaid:part>`) or attribute (`pdfaid:part="2"`) form.
- * Null when `xmp` claims neither, so there is nothing to keep.
+ * Null when `xmp` claims neither, so there is nothing to keep. The title is
+ * kept too: stripping keeps the Info dictionary's Title, and PDF/A wants the
+ * two to agree.
  */
 export function requiredXmp(xmp: string): string | null {
   const blocks: string[] = [];
+  const title = /<dc:title\b[^>]*>[\s\S]*?<\/dc:title>/.exec(xmp)?.[0];
   for (const [prefix, { uri, props }] of Object.entries(SCHEMAS)) {
     const values: string[] = [];
     for (const prop of props) {
@@ -172,6 +201,7 @@ export function requiredXmp(xmp: string): string | null {
     if (values.length) blocks.push(`<rdf:Description rdf:about="" xmlns:${prefix}="${uri}">${values.join("")}</rdf:Description>`);
   }
   if (!blocks.length) return null;
+  if (title) blocks.push(`<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/">${title}</rdf:Description>`);
   return (
     '<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>\n' +
     '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">' +
@@ -183,15 +213,16 @@ export function requiredXmp(xmp: string): string | null {
 
 // ── notes ──────────────────────────────────────────────────────────────────
 
-/** The sentences a compress run adds to RunResult.notes for a special input. */
+/**
+ * The sentences a compress run adds to RunResult.notes for a special input.
+ * The repair note is not among them: the compress handler adds that one.
+ */
 export function specialNotes(
   params: Pick<CompressParams, "stripMetadata" | "reencrypt" | "acceptSignatureLoss">,
   analysis: PdfAnalysis | null | undefined,
 ): string[] {
   if (!analysis) return [];
   const notes: string[] = [];
-  const repaired = repairNote(analysis.flags.repaired);
-  if (repaired) notes.push(repaired);
   const signers = analysis.flags.signed;
   if (signers) {
     const named = signers.length ? signers : [UNNAMED_SIGNER];
