@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { FiChevronDown } from "react-icons/fi";
 import {
+  DEFAULT_CODEC,
   DEFAULT_ENGINE,
   ENGINES,
   PRESET_IDS,
@@ -14,9 +15,12 @@ import {
   type PresetId,
 } from "@tools/shared";
 import { EnginePicker } from "@/components/pdf/EnginePicker";
-import { Button, Section, Sections, Segmented, Toggle } from "@/components/ui";
+import { Button, Field, Section, Sections, Segmented, Toggle } from "@/components/ui";
 import { useEngineSupport, type RowSupport } from "@/hooks/useEngineSupport";
 import { cn } from "@/lib/cn";
+import { CodecSection } from "./CodecSection";
+import { DpiControl, PutBack, QualityControl } from "./controls";
+import { CODEC_SHORT } from "./overrides";
 import { InputCautions } from "./SpecialInputs";
 
 /** What each preset is for, in one line under the picker. */
@@ -33,15 +37,20 @@ const CONSEQUENCE: Partial<Record<PassId, string>> = {
   grayscale: "Turns colour into shades of grey.",
 };
 
-/** `Ebook · 150 dpi · q75 · grayscale` — a run's settings in one line, for its row in the history. */
+/** `Ebook · 150 dpi · q75 · jpeg 2000 · grayscale · 2 overrides` — a run's settings in one line, for its row in the history. */
 export function describeParams(params: CompressParams): string {
+  const overrides = Object.keys(params.overrides ?? {}).length;
   return [
     ...(params.engine && params.engine !== DEFAULT_ENGINE ? [ENGINES[params.engine]?.label ?? params.engine] : []),
     PRESETS[params.preset]?.label ?? params.preset,
     params.dpiCap ? `${params.dpiCap} dpi` : "full resolution",
     `q${params.quality}`,
+    params.codec && params.codec !== DEFAULT_CODEC ? (CODEC_SHORT[params.codec] ?? params.codec) : null,
     ...params.advanced.map((p) => passInfo(p)?.verb ?? p),
-  ].join(" · ");
+    overrides ? `${overrides} ${overrides === 1 ? "override" : "overrides"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**
@@ -52,18 +61,31 @@ export function describeParams(params: CompressParams): string {
  * fill it: the engine (#13), the codecs (#10), these opt-ins, then the time
  * budget of a target size (#12). `busy` while the queue holds a task for this
  * job — one at a time per caller — and RUN says why it waits.
+ *
+ * The DPI cap and quality start at the preset's and can be edited (#10);
+ * picking a preset puts them back. `onChange` reports every settings change so
+ * the page can draw the before/after crop under them, and `onCommitStart` is
+ * the sliders' drag start, when the page holds that crop until release.
+ * Per-image overrides live with the image table, not here: the page lays them
+ * over these params.
  */
 export function RunPanel({
   analysis,
   busy,
   onRun,
+  onChange,
+  onCommitStart,
 }: {
   analysis: PdfAnalysis | null;
   busy: boolean;
   onRun?: (params: CompressParams) => void;
+  onChange?: (params: CompressParams) => void;
+  onCommitStart?: () => void;
 }) {
   const [params, setParams] = useState<CompressParams>(() => defaultCompressParams());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => onChange?.(params), [params]); // eslint-disable-line react-hooks/exhaustive-deps -- report changes only
 
   // The preset owns the numbers; the opt-ins and anything later tickets add survive a change of preset.
   const pick = (id: PresetId) =>
@@ -78,8 +100,11 @@ export function RunPanel({
   const support = useEngineSupport(params.engine);
   const optIns = passesIn("advanced");
   // An opt-in the engine can't run is skipped, so it isn't counted as on.
-  const on = params.advanced.filter((p) => support.pass(p).supported).length;
+  const on =
+    params.advanced.filter((p) => support.pass(p).supported).length +
+    (params.codec !== DEFAULT_CODEC && support.codec(params.codec).supported ? 1 : 0);
   const engineLabel = params.engine !== DEFAULT_ENGINE ? ENGINES[params.engine].label : null;
+  const preset = PRESETS[params.preset];
 
   return (
     <Sections>
@@ -90,13 +115,48 @@ export function RunPanel({
           options={PRESET_IDS.map((id) => ({ value: id, label: PRESETS[id].label }))}
         />
         <p className="text-prose text-body font-sans normal-case">{PURPOSE[params.preset]}</p>
+        <Supported support={support.pass("downsample")}>
+          <Field
+            label="downsample above"
+            changed={params.dpiCap !== preset.dpiCap}
+            action={
+              params.dpiCap !== preset.dpiCap ? (
+                <PutBack
+                  label={`back to ${preset.dpiCap} dpi`}
+                  onClick={() => setParams((p) => ({ ...p, dpiCap: preset.dpiCap }))}
+                />
+              ) : null
+            }
+          >
+            <DpiControl
+              value={params.dpiCap}
+              fallback={preset.dpiCap}
+              onChange={(dpiCap) => setParams((p) => ({ ...p, dpiCap }))}
+              onCommitStart={onCommitStart}
+            />
+          </Field>
+        </Supported>
+        <Supported support={support.pass("reencode-images")}>
+          <Field
+            label="quality"
+            changed={params.quality !== preset.quality}
+            action={
+              params.quality !== preset.quality ? (
+                <PutBack
+                  label={`back to ${preset.quality}`}
+                  onClick={() => setParams((p) => ({ ...p, quality: preset.quality }))}
+                />
+              ) : null
+            }
+          >
+            <QualityControl
+              value={params.quality}
+              onChange={(quality) => setParams((p) => ({ ...p, quality }))}
+              onCommitStart={onCommitStart}
+            />
+          </Field>
+        </Supported>
         <dl className="flex flex-col">
-          <Fact
-            label="images above"
-            value={params.dpiCap ? `${params.dpiCap} dpi` : "kept"}
-            support={support.pass("downsample")}
-          />
-          <Fact label="quality" value={String(params.quality)} support={support.pass("reencode-images")} />
           <Fact
             label="metadata"
             value={params.stripMetadata ? "stripped" : "kept"}
@@ -117,7 +177,9 @@ export function RunPanel({
                   {passInfo(pass).label}
                 </span>
                 {reason || note ? (
-                  <span className="text-meta text-body pl-3.5 font-sans normal-case leading-snug">{reason ?? note}</span>
+                  <span className="text-meta text-body pl-3.5 font-sans normal-case leading-snug">
+                    {reason ?? note}
+                  </span>
                 ) : null}
               </li>
             );
@@ -148,9 +210,17 @@ export function RunPanel({
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
               <span className="text-meta text-meta font-mono uppercase">engine</span>
-              <EnginePicker tool="compress" value={params.engine} onChange={(engine) => setParams((p) => ({ ...p, engine }))} />
+              <EnginePicker
+                tool="compress"
+                value={params.engine}
+                onChange={(engine) => setParams((p) => ({ ...p, engine }))}
+              />
             </div>
-            {/* #10 codecs go here, above the opt-ins; dim them with support.codec(id). */}
+            <CodecSection
+              engine={params.engine}
+              codec={params.codec}
+              onChange={(codec) => setParams((p) => ({ ...p, codec }))}
+            />
             <div className="flex flex-col gap-4">
               <span className="text-meta text-meta font-mono uppercase">changes the document</span>
               {optIns.map((pass) => {
@@ -193,10 +263,26 @@ export function RunPanel({
 }
 
 /** A preset number, dimmed with the reason when the engine can't apply it, or with what it leaves out. */
+/** A control the engine can't honour dims (opacity, never colour) and says why; one it runs with a caveat says that. */
+function Supported({ support, children }: { support: RowSupport; children: ReactNode }) {
+  const said = support.reason ?? support.note;
+  return (
+    <div className={cn("flex flex-col gap-1", support.reason && "opacity-35")}>
+      {children}
+      {said ? <p className="text-meta text-body font-sans normal-case leading-snug">{said}</p> : null}
+    </div>
+  );
+}
+
 function Fact({ label, value, support }: { label: string; value: string; support?: RowSupport }) {
   const said = support?.reason ?? support?.note;
   return (
-    <div className={cn("border-hairline-faint flex flex-col gap-0.5 border-b py-1.5 last:border-b-0", support?.reason && "opacity-35")}>
+    <div
+      className={cn(
+        "border-hairline-faint flex flex-col gap-0.5 border-b py-1.5 last:border-b-0",
+        support?.reason && "opacity-35",
+      )}
+    >
       <div className="flex items-baseline justify-between gap-3">
         <dt className="text-meta text-meta font-mono uppercase">{label}</dt>
         <dd className="text-ink text-label font-mono tabular-nums tracking-normal">{value}</dd>
