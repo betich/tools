@@ -8,11 +8,11 @@ import type { TaskContext } from "./jobs";
  * the join differs between engines, so that is the step an engine provides.
  *
  * MuPDF and qpdf both join with qpdf — it reads each source lazily, where
- * MuPDF's graft holds every copied stream in memory until the save. The other
- * engines have no join yet: a merge asking for one runs on the default engine
- * and says so in its notes. #13 adds them with `registerMergeJoin("ghostscript", …)`
- * from its own file, imported from handlers/index.ts; joins are looked up when
- * a task runs, so import order does not matter.
+ * MuPDF's graft holds every copied stream in memory until the save.
+ * Ghostscript and pdf-lib register theirs from ./engines.ts (#13), imported
+ * from handlers/index.ts; joins are looked up when a task runs, so import
+ * order does not matter. An engine without a join would run on the default
+ * engine and say so in its notes.
  */
 
 /** Writes `parts` (PDFs, in order, pages kept in order) to `out` as one PDF. */

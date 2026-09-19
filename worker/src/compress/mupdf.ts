@@ -30,7 +30,7 @@ const SCRIPT = join(import.meta.dir, "../../scripts/compress.js");
 const DEEP_DEDUPE_MAX_OBJECTS = 10_000;
 const DEDUPE_MAX_OBJECTS = 15_000;
 
-type Removed = Partial<
+export type Removed = Partial<
   Record<"attachments" | "scripts" | "bookmarks" | "annotations" | "fields" | "thumbnails" | "privateData", number>
 >;
 type Report = { objects: number; garbage: "none" | "compact" | "deduplicate" | "4"; removed: Removed };

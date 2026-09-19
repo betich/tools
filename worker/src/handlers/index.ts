@@ -7,3 +7,5 @@ import "./analyse";
 import "./merge";
 import "./thumbnail";
 import "./compress";
+// #13: Merge's Ghostscript and pdf-lib joins.
+import "../engines";

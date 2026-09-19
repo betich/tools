@@ -3,6 +3,9 @@
  * read it to enable or dim rows, and the pdf-worker reads it to decide which
  * passes it may run. One table, so a row the UI offers is a pass the worker
  * will actually run. Reasons are sentences the client shows as-is.
+ *
+ * Checked against the worker's binaries in #13 (qpdf 12.2, Ghostscript 10.05.1,
+ * pdf-lib 1.17.1): a pass marked supported here is one the worker has a step for.
  */
 
 export type EngineId = "mupdf" | "qpdf" | "ghostscript" | "pdf-lib";
@@ -112,9 +115,9 @@ export const ENGINES: Record<EngineId, EngineInfo> = {
       "lossless-images": none(),
       "subset-fonts": none(),
       downsample: none("qpdf can't downsample images — it only re-encodes them at their own size."),
-      "reencode-images": partial("JPEG only, with qpdf's own encoder."),
+      "reencode-images": partial("JPEG only, with qpdf's own encoder — kept only when the file gets smaller."),
       "strip-metadata": FULL,
-      "remove-extras": partial("Attachments only."),
+      "remove-extras": FULL,
       flatten: FULL,
       grayscale: none(),
     },
@@ -126,19 +129,19 @@ export const ENGINES: Record<EngineId, EngineInfo> = {
     label: "Ghostscript",
     tools: {
       compress: FULL,
-      merge: partial("Re-distills every page — links, form fields and tags may not survive."),
+      merge: partial("Re-distills every page — form fields and tagged structure don't survive."),
     },
     passes: {
       "object-streams": FULL,
       "recompress-streams": partial("Re-distills the file rather than recompressing it in place."),
-      dedupe: FULL,
+      dedupe: partial("Duplicate images only."),
       "garbage-collect": FULL,
-      "lossless-images": partial("Only images it keeps lossless anyway."),
+      "lossless-images": none("Ghostscript re-encodes images rather than repacking them — JPEGs it doesn't downsample keep their bytes."),
       "subset-fonts": FULL,
       downsample: partial("Bicubic, not Lanczos."),
-      "reencode-images": partial("JPEG only, with Ghostscript's own encoder."),
+      "reencode-images": partial("JPEG or Flate, with Ghostscript's own encoder, chosen per image — JPEGs it doesn't downsample keep their bytes."),
       "strip-metadata": FULL,
-      "remove-extras": partial("Drops what it doesn't carry over — no choice per item."),
+      "remove-extras": FULL,
       flatten: FULL,
       grayscale: FULL,
     },
@@ -151,23 +154,23 @@ export const ENGINES: Record<EngineId, EngineInfo> = {
     label: "pdf-lib",
     tools: {
       compress: partial("Rewrites structure only — little to gain on most files."),
-      merge: partial("Copies pages only — bookmarks and form fields are dropped."),
+      merge: partial("Copies pages only — form fields are dropped."),
     },
     passes: {
       "object-streams": FULL,
-      "recompress-streams": none(),
+      "recompress-streams": none("pdf-lib copies streams as they are."),
       dedupe: none(),
-      "garbage-collect": none(),
+      "garbage-collect": none("pdf-lib writes out every object, used or not."),
       "lossless-images": none(),
       "subset-fonts": none(),
-      downsample: partial("Done by hand outside pdf-lib, then embedded."),
-      "reencode-images": partial("Done by hand outside pdf-lib, then embedded — JPEG or Flate only."),
-      "strip-metadata": partial("Document info only — XMP metadata stays."),
-      "remove-extras": partial("Done by hand on the catalog."),
-      flatten: partial("Form fields only — annotations stay."),
+      downsample: none("pdf-lib can't decode images, so it can't downsample them."),
+      "reencode-images": none("pdf-lib can't decode images, so it can't re-encode them."),
+      "strip-metadata": FULL,
+      "remove-extras": none(),
+      flatten: none(),
       grayscale: none(),
     },
-    codecs: ["mozjpeg", "flate"],
+    codecs: [],
     renders: false,
   },
 };

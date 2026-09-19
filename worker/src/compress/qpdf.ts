@@ -16,7 +16,7 @@ registerStep({
   id: "qpdf-flatten",
   phase: "edit",
   stage: "flattening forms and annotations",
-  engines: ["mupdf", "qpdf"],
+  engines: ["mupdf", "qpdf", "ghostscript"],
   passes: ["flatten"],
   async run(run) {
     const out = run.scratch("flat.pdf");
@@ -30,15 +30,17 @@ registerStep({
 });
 
 /**
- * The final lossless pass whatever the engine: re-deflate every Flate stream
- * at level 9 (MuPDF copies already-filtered streams as they are) and write
- * object streams. Kept only when it is smaller — on a file MuPDF just packed
- * it sometimes is not.
+ * The final lossless pass of the default (MuPDF) pipeline: re-deflate every
+ * Flate stream at level 9 (MuPDF copies already-filtered streams as they are)
+ * and write object streams. Kept only when it is smaller — on a file MuPDF
+ * just packed it sometimes is not. The other engines stop at their own
+ * structure pass, so a run shows what the picked engine does (#13).
  */
 registerStep({
   id: "qpdf-finish",
   phase: "finish",
   stage: "recompressing streams",
+  engines: ["mupdf"],
   passes: ["recompress-streams", "object-streams"],
   async run(run) {
     const out = run.scratch("qpdf.pdf");
