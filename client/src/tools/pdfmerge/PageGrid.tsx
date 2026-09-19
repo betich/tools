@@ -279,7 +279,7 @@ export function PageGrid({
                       </li>
                     ) : (
                       <li key={slot.id}>
-                        <FileTile state={slot.state} />
+                        <FileTile slot={slot} onRetry={state.retryCounts} />
                       </li>
                     ),
                   )}
@@ -413,7 +413,7 @@ const PageTile = memo(function PageTile({
         )}
       >
         <span>{pad(at + 1)}</span>
-        <span className="uppercase">{image ? entry.kind : `p${page + 1}`}</span>
+        <span className="uppercase">{image ? entry.kind : `p${pad(page + 1)}`}</span>
       </span>
     </button>
   );
@@ -446,7 +446,7 @@ function PdfFace({ entry, page }: { entry: MergeEntry; page: number }) {
       {href ? (
         <img src={href} alt="" onError={() => setHref(null)} className="max-h-full max-w-full bg-white object-contain" draggable={false} />
       ) : (
-        <span className="text-meta font-mono text-label tabular-nums">{page + 1}</span>
+        <span className="text-meta font-mono text-label tabular-nums">{pad(page + 1)}</span>
       )}
     </span>
   );
@@ -474,8 +474,12 @@ function ImageFace({ entry }: { entry: MergeEntry }) {
   );
 }
 
-/** A file whose pages aren't known: counting, or the server couldn't say. */
-function FileTile({ state }: { state: "counting" | "uncounted" }) {
+/**
+ * A file whose pages aren't known: counting, or the server couldn't count
+ * them — its sentence as it was sent, and a way to ask again when that was
+ * only for now (the worker was offline, say).
+ */
+function FileTile({ slot, onRetry }: { slot: Extract<Slot, { kind: "file" }>; onRetry: () => void }) {
   return (
     <span
       className={cn(
@@ -483,7 +487,8 @@ function FileTile({ state }: { state: "counting" | "uncounted" }) {
         TILE,
       )}
     >
-      {state === "counting" ? "counting pages…" : "pages unknown"}
+      {slot.state === "counting" ? "counting pages…" : (slot.why.reason ?? "pages unknown")}
+      {slot.state === "uncounted" && slot.why.retry ? <TextButton onClick={onRetry}>try again</TextButton> : null}
     </span>
   );
 }

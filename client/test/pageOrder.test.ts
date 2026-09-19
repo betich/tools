@@ -6,6 +6,7 @@ import {
   interleavePages,
   layout,
   moveFile,
+  moveFileTo,
   movePages,
   NO_SELECTION,
   orderRequest,
@@ -19,11 +20,14 @@ import {
   shiftPages,
   type OrderFile,
   type PageOrder,
+  type Uncounted,
 } from "../src/tools/pdfmerge/pageOrder";
 
 const A: OrderFile = { key: "a", pages: 5 };
 const B: OrderFile = { key: "b", pages: 3 };
 const IMG: OrderFile = { key: "i", pages: 1 };
+const LOCKED: Uncounted = { reason: "this PDF is password-protected", retry: false };
+const OFFLINE: Uncounted = { reason: null, retry: true };
 
 const show = (order: PageOrder, files: OrderFile[]) =>
   layout(order, files)
@@ -43,7 +47,7 @@ describe("layout", () => {
   });
 
   test("a file not counted yet holds its place", () => {
-    expect(show(null, [A, { key: "c", pages: undefined }, { key: "d", pages: null }])).toBe("a1 a2 a3 a4 a5 c:counting d:uncounted");
+    expect(show(null, [A, { key: "c", pages: undefined }, { key: "d", pages: LOCKED }])).toBe("a1 a2 a3 a4 a5 c:counting d:uncounted");
   });
 
   test("an edited order drops removed files and pages past the end, and adds new files whole", () => {
@@ -69,6 +73,29 @@ describe("edits", () => {
     const counting = { key: "c", pages: undefined };
     const next = removePages(null, [A, counting], new Set(["a#0"]));
     expect(show(next, [A, { key: "c", pages: 2 }])).toBe("a2 a3 a4 a5 c1 c2");
+  });
+
+  test("a file still counting when the order was edited keeps its place in the file order", () => {
+    const counting = { key: "c", pages: undefined };
+    const next = removePages(null, [A, counting, B], new Set(["a#0"]));
+    expect(show(next, [A, counting, B])).toBe("a2 a3 a4 a5 c:counting b1 b2 b3");
+    const counted = [A, { key: "c", pages: 2 }, B];
+    expect(show(next, counted)).toBe("a2 a3 a4 a5 c1 c2 b1 b2 b3");
+    expect(orderRequest(next, counted, [item("A"), item("C"), item("B")])).toEqual({
+      state: "pages",
+      pages: [[0, 1, 4], [1, 0, 1], [2, 0, 2]],
+    });
+    // One that can't be counted holds its place too, until it is removed or the order reset.
+    expect(show(next, [A, { key: "c", pages: LOCKED }, B])).toBe("a2 a3 a4 a5 c:uncounted b1 b2 b3");
+  });
+
+  test("a later edit keeps a file that is still counting where it is", () => {
+    const counting = { key: "c", pages: undefined };
+    let order = removePages(null, [A, counting, B], new Set(["a#0"]));
+    order = removePages(order, [A, counting, B], new Set(["b#0"]));
+    order = movePages(order, [A, counting, B], new Set(["a#1"]), null);
+    expect(show(order, [A, counting, B])).toBe("a3 a4 a5 c:counting b2 b3 a2");
+    expect(show(order, [A, { key: "c", pages: 1 }, B])).toBe("a3 a4 a5 c1 b2 b3 a2");
   });
 
   test("a range takes the file's place, in the order typed", () => {
@@ -112,6 +139,20 @@ describe("edits", () => {
     expect(show(moveFile(edited, [B, A], "b"), [B, A])).toBe("b1 b2 b3 a1 a3");
     expect(show(moveFile(edited, [B, A], "a"), [B, A])).toBe("b1 b2 b3 a1 a3");
     expect(moveFile(null, [B, A], "a")).toBeNull();
+  });
+
+  test("moveFileTo takes the list as it was and where the file went", () => {
+    const edited = setFilePages(null, [A, B, IMG], "a", [0, 2]);
+    expect(show(moveFileTo(edited, [A, B, IMG], "a", 2), [B, IMG, A])).toBe("b1 b2 b3 i1 a1 a3");
+    expect(show(moveFileTo(edited, [A, B, IMG], "i", 0), [IMG, A, B])).toBe("i1 a1 a3 b1 b2 b3");
+    expect(moveFileTo(edited, [A, B], "gone", 0)).toBe(edited);
+    expect(moveFileTo(null, [A, B], "a", 1)).toBeNull();
+  });
+
+  test("a file still counting moves with the list", () => {
+    const counting = { key: "c", pages: undefined };
+    const edited = removePages(null, [A, counting, B], new Set(["a#0"]));
+    expect(show(moveFileTo(edited, [A, counting, B], "c", 0), [counting, A, B])).toBe("c:counting a2 a3 a4 a5 b1 b2 b3");
   });
 });
 
@@ -196,11 +237,18 @@ describe("orderRequest", () => {
     expect(orderRequest(order, [A, B, { key: "c", pages: undefined }], [...items, item("C")])).toEqual({ state: "counting" });
   });
 
-  test("names a file that can't be counted", () => {
+  test("names a file that can't be counted, with the server's reason as it was sent", () => {
     const order = removePages(null, [A, B], new Set(["a#0"]));
-    const r = orderRequest(order, [A, B, { key: "c", pages: null }], [...items, item("scan.pdf")]);
+    const r = orderRequest(order, [A, B, { key: "c", pages: LOCKED }], [...items, item("scan.pdf")]);
     expect(r.state).toBe("problem");
     expect(r.state === "problem" && r.message).toContain("“scan.pdf”");
+    expect(r.state === "problem" && r.message).toContain("this PDF is password-protected");
+  });
+
+  test("a count that failed for now says it can be tried again", () => {
+    const order = removePages(null, [A, B], new Set(["a#0"]));
+    const r = orderRequest(order, [A, B, { key: "c", pages: OFFLINE }], [...items, item("scan.pdf")]);
+    expect(r.state === "problem" && r.message).toMatch(/try again/i);
   });
 
   test("an empty output is a problem, said as-is", () => {
@@ -253,10 +301,10 @@ describe("moving pages", () => {
     expect(orderRequest(order, files, [item("A"), item("B")])).toEqual({ state: "pages", pages: [[0, 0, 2], [1, 1, 1], [0, 3, 4]] });
   });
 
-  test("a file still counting stays whole after the pages", () => {
+  test("a file still counting stays whole, where it was", () => {
     const counting = { key: "c", pages: undefined };
     const next = movePages(null, [A, counting, B], new Set(["b#0"]), "a#0");
-    expect(show(next, [A, counting, B])).toBe("b1 a1 a2 a3 a4 a5 b2 b3 c:counting");
+    expect(show(next, [A, counting, B])).toBe("b1 a1 a2 a3 a4 a5 c:counting b2 b3");
   });
 });
 

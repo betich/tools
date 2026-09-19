@@ -3,7 +3,8 @@ import { pdfPageCount, pdfPageThumb, pdfThumbnail } from "../src/tools/pdfmerge/
 
 /**
  * The client side of the thumbnail lane's contract (#17, #37), against a fake
- * API: 200 is the answer, 202 and a busy 503 mean wait, anything else is none.
+ * API: 200 is the answer, 202 and a busy 503 mean wait, anything else is none —
+ * and for a count, says why and whether to ask again.
  * The page grid's tiles wait on one poller per batch, not one each.
  */
 
@@ -38,24 +39,39 @@ describe("pdfPageCount", () => {
   test("waits through 202s, then keeps the count", async () => {
     const id = fresh();
     route = (_p, hit) => (hit < 3 ? wait() : Response.json({ pages: 12 }));
-    expect(await pdfPageCount(id, signal())).toBe(12);
+    expect(await pdfPageCount(id, signal())).toEqual({ state: "counted", pages: 12 });
     expect(hits.length).toBe(3);
-    expect(await pdfPageCount(id, signal())).toBe(12);
+    expect(await pdfPageCount(id, signal())).toEqual({ state: "counted", pages: 12 });
     expect(hits.length).toBe(3);
   });
 
-  test("a locked or broken PDF, or an offline worker, is null", async () => {
-    route = () => refused(422);
-    expect(await pdfPageCount(fresh(), signal())).toBeNull();
-    route = () => refused(503);
-    expect(await pdfPageCount(fresh(), signal())).toBeNull();
+  test("a locked or broken PDF is refused, with the server's sentence as it was sent", async () => {
+    route = () => refused(422, { error: "this PDF is password-protected" });
+    expect(await pdfPageCount(fresh(), signal())).toEqual({ state: "refused", reason: "this PDF is password-protected" });
+    route = () => refused(422, {});
+    expect(await pdfPageCount(fresh(), signal())).toMatchObject({ state: "refused" });
+  });
+
+  test("an offline worker, a dropped connection or a bad answer is only for now, and is asked again", async () => {
+    const id = fresh();
+    route = () => refused(503, { error: "The PDF worker is offline — try again shortly." });
+    expect(await pdfPageCount(id, signal())).toEqual({
+      state: "unavailable",
+      reason: "The PDF worker is offline — try again shortly.",
+    });
     route = () => Response.json({ pages: 0 });
-    expect(await pdfPageCount(fresh(), signal())).toBeNull();
+    expect(await pdfPageCount(id, signal())).toEqual({ state: "unavailable", reason: null });
+    route = () => {
+      throw new TypeError("network");
+    };
+    expect(await pdfPageCount(id, signal())).toEqual({ state: "unavailable", reason: null });
+    route = () => Response.json({ pages: 4 });
+    expect(await pdfPageCount(id, signal())).toEqual({ state: "counted", pages: 4 });
   });
 
   test("a busy 503 says to wait, and is waited for", async () => {
     route = (_p, hit) => (hit === 1 ? refused(503, { error: "busy", retryAfter: 0.25 }) : Response.json({ pages: 3 }));
-    expect(await pdfPageCount(fresh(), signal())).toBe(3);
+    expect(await pdfPageCount(fresh(), signal())).toEqual({ state: "counted", pages: 3 });
   });
 });
 

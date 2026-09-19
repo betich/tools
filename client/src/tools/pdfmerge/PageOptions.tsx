@@ -13,14 +13,7 @@ import { Field, Input, NumberInput, Section, Segmented, Select, TextButton } fro
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
 import type { MergeEntry } from "./useMergeFiles";
-
-/** The selected PDF's pages in the merge (#37): its count as the order knows it, the pages kept in output order, and the two ways to change them. */
-export type FilePages = {
-  count: number | null | undefined;
-  kept: number[];
-  onApply: (pages: number[]) => void;
-  onReset: () => void;
-};
+import type { FilePages } from "./usePageOrder";
 
 const MODES: { value: MergeItemOptions["mode"]; label: string }[] = [
   { value: "image", label: "image size" },
@@ -138,6 +131,14 @@ export function PageOptions({
  * says why under the box and changes nothing. Reset brings every page back,
  * in order, where the file's first page sits.
  */
+/** Why the pages can't be picked, with the server's sentence as it was sent. */
+function uncountedSaid(why: { reason: string | null; retry: boolean }): string {
+  const reason = why.reason ? ` The server said: ${why.reason}${/[.!?…]$/.test(why.reason) ? "" : "."}` : "";
+  return why.retry
+    ? `This file's pages couldn't be counted just now, so they can't be picked yet.${reason} It goes in whole until they are.`
+    : `This file's pages can't be counted, so they can't be picked.${reason} It can only go in whole.`;
+}
+
 function PdfPages({ pages }: { pages: FilePages | null }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,13 +148,16 @@ function PdfPages({ pages }: { pages: FilePages | null }) {
 
   if (!pages || typeof count !== "number") {
     return (
-      <Section title="pages">
+      <Section
+        title="pages"
+        aside={typeof count === "object" && count.retry ? <TextButton onClick={pages?.onRetry}>try again</TextButton> : undefined}
+      >
         <p className="text-prose font-sans text-body normal-case">
-          {count === null
-            ? "The server couldn't count this file's pages — it may be locked or damaged — so they can't be picked. It can only go in whole."
-            : pages
-              ? "Counting this file's pages…"
-              : "A PDF goes in as it is: every page, at its own size. Its pages can be picked once it has uploaded."}
+          {!pages
+            ? "A PDF goes in as it is: every page, at its own size. Its pages can be picked once it has uploaded."
+            : typeof count === "object"
+              ? uncountedSaid(count)
+              : "Counting this file's pages…"}
         </p>
       </Section>
     );

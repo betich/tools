@@ -8,6 +8,7 @@ import {
   type EngineId,
   type JobInfo,
   type MergeOutput,
+  type MergePageRun,
   type MergeParams,
 } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
@@ -24,8 +25,8 @@ import { FileList } from "./FileList";
 import { latestMerge, MergeRun } from "./MergeRun";
 import { OutputOptions } from "./OutputOptions";
 import { PageGrid } from "./PageGrid";
-import { filePages, orderRequest } from "./pageOrder";
-import { PageOptions, type FilePages } from "./PageOptions";
+import { orderRequest, type OrderRequest } from "./pageOrder";
+import { PageOptions } from "./PageOptions";
 import { PagePreview } from "./PagePreview";
 import { ACCEPT, defaultTitle, mergeItems, mergeParams, useMergeFiles } from "./useMergeFiles";
 import { usePageOrder } from "./usePageOrder";
@@ -86,6 +87,33 @@ const sameSet = (a: string[], b: string[]) => {
 };
 
 /**
+ * What the merge sends and the bar says, from what the page order adds to the
+ * request (null until every file has uploaded): whether there is a request
+ * to send, its page list if any, the status line and a problem to show as-is.
+ */
+function planFor(
+  request: OrderRequest | null,
+  outputPages: number | null,
+  files: number,
+): { send: boolean; pages?: MergePageRun[]; status: string; problem: string | null } {
+  const filesSaid = `${pad(files)} ${files === 1 ? "file" : "files"} · one pdf`;
+  switch (request?.state) {
+    case "pages": {
+      const pagesSaid = outputPages === null ? "" : `${pad(outputPages)} ${outputPages === 1 ? "page" : "pages"} · `;
+      return { send: true, pages: request.pages, status: pagesSaid + filesSaid, problem: null };
+    }
+    case "whole":
+      return { send: true, status: filesSaid, problem: null };
+    case "counting":
+      return { send: false, status: "counting pages…", problem: null };
+    case "problem":
+      return { send: false, status: "nothing to merge yet", problem: request.message };
+    default:
+      return { send: false, status: filesSaid, problem: null };
+  }
+}
+
+/**
  * Files on the left in the order they will be joined, the selected one's page
  * options and the output options under them, and that page drawn on the right
  * above the merge button and, once asked for, the merge itself. Only mounted
@@ -106,7 +134,7 @@ export function MergeWorkbench() {
   const [selected, setSelected] = useState<string | null>(null);
   // File-level merge is the default; the page view is a toggle (#37).
   const [view, setView] = useState<View>("files");
-  const pages = usePageOrder(files.entries, { all: view === "pages", focus: selected });
+  const pageOrder = usePageOrder(files.entries, { all: view === "pages", focus: selected });
   const [output, setOutput] = useState<MergeOutput>(DEFAULT_MERGE_OUTPUT);
   const [restoring, setRestoring] = useState(() => stored() !== null);
   const [starting, setStarting] = useState(false);
@@ -146,15 +174,11 @@ export function MergeWorkbench() {
   const entry = index >= 0 ? entries[index]! : null;
   const items = mergeItems(entries);
   // What the page view adds: nothing while untouched, so that request is the file-level one.
-  const request = items ? orderRequest(pages.order, pages.files, items) : null;
-  const params =
-    request?.state === "whole"
-      ? mergeParams(entries, output, engine)
-      : request?.state === "pages"
-        ? mergeParams(entries, output, engine, request.pages)
-        : null;
+  const request = items ? orderRequest(pageOrder.order, pageOrder.files, items) : null;
   // How many pages come out, once every file's count is known.
-  const outputPages = pages.slots.every((s) => s.kind === "page") ? pages.slots.length : null;
+  const outputPages = pageOrder.slots.every((s) => s.kind === "page") ? pageOrder.slots.length : null;
+  const plan = planFor(request, outputPages, entries.length);
+  const params = plan.send ? mergeParams(entries, output, engine, plan.pages) : null;
   const task = latestMerge(job.job);
   const busy = starting || job.activeTask !== null;
   // The shown merge was asked for with exactly what the page holds now.
@@ -164,24 +188,16 @@ export function MergeWorkbench() {
   const images = entries.filter((e) => e.kind !== "pdf").length;
 
   // The selected PDF's pages, for its range box and the preview's caption.
-  const entryCount = entry ? pages.files[index]?.pages : undefined;
-  const kept = entry && typeof entryCount === "number" ? filePages(pages.slots, entry.key) : null;
-  const filePagesOf: FilePages | null =
-    entry?.kind === "pdf" && (entry.upload.phase === "done" || entry.upload.phase === "failed")
-      ? {
-          count: entryCount,
-          kept: kept ?? [],
-          onApply: (list) => pages.setPages(entry.key, list),
-          onReset: () => pages.reset(entry.key),
-        }
-      : null;
+  const focused = pageOrder.focused;
+  const kept =
+    focused && typeof focused.count === "number" && !pageOrder.untouched ? { pages: focused.kept.length, of: focused.count } : null;
 
   // Page view keys: delete takes the picked pages out, escape lets go of them, mod+A picks every page.
-  const picking = view === "pages" && pages.selection.ids.size > 0;
-  useHotkey("Delete", pages.removePicked, { enabled: picking });
-  useHotkey("Backspace", pages.removePicked, { enabled: picking });
-  useHotkey("Escape", pages.clearPicked, { enabled: picking });
-  const { pickAll } = pages;
+  const picking = view === "pages" && pageOrder.selection.ids.size > 0;
+  useHotkey("Delete", pageOrder.removePicked, { enabled: picking });
+  useHotkey("Backspace", pageOrder.removePicked, { enabled: picking });
+  useHotkey("Escape", pageOrder.clearPicked, { enabled: picking });
+  const { pickAll } = pageOrder;
   const onPickAll = useCallback(
     (e: KeyboardEvent) => {
       e.preventDefault();
@@ -192,7 +208,7 @@ export function MergeWorkbench() {
   useHotkey("mod+a", onPickAll, { enabled: view === "pages" });
 
   // Undo walks the page order back (#42): mod+Z, and mod+shift+Z or mod+Y forward. Fields keep their own.
-  const { undo, redo } = pages;
+  const { undo, redo } = pageOrder;
   const onUndo = useCallback(
     (e: KeyboardEvent) => {
       e.preventDefault();
@@ -214,7 +230,7 @@ export function MergeWorkbench() {
   // A file moved in the list takes its pages with it when the page order has been edited.
   const moveTo = (key: string, to: number) => {
     files.moveTo(key, to);
-    pages.fileMoved(key, to);
+    pageOrder.fileMoved(key, to);
   };
   const move = (key: string, by: -1 | 1) => {
     const at = entries.findIndex((e) => e.key === key);
@@ -290,7 +306,7 @@ export function MergeWorkbench() {
     if (!(await job.discard())) return;
     remember(null);
     files.clear();
-    pages.clear();
+    pageOrder.clear();
     setSelected(null);
     asked.current.clear();
     onward.current.clear();
@@ -384,7 +400,7 @@ export function MergeWorkbench() {
             }}
           />
           {view === "pages" ? (
-            <PageGrid state={pages} entries={entries} onFocusFile={setSelected} />
+            <PageGrid state={pageOrder} entries={entries} onFocusFile={setSelected} />
           ) : (
             <FileList
               entries={entries}
@@ -402,7 +418,7 @@ export function MergeWorkbench() {
         <PageOptions
           entry={entry}
           images={images}
-          pages={filePagesOf}
+          pages={focused}
           onChange={(change) => entry && files.setLayout(entry.key, change)}
           onApplyToAll={() => entry && files.layoutToAll(entry.key)}
         />
@@ -419,7 +435,7 @@ export function MergeWorkbench() {
           entry={entry}
           index={index}
           count={entries.length}
-          kept={kept && typeof entryCount === "number" && !pages.untouched ? { pages: kept.length, of: entryCount } : null}
+          kept={kept}
         />
 
         <MergeBar
@@ -428,15 +444,9 @@ export function MergeWorkbench() {
               ? `${pad(stopped)} ${stopped === 1 ? "upload" : "uploads"} stopped`
               : waiting
                 ? `${pad(waiting)} ${waiting === 1 ? "file" : "files"} still uploading`
-                : request?.state === "counting"
-                  ? "counting pages…"
-                  : request?.state === "problem"
-                    ? "nothing to merge yet"
-                    : request?.state === "pages" && outputPages !== null
-                      ? `${pad(outputPages)} ${outputPages === 1 ? "page" : "pages"} · ${pad(entries.length)} ${entries.length === 1 ? "file" : "files"} · one pdf`
-                      : `${pad(entries.length)} ${entries.length === 1 ? "file" : "files"} · one pdf`
+                : plan.status
           }
-          problem={!stopped && !waiting && request?.state === "problem" ? request.message : null}
+          problem={!stopped && !waiting ? plan.problem : null}
           disabled={!params || busy}
           label={starting ? "starting…" : job.activeTask ? "merging…" : "merge"}
           onMerge={() => params && void merge(params)}
