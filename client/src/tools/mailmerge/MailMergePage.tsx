@@ -21,7 +21,7 @@ import { addRow, changeRow, record, reloadSheet, remapTokens, removeRow, rollbac
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { ensureDocFonts, loadGoogleFont } from "./fonts";
-import { PasswordGate } from "./ShareMenu";
+import { PasswordGate, UnlockDialog } from "./ShareMenu";
 import { ShareDialog } from "./ShareDialog";
 import { forget, remember, unlockFor } from "./unlocks";
 import { parseSheet, sampleData } from "./sheet";
@@ -147,6 +147,8 @@ export function MailMergePage() {
   // Opening a merge from the shelf is a place to come back to; saving or
   // sharing the one you are in only corrects the address.
   const pushNext = useRef(false);
+  // Names of merges opened from the shelf, so a password prompt can say which.
+  const shelfNames = useRef(new Map<string, string>());
   const go = useCallback(
     (path: string, replace = false) => {
       shown.current = path;
@@ -533,6 +535,10 @@ export function MailMergePage() {
   useHotkey("Escape", () => merge.setRowMode(false), { enabled: merge.rowMode && !editing && !exporting && !sharing && !reconciling });
 
 
+  // What the gate is guarding, narrowed once for the two ways it is shown.
+  const slugAt = gate?.target.kind === "share" ? gate.target.slug : "";
+  const lockedId = gate?.target.kind === "project" ? gate.target.id : null;
+
   return (
     <Shell width="workspace">
       {/*
@@ -580,15 +586,10 @@ export function MailMergePage() {
         </div>
       </header>
 
-      {gate ? (
+      {/* A share link is nothing until it is unlocked, so its gate is the page. */}
+      {gate?.target.kind === "share" ? (
         <div className="lg:px-6 lg:pt-6 xl:px-7">
-          <PasswordGate
-            error={gate.error}
-            onSubmit={(password) =>
-              void (gate.target.kind === "share" ? openShared(gate.target.slug, password) : openProject(gate.target.id, password))
-            }
-            onCancel={gate.target.kind === "project" ? () => setGate(null) : undefined}
-          />
+          <PasswordGate error={gate.error} onSubmit={(password) => void openShared(slugAt, password)} />
         </div>
       ) : null}
 
@@ -690,7 +691,8 @@ export function MailMergePage() {
           <ProjectsPanel
             currentId={projectId}
             refreshKey={shelf}
-            onOpen={(id) => {
+            onOpen={(id, name) => {
+              shelfNames.current.set(id, name);
               pushNext.current = id !== projectId;
               void openProject(id);
             }}
@@ -848,6 +850,17 @@ export function MailMergePage() {
           busy={busy !== null}
           onApply={applyShare}
           onClose={() => setSharing(false)}
+        />
+      ) : null}
+
+      {/* A locked project asks over the room, leaving the open merge in place behind it. */}
+      {gate && lockedId ? (
+        <UnlockDialog
+          name={shelfNames.current.get(lockedId)}
+          error={gate.error}
+          busy={busy !== null}
+          onSubmit={(password) => void openProject(lockedId, password)}
+          onClose={() => setGate(null)}
         />
       ) : null}
     </Shell>

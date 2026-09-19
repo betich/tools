@@ -36,7 +36,7 @@ export function ProjectsPanel({
   onSave: () => void;
   /** Bumped by the page after a save, so a new row appears without a reload. */
   refreshKey: number;
-  onOpen: (id: string) => void;
+  onOpen: (id: string, name: string) => void;
   /** An empty password means a local, unshared merge — the usual case. */
   onNew: (name: string, password: string) => void;
   onDeleted: (id: string) => void;
@@ -116,7 +116,7 @@ export function ProjectsPanel({
               <li key={project.id} className="group relative flex items-center">
                 <button
                   type="button"
-                  onClick={() => onOpen(project.id)}
+                  onClick={() => onOpen(project.id, project.name || "untitled")}
                   aria-current={here || undefined}
                   className={cn(
                     "flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 rounded-xs py-2 pl-2.5 text-left transition-colors duration-200",

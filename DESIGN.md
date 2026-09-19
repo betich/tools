@@ -277,7 +277,9 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 **Top bar.** Sticky, hairline bottom, `backdrop-blur-xl` over the ground at 70% so content dissolves under it rather than colliding. Wordmark left, API state right.
 
-**Bottom rail.** Fixed, three equal cells, hairline top, blurred ground at 80%. The active cell takes a 7% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME · SOURCE` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. `SOURCE` links the repository, which the AGPL-3.0 PDF engines oblige every page to offer. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
+**Bottom rail.** Fixed, one equal cell for the index and one per tool, hairline top, blurred ground at 80%. The active cell takes a 7% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME · SOURCE` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. `SOURCE` links the repository, which the AGPL-3.0 PDF engines oblige every page to offer. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
+
+**Below `md` the rail is two cells, not five.** A phone cannot hold every tool and the signature under the work without the chrome becoming the loudest thing on screen. The rail becomes `← INDEX` and the tool you are in, 46px tall, the tool cell carrying the active fill and top line plus a chevron. Pressing it lifts a menu of every tool off the rail — the menu surface, each row the tool's name and its tagline, the current one filled — so the next tool is still two taps away. The signature leaves the rail for the foot of the page, in flow, and content reserves only what the one row needs. On the index there is no rail at all: the doors are the navigation.
 
 **Three measures and a room.** `max-w-3xl` for reading, `max-w-6xl` for squoosh, `max-w-[1600px]` for the index and any wide page. A tool takes the narrowest measure that fits its work — except the merge editor, which from a laptop up is not a page at all but a room (below). The index takes the widest measure on purpose: its two doors are meant to be billboards.
 
@@ -299,7 +301,7 @@ Touch gets its own sizes where it needs them: the layer's resize handle goes fro
 
 ### Named Rules
 
-**The Always-Reachable Rule.** Navigation is fixed at both ends of the viewport. On a 3000px editor page the next tool is one tap away from anywhere.
+**The Always-Reachable Rule.** Navigation is fixed at both ends of the viewport. On a 3000px editor page the next tool is one tap away from anywhere — two on a phone, where the rail folds the tools into a menu.
 
 **The Work-Order Rule.** When columns stack, they stack in the order the work happens: set up, look, adjust.
 
@@ -332,7 +334,7 @@ Wordmark at `0.32em` tracking, and a status chip. The chip is a 6px dot plus a w
 
 ### Bottom rail
 
-Three equal cells, uppercase meta, with the active cell taking a 7% fill and a periwinkle top edge. The footer line sits under it and is the only place the product signs its own name.
+Equal cells, uppercase meta, with the active cell taking a 7% fill and a periwinkle top edge. The footer line sits under it and is the only place the product signs its own name; below `md` it moves to the foot of the page and the rail folds to `← INDEX` plus the current tool (see Layout).
 
 ### Bezel (signature component)
 
@@ -348,7 +350,7 @@ The index page's authored moment: track's compass bezel unrolled flat.
 The index says nothing it does not have to. Under the bezel there is one door per live tool — two across from a laptop up, stacked below — and nothing else: no introduction, no queue of ideas, no empty slots. A tool is shown, not described.
 
 - **Name:** the `hero` step — Roboto Mono bold, `clamp(3rem, 6.4vw, 7.25rem)`, line-height 0.92, tracking `-0.035em`. The one place in the product where type is the image; tracking tightens here because at this size the mono's own spacing is already wide. It turns periwinkle on approach.
-- **Drawing:** each door carries its tool's own interface doing its own job, in ink alphas only, with periwinkle reserved for the part that moves. *squoosh* is its compare slider across a lit sphere — smooth on the `ORIGINAL` side, blocked into 15px cells and five bands on the `WEBP` side; on approach the divider slides from 50% to 28%. *mail merge* is a stack of the same poster carrying the editor's own sample rows; on approach it deals itself out into three. Both move over 700ms on the house ease and stand still under reduced motion.
+- **Drawing:** each door carries its tool's own interface doing its own job, in ink alphas only, with periwinkle reserved for the part that moves. *squoosh* is its compare slider across a lit sphere — smooth on the `ORIGINAL` side, blocked into 15px cells and five bands on the `WEBP` side; on approach the divider slides from 50% to 28%. *mail merge* is a stack of the same poster carrying the editor's own sample rows; on approach it deals itself out into three. *pdf compress* is a page beside the tool's own size breakdown — `BEFORE` and `AFTER` bars in the category ink steps, which match at rest; on approach the images segment turns periwinkle and gives back most of its length, the after bar ends short, the photo on the page lights with it, and the readout goes from `4.8 mb · ORIGINAL` to `1.7 mb · −65%`. *pdf merge* is three files as runs of pages, each under its own bracket and numbered from `01`; on approach they close up under one periwinkle bracket, `merged.pdf · 04 pages`, and the pages that moved take their new numbers. The pdf drawings are sized in container units (`cqw`) so each scales as one piece, with a 7px floor on their labels. All four move over 700ms on the house ease and stand still under reduced motion.
 - **Footer:** a hairline, the tool's tagline in meta, `OPEN →`. That is all the copy a door has.
 - **Frame:** ground plus 4% ink behind a 16% hairline, 16px radius. From a laptop up a door is `min(100dvh − 21.5rem, 44rem)` tall so both fit above the rail without scrolling.
 - **Hover:** the border moves to periwinkle at 45%, the fill lifts from 4% to 7%, the name turns periwinkle, the arrow translates 4px, and a 160px indigo wash rises from the floor of the door over 500ms.
@@ -368,7 +370,7 @@ Sections run in the order the work happens: **base image, document, layers, data
 
 Saved merges are a list, never a gallery: what separates two projects is a name and a timestamp, and a list puts both on one line. Each row is a hairline-separated two-line button — the name in normal tracking because the user typed it, the `YYYY.MM.DD HH:MM` stamp under it in meta — with the open arrow appearing on row hover and a delete button held to the right. The open project sits at full ink; everything else at 70% and periwinkle on hover.
 
-**Every project is listed, locked ones included.** A lock guards the contents, not the fact that the project exists: a locked row carries a 12px lock glyph after its name and asks for the password when opened. **Duplicate** asks first: a panel-high dialog in the share dialog's frame at 28rem, naming what the copy carries and — for a locked or shared original — that the copy has no link and no password; a locked original asks for its password there. `DUPLICATE AND OPEN` makes the copy and opens it. A row with a link carries a copy-link icon beside duplicate and delete, so a link is one click from the shelf — the icon is the "shared" marker; there is no status word.
+**Every project is listed, locked ones included.** A lock guards the contents, not the fact that the project exists: a locked row carries a 12px lock glyph after its name and asks for the password when opened — in a dialog over the room (the duplicate dialog's frame at 28rem: `OPEN <name>`, one sentence of prose, the field, a solid `OPEN`), so the merge already open stays exactly where it was until the new one is unlocked. A wrong password is said in the dialog and selected for retyping. Only a locked share link keeps the inline gate, because until it is unlocked that gate is the whole page. **Duplicate** asks first: a panel-high dialog in the share dialog's frame at 28rem, naming what the copy carries and — for a locked or shared original — that the copy has no link and no password; a locked original asks for its password there. `DUPLICATE AND OPEN` makes the copy and opens it. A row with a link carries a copy-link icon beside duplicate and delete, so a link is one click from the shelf — the icon is the "shared" marker; there is no status word.
 
 **NEW opens a popover, not a blank document.** A name and an optional password, in the same panel-high surface the share dialog uses. Empty password — the usual answer — means the merge stays local until it is saved; a password creates and locks it in one gesture, so a link that is going to a group is never briefly open.
 

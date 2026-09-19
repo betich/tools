@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { FiArrowRight } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
 import { Bezel } from "@/components/Bezel";
@@ -115,6 +115,8 @@ const EASE = "ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none";
 const ART: Partial<Record<string, ReactNode>> = {
   squoosh: <CompareArt />,
   "mail-merge": <StackArt />,
+  "pdf-compress": <ShrinkArt />,
+  "pdf-merge": <JoinArt />,
 };
 
 /**
@@ -239,6 +241,238 @@ function StackArt() {
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * The frame both pdf drawings share: the same box as the other two doors, with
+ * a container inside it so every length below is a share of the drawing's own
+ * width (`cqw`) and the drawing scales as one piece from a phone to a billboard.
+ */
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative aspect-[16/10] w-full max-w-[34rem] lg:h-full lg:max-h-[21rem] lg:w-auto lg:max-w-full">
+      <div className="@container absolute inset-0">{children}</div>
+    </div>
+  );
+}
+
+/** One line of type on a drawn page: a bar of ink at the given width. */
+function Line({ w, strong = false }: { w: string; strong?: boolean }) {
+  return <span className={cn("block shrink-0 rounded-[1px]", strong ? "bg-ink/40 h-[1.1cqw]" : "bg-ink/16 h-[0.55cqw]")} style={{ width: w }} />;
+}
+
+/** Two labels in one place, the second taking over on approach. */
+function Swap({ from, to, toClass }: { from: ReactNode; to: ReactNode; toClass?: string }) {
+  return (
+    <span className="grid">
+      <span className={cn("[grid-area:1/1] transition-opacity duration-700 group-hover:opacity-0", EASE)}>{from}</span>
+      <span className={cn("[grid-area:1/1] opacity-0 transition-opacity duration-700 group-hover:opacity-100", EASE, toClass)}>{to}</span>
+    </span>
+  );
+}
+
+/**
+ * pdf compress's own size breakdown beside the page it measures: the file
+ * split by what it carries, before and after, on one scale. At rest the two
+ * bars match. On approach the images are re-encoded — their segment gives back
+ * most of its length, the after bar ends short of the before bar, and the
+ * photo on the page lights with it, as pointing at a category does in the tool.
+ */
+function ShrinkArt() {
+  // Tenths of a megabyte, so the bars and the readout are the same numbers.
+  const parts = [
+    { key: "images", was: 36, now: 5, fill: "bg-ink/60" },
+    { key: "fonts", was: 7, now: 7, fill: "bg-ink/48" },
+    { key: "content", was: 4, now: 4, fill: "bg-ink/38" },
+    { key: "metadata", was: 1, now: 1, fill: "bg-ink/30" },
+  ];
+  const was = parts.reduce((n, p) => n + p.was, 0);
+  const now = parts.reduce((n, p) => n + p.now, 0);
+  // A length that holds `rest` and becomes `on` when the door is approached;
+  // the before bar passes the same number twice and stays put.
+  const grows = "basis-0 grow-[var(--rest)] group-hover:grow-[var(--on)] transition-[flex-grow] duration-700";
+  const grow = (rest: number, on: number) => ({ "--rest": rest, "--on": on }) as CSSProperties;
+
+  const bar = (after: boolean) => (
+    <span className="flex w-full">
+      <span
+        className={cn("border-wash bg-surface rounded-hairline flex h-[2.4cqw] gap-px overflow-hidden border", grows, EASE)}
+        style={grow(was, after ? now : was)}
+      >
+        {parts.map((p) => (
+          <span
+            key={p.key}
+            className={cn(
+              "block h-full min-w-[2px] transition-[flex-grow,background-color]",
+              grows,
+              p.fill,
+              after && p.was !== p.now && "group-hover:bg-indigo",
+              EASE,
+            )}
+            style={grow(p.was, after ? p.now : p.was)}
+          />
+        ))}
+      </span>
+      {/* What the file gave back: bare ground past the end of the after bar. */}
+      <span className={cn("block", grows, EASE)} style={grow(0, after ? was - now : 0)} />
+    </span>
+  );
+
+  const label = "text-meta font-mono text-[max(7px,1.9cqw)] leading-none tracking-[0.18em] uppercase";
+  const mb = (tenths: number) => `${(tenths / 10).toFixed(1)} mb`;
+
+  return (
+    <Frame>
+      <div className="flex size-full items-center justify-center gap-[7cqw]">
+        {/* the page: a heading, a photograph, a column of type */}
+        <div className="border-wash bg-panel flex aspect-[1/1.414] h-[50cqw] shrink-0 flex-col gap-[1.2cqw] rounded-sm border p-[2.6cqw]">
+          <Line w="62%" strong />
+          <Line w="38%" />
+          <span
+            className={cn(
+              "border-hairline-faint mt-[0.8cqw] mb-[0.6cqw] block h-[40%] shrink-0 rounded-[3px] border transition-colors duration-700",
+              "bg-[repeating-linear-gradient(135deg,rgba(246,245,255,0.09)_0_1px,transparent_1px_6px)]",
+              "group-hover:border-indigo/70",
+              EASE,
+            )}
+          />
+          <Line w="100%" />
+          <Line w="94%" />
+          <Line w="100%" />
+          <Line w="71%" />
+          <Line w="88%" />
+        </div>
+
+        {/* the breakdown */}
+        <div className="flex w-[44cqw] flex-col">
+          <span className={cn(label, "mb-[1.4cqw]")}>before</span>
+          {bar(false)}
+          <span className={cn(label, "mt-[3.4cqw] mb-[1.4cqw]")}>after</span>
+          {bar(true)}
+
+          <span className="border-hairline-faint mt-[4.4cqw] flex items-baseline justify-between gap-[2cqw] border-t pt-[2.4cqw]">
+            <span className="text-ink font-mono text-[5.4cqw] leading-none font-bold tracking-normal tabular-nums">
+              <Swap from={mb(was)} to={mb(now)} />
+            </span>
+            <span className="font-mono text-[max(7px,1.9cqw)] leading-none tracking-normal tabular-nums">
+              <Swap
+                from={<span className="text-meta uppercase tracking-[0.18em]">original</span>}
+                to={`−${Math.round((1 - now / was) * 100)}%`}
+                toClass="text-indigo text-right"
+              />
+            </span>
+          </span>
+
+          <span className="mt-[2.6cqw] flex flex-wrap gap-x-[2.4cqw] gap-y-[1cqw]">
+            {parts.slice(0, 2).map((p) => (
+              <span key={p.key} className={cn(label, "flex items-center gap-[0.9cqw] text-[max(7px,1.6cqw)]")}>
+                <span
+                  className={cn(
+                    "block size-[1.3cqw] rounded-[1px] transition-colors duration-700",
+                    p.fill,
+                    p.was !== p.now && "group-hover:bg-indigo",
+                    EASE,
+                  )}
+                />
+                {p.key}
+              </span>
+            ))}
+          </span>
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+/**
+ * pdf merge's input list drawn as what it becomes: three files, each its own
+ * run of pages under its own bracket and numbered from one. On approach they
+ * close up into a single document — one bracket, one name, and the pages that
+ * moved take their new numbers.
+ */
+function JoinArt() {
+  const files: { name: string; pages: ("text" | "image" | "table")[] }[] = [
+    { name: "report.pdf", pages: ["text", "text"] },
+    { name: "scan.jpg", pages: ["image"] },
+    { name: "notes.pdf", pages: ["table"] },
+  ];
+  // Page 15cqw wide, 1.2cqw between pages, 10cqw between files at rest.
+  const total = files.reduce((n, f) => n + f.pages.length, 0);
+  const joined = `${total * 15 + (total - 1) * 1.2}cqw`;
+  let at = 0;
+
+  return (
+    <Frame>
+      <div className="flex size-full items-center justify-center">
+        <div className={cn("relative flex items-start gap-[10cqw] transition-[gap] duration-700 group-hover:gap-[1.2cqw]", EASE)}>
+          {files.map((file) => (
+            <div key={file.name} className="flex flex-col">
+              <div className="flex gap-[1.2cqw]">
+                {file.pages.map((kind, i) => {
+                  at += 1;
+                  const own = i + 1;
+                  return <Page key={i} kind={kind} own={own} merged={at} />;
+                })}
+              </div>
+              {/* each file's bracket and name, giving way to the merged one */}
+              <span className={cn("flex flex-col transition-opacity duration-500 group-hover:opacity-0", EASE)}>
+                <span className="border-edge mt-[2.4cqw] block h-[1.4cqw] border-x border-b" />
+                <span className="text-meta mt-[1.4cqw] truncate text-center font-mono text-[max(7px,1.8cqw)] leading-none tracking-normal">
+                  {file.name}
+                </span>
+              </span>
+            </div>
+          ))}
+
+          <span
+            className={cn(
+              "pointer-events-none absolute top-[calc(21.2cqw+2.4cqw)] left-1/2 flex -translate-x-1/2 flex-col opacity-0 transition-opacity duration-700 group-hover:opacity-100",
+              EASE,
+            )}
+            style={{ width: joined }}
+          >
+            <span className="border-indigo block h-[1.4cqw] border-x border-b" />
+            <span className="text-indigo mt-[1.4cqw] text-center font-mono text-[max(7px,1.8cqw)] leading-none tracking-normal whitespace-nowrap">
+              merged.pdf · {String(total).padStart(2, "0")} pages
+            </span>
+          </span>
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+/** One page of a file, with its number at the foot: its own at rest, the merged one on approach. */
+function Page({ kind, own, merged }: { kind: "text" | "image" | "table"; own: number; merged: number }) {
+  const n = (v: number) => String(v).padStart(2, "0");
+  return (
+    <span className="border-wash bg-panel flex aspect-[1/1.414] w-[15cqw] flex-col gap-[0.9cqw] rounded-[3px] border p-[1.5cqw]">
+      {kind === "image" ? (
+        <span className="border-hairline-faint block flex-1 rounded-[2px] border bg-[repeating-linear-gradient(135deg,rgba(246,245,255,0.09)_0_1px,transparent_1px_5px)]" />
+      ) : (
+        <>
+          <Line w="70%" strong />
+          {kind === "text" ? (
+            ["100%", "92%", "100%", "64%", "100%", "86%"].map((w, i) => <Line key={i} w={w} />)
+          ) : (
+            <span className="mt-[0.4cqw] grid grid-cols-3 gap-x-[0.8cqw] gap-y-[1cqw]">
+              {Array.from({ length: 15 }, (_, i) => (
+                <span key={i} className={cn("block h-[0.55cqw] rounded-[1px]", i < 3 ? "bg-ink/32" : "bg-ink/16")} />
+              ))}
+            </span>
+          )}
+          <span className="flex-1" />
+        </>
+      )}
+      <span className={cn("self-center font-mono text-[max(6px,1.5cqw)] leading-none tracking-normal tabular-nums", kind === "image" && "mt-[0.3cqw]")}>
+        {own === merged ? (
+          <span className="text-meta">{n(own)}</span>
+        ) : (
+          <Swap from={<span className="text-meta">{n(own)}</span>} to={n(merged)} toClass="text-indigo" />
+        )}
+      </span>
+    </span>
   );
 }
 

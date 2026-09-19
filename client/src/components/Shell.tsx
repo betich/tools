@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/cn";
-import { TabRail, TopBar } from "./Chrome";
+import { Colophon, TabRail, TopBar } from "./Chrome";
 
 /**
  * Ground, one bloom of light, and the console chrome around the work.
@@ -17,6 +18,11 @@ export function Shell({
   children: ReactNode;
   width?: "default" | "page" | "wide" | "workspace";
 }) {
+  // Below md the signature leaves the rail for the foot of the page, and the
+  // rail shrinks to one row — or, on the index, is not there at all.
+  const home = useLocation().pathname === "/";
+  const foot = <Colophon className={cn("md:hidden", home ? "pb-6" : "pb-[calc(46px+1.25rem+env(safe-area-inset-bottom))]")} />;
+
   if (width === "workspace") {
     return (
       <div className="relative flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
@@ -24,9 +30,10 @@ export function Shell({
 
         <div className="relative z-10 flex min-h-dvh flex-col lg:h-full lg:min-h-0">
           <TopBar />
-          <main className="flex-1 px-5 pt-5 pb-36 sm:px-8 lg:flex lg:min-h-0 lg:flex-col lg:px-0 lg:pt-0 lg:pb-0">
+          <main className="flex-1 px-5 pt-5 pb-10 sm:px-8 md:pb-36 lg:flex lg:min-h-0 lg:flex-col lg:px-0 lg:pt-0 lg:pb-0">
             {children}
           </main>
+          {foot}
           {/* In the room the rail is part of the floor plan, not laid over it. */}
           <TabRail inFlow />
         </div>
@@ -40,11 +47,12 @@ export function Shell({
 
       <div className="relative z-10 flex min-h-dvh flex-col">
         <TopBar />
-        <main className="flex-1 px-5 pt-10 pb-36 sm:px-8 sm:pt-14 md:px-12">
+        <main className="flex-1 px-5 pt-10 pb-10 sm:px-8 sm:pt-14 md:px-12 md:pb-36">
           <div className={cn("mx-auto", width === "wide" ? "max-w-[1600px]" : width === "page" ? "max-w-6xl" : "max-w-3xl")}>
             {children}
           </div>
         </main>
+        {foot}
       </div>
 
       <TabRail />
