@@ -59,9 +59,25 @@ export type OpenedProject = Project & { share: ShareState | null };
 const lock = (password?: string): Record<string, string> => (password ? { "x-share-password": password } : {});
 export type FontList = { source: "google" | "fallback"; total: number; fonts: Pick<GoogleFont, "family" | "category" | "variants">[] };
 
+export type AdminStats = {
+  uptimeSeconds: number;
+  projects: number;
+  shares: number;
+  lockedShares: number;
+  assets: number;
+  assetBytes: number;
+  freeBytes: { data: number | null; assets: number | null };
+  recentProjects: { id: string; name: string; updatedAt: string }[];
+  /** The last 30 days, oldest first. */
+  series: { day: string; hits: number; visitors: number }[];
+  routes: { route: string; hits: number }[];
+};
+
 export const api = {
   /** Resolves only when the server is actually reachable — the UI degrades gracefully otherwise. */
   health: () => request<{ ok: boolean; projects: number; uptimeSeconds: number }>("/api/health"),
+
+  adminStats: (password: string) => request<AdminStats>("/api/admin/stats", { headers: { "x-admin-password": password } }),
 
   tools: () => request<ToolMeta[]>("/api/tools"),
 

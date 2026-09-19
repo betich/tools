@@ -8,6 +8,7 @@ import { Launchpad } from "@/routes/Launchpad";
 // Both tools pull in heavy dependencies (wasm codecs, spreadsheet parsers);
 // the index page should not pay for either.
 const Squoosh = lazy(() => import("@/tools/squoosh/SquooshPage").then((m) => ({ default: m.SquooshPage })));
+const Admin = lazy(() => import("@/routes/Admin").then((m) => ({ default: m.Admin })));
 const MailMerge = lazy(() => import("@/tools/mailmerge/MailMergePage").then((m) => ({ default: m.MailMergePage })));
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
             <Route path="/mail-merge" element={<MailMerge />} />
             <Route path="/mail-merge/s/:slug" element={<MailMerge />} />
             <Route path="/mail-merge/p/:id" element={<MailMerge />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>

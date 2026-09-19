@@ -20,6 +20,8 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://tools.betich.me,https://betich-tools.pages.dev,http://localhost:5173}
       MAX_BATCH_ROWS: ${MAX_BATCH_ROWS:-500}
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-12582912}
+      # Unlocks the usage dashboard at /admin; unset, it refuses everyone.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # The rest of the guard rails (rate limits, disk reserve, render queue)
       # have defaults in server/src/env.ts; override any of them here.
       # Uploads and font files live on the pooled USB drives (mergerfs at

@@ -41,6 +41,8 @@ export const env = {
   /** Renders running at once, and how many may wait behind them before the rest are turned away. */
   renderConcurrency: int(process.env.RENDER_CONCURRENCY, 1),
   renderQueue: int(process.env.RENDER_QUEUE, 3),
+  /** Unlocks /api/admin. Unset, the admin routes refuse everyone. */
+  adminPassword: process.env.ADMIN_PASSWORD ?? "",
   fontCacheTtlMs: int(process.env.FONT_CACHE_TTL_MS, 24 * 60 * 60 * 1000),
 };
 
