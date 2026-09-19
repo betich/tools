@@ -1,5 +1,5 @@
 #!/bin/sh
-# Generates the #8 analysis fixtures into $1 (default: ./out). Needs the
+# Generates the #8 analysis and #9 compress fixtures into $1 (default: ./out). Needs the
 # worker image's toolchain (mutool, vips, gs, qpdf); run it inside
 # tools-pdf-worker. Nothing binary is checked in — together they are ~2 MB.
 set -eu
@@ -32,6 +32,8 @@ mutool run "$here/scan.js" scan.pdf page.jpg 3
 # fonts, a classic xref table, no object streams, flags dropped.
 gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dEmbedAllFonts=true -dSubsetFonts=true -o deck-gs.pdf \
   -c "<< /NeverEmbed [ ] >> setdistillerparams" -f deck.pdf
+# Uncompressed, with duplicates, metadata, extras and annotations for the compress passes (#9).
+mutool run "$here/bloated.js" bloated.pdf photo.jpg
 # Encrypted with a user password: nothing past the dictionaries can be read.
 qpdf --encrypt --user-password=secret --owner-password=owner --bits=256 -- deck.pdf locked.pdf
 

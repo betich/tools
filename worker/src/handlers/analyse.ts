@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PdfAnalysis, PdfFont, PdfImage, SizeCategory } from "@tools/shared";
-import { registerHandler, TaskError } from "../jobs";
+import { registerHandler, TaskError, type TaskContext } from "../jobs";
 import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_OBJECTS, ANALYSIS_MAX_PAGES, ANALYSIS_TIMEOUT_MS } from "../limits";
 
 /**
@@ -22,18 +22,34 @@ const CATEGORIES: SizeCategory[] = ["images", "fonts", "content", "metadata", "o
 /** What the script writes: the contract's fields plus a couple of its own. */
 type ScriptOutput = PdfAnalysis & { error?: string; message?: string; locked?: boolean };
 
-registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
-  const input = inputs[0];
+registerHandler("analyse", async (ctx) => {
+  const input = ctx.inputs[0];
   if (!input) throw new Error("analyse needs one input");
-  const out = join(workDir, "analysis.json");
-  const progressFile = join(workDir, "progress.txt");
+  return { result: await analyseFile(ctx, input.path, input.size) };
+});
+
+let runs = 0;
+
+/**
+ * Analyses one PDF on disk. Also measures a compress run's output (#9), where
+ * `stage` replaces the script's own stage names so the browser sees one step.
+ */
+export async function analyseFile(
+  { workDir, progress, run }: Pick<TaskContext, "workDir" | "progress" | "run">,
+  path: string,
+  size: number,
+  opts: { stage?: string } = {},
+): Promise<PdfAnalysis> {
+  const n = ++runs;
+  const out = join(workDir, `analysis-${n}.json`);
+  const progressFile = join(workDir, `analysis-${n}.progress`);
   const deadline = Date.now() + ANALYSIS_TIMEOUT_MS * SOFT_DEADLINE;
 
-  progress("opening", 0, 0);
+  progress(opts.stage ?? "opening", 0, 0);
   const poll = setInterval(async () => {
     const line = await readFile(progressFile, "utf8").catch(() => "");
     const [stage, done, total] = line.trim().split("\t");
-    if (stage && total) progress(stage, Number(done), Number(total));
+    if (stage && total) progress(opts.stage ?? stage, Number(done), Number(total));
   }, POLL_MS);
 
   try {
@@ -42,10 +58,10 @@ registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
       [
         "run",
         SCRIPT,
-        input.path,
+        path,
         out,
         progressFile,
-        String(input.size),
+        String(size),
         String(ANALYSIS_MAX_PAGES),
         String(ANALYSIS_MAX_BYTES_READ),
         String(ANALYSIS_MAX_OBJECTS),
@@ -64,8 +80,8 @@ registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
     throw new TaskError("The analysis could not read this file.");
   }
   if (raw.error) throw new TaskError("This file could not be opened as a PDF.");
-  return { result: shape(raw, input.size) };
-});
+  return shape(raw, size);
+}
 
 /**
  * Only the contract's fields, so the stored result stays the shape the client
