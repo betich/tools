@@ -143,6 +143,82 @@ export function moveFile(order: PageOrder, files: readonly OrderFile[], key: str
   return settle({ refs: rest, taken: m.taken }, files);
 }
 
+/**
+ * Takes the pages in `ids` out of where they are and puts them back as one
+ * block, in the order they were shown, before page `before` — or at the end
+ * when it is `null`. If `before` is itself one of the pages moving, the block
+ * lands before the first page after it that stays. This is a drop in the page
+ * view, across files as much as within one.
+ */
+export function movePages(order: PageOrder, files: readonly OrderFile[], ids: ReadonlySet<string>, before: string | null): PageOrder {
+  const m = materialize(order, files);
+  const at = before === null ? -1 : m.refs.findIndex((r) => refId(r) === before);
+  const gap = at < 0 ? m.refs.length : at;
+  // Where the block goes, counted among the pages that stay.
+  const place = m.refs.slice(0, gap).filter((r) => !ids.has(refId(r))).length;
+  return placeBlock(order, m, files, ids, place);
+}
+
+/**
+ * The keyboard's move: the picked pages, gathered into one block where the
+ * first of them is, step one page earlier (`-1`) or later (`1`) past the pages
+ * that stay.
+ */
+export function shiftPages(order: PageOrder, files: readonly OrderFile[], ids: ReadonlySet<string>, by: -1 | 1): PageOrder {
+  const m = materialize(order, files);
+  const first = m.refs.findIndex((r) => ids.has(refId(r)));
+  if (first < 0) return order;
+  const stay = m.refs.filter((r) => !ids.has(refId(r))).length;
+  return placeBlock(order, m, files, ids, Math.max(0, Math.min(stay, first + by)));
+}
+
+/**
+ * Deals the picked pages out one file at a time — the first picked page of
+ * each file, then the second of each, and so on — where the first of them is.
+ * Files take turns in the order their pages first appear; one that runs out
+ * drops out of the deal. Two scans of one stack, fronts and backs, become one
+ * document in a gesture: pick both, interleave. (Backs scanned last page
+ * first are put right with the range box, "20-1", before or after.)
+ */
+export function interleavePages(order: PageOrder, files: readonly OrderFile[], ids: ReadonlySet<string>): PageOrder {
+  const m = materialize(order, files);
+  const piles = new Map<string, PageRef[]>();
+  for (const r of m.refs) if (ids.has(refId(r))) piles.set(r.key, [...(piles.get(r.key) ?? []), r]);
+  if (piles.size < 2) return order;
+  const decks = [...piles.values()];
+  const longest = Math.max(...decks.map((d) => d.length));
+  const dealt: PageRef[] = [];
+  for (let i = 0; i < longest; i++) for (const d of decks) if (i < d.length) dealt.push(d[i]!);
+  const first = m.refs.findIndex((r) => ids.has(refId(r)));
+  return placeBlock(order, m, files, ids, first, dealt);
+}
+
+/** True when the picked pages come from more than one file, so there is something to interleave. */
+export function canInterleave(slots: readonly Slot[], ids: ReadonlySet<string>): boolean {
+  const keys = new Set<string>();
+  for (const s of slots) if (s.kind === "page" && ids.has(s.id)) keys.add(s.ref.key);
+  return keys.size > 1;
+}
+
+/**
+ * The pages in `ids` lifted out and set down as `block` (by default, as they
+ * were shown) at `place` among the rest. A move that lands every page where it
+ * was gives back `order` itself, so it is no undo step.
+ */
+function placeBlock(
+  order: PageOrder,
+  m: { refs: PageRef[]; taken: string[] },
+  files: readonly OrderFile[],
+  ids: ReadonlySet<string>,
+  place: number,
+  block = m.refs.filter((r) => ids.has(refId(r))),
+): PageOrder {
+  const rest = m.refs.filter((r) => !ids.has(refId(r)));
+  rest.splice(place, 0, ...block);
+  if (rest.every((r, i) => refId(r) === refId(m.refs[i]!))) return order;
+  return settle({ refs: rest, taken: m.taken }, files);
+}
+
 /* ── selection ───────────────────────────────────────────────────────────── */
 
 /** Picked pages by `refId`, and the one a shift-click extends from. Not part of the order, so never undone. */

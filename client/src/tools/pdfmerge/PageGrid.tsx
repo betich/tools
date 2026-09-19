@@ -1,12 +1,25 @@
-import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { FiImage } from "react-icons/fi";
-import { TextButton } from "@/components/ui";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
+import { FiArrowLeft, FiArrowRight, FiImage } from "react-icons/fi";
+import { IconButton, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
-import type { Slot } from "./pageOrder";
+import { canInterleave, type Slot } from "./pageOrder";
 import { pdfPageThumb } from "./thumbnail";
 import type { MergeEntry } from "./useMergeFiles";
 import type { PageOrderState } from "./usePageOrder";
+
+/** Where a dragged block would land: against one side of the tile under the pointer. */
+type Over = { id: string; side: "before" | "after" };
 
 /**
  * The page view (#37): the merge's output, page by page, in order. Pages
@@ -17,6 +30,14 @@ import type { PageOrderState } from "./usePageOrder";
  * Click picks a page, shift-click a span, ⌘/ctrl-click one more; delete takes
  * the picked pages out of the output (the file is untouched). Picking a page
  * also makes its file the one the page section and preview are about.
+ *
+ * Pages drag anywhere in the output, across files too (#42): a picked page
+ * takes every picked page with it, as one block, and a periwinkle rule on a
+ * tile's edge shows where it will land. Alt+arrows do the same from the
+ * keyboard, one place at a time, and the arrows in the bar do it for touch.
+ * Interleave deals the picked pages out a file at a time, so fronts and backs
+ * scanned as two files become one document in one gesture. Every drop, move
+ * and deal is one undo step.
  */
 export function PageGrid({
   state,
@@ -33,6 +54,15 @@ export function PageGrid({
   const picked = selection.ids.size;
   const total = slots.filter((s) => s.kind === "page").length;
   const list = useRef<HTMLOListElement>(null);
+  const ghost = useRef<HTMLSpanElement>(null);
+  const dealable = picked > 1 && canInterleave(slots, selection.ids);
+
+  // The pages being dragged, and the edge they would land against.
+  const [dragging, setDragging] = useState<ReadonlySet<string> | null>(null);
+  const [over, setOver] = useState<Over | null>(null);
+  // Read by handlers that stay put across renders, so the memoised tiles don't redraw on every change.
+  const live = useRef({ selection, slots, dragging });
+  live.current = { selection, slots, dragging };
 
   const { pick } = state;
   const onPick = useCallback(
@@ -43,51 +73,178 @@ export function PageGrid({
     [pick, onFocusFile],
   );
 
-  // Arrow keys walk the tiles in reading order; the rest of the keys are the page's own (space, enter).
+  /** A picked page takes the whole pick with it; any other page goes alone, and is picked. */
+  const carried = useCallback(
+    (id: string) => {
+      const sel = live.current.selection.ids;
+      if (sel.has(id)) return sel;
+      pick(id);
+      return new Set([id]);
+    },
+    [pick],
+  );
+
+  const onDragStart = useCallback(
+    (id: string, key: string, e: DragEvent) => {
+      const ids = carried(id);
+      onFocusFile(key);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+      // More than one page: the pointer carries a count rather than a picture of one of them.
+      if (ids.size > 1 && ghost.current) {
+        ghost.current.textContent = `${pad(ids.size)} pages`;
+        e.dataTransfer.setDragImage(ghost.current, 14, 12);
+      }
+      setDragging(ids);
+    },
+    [carried, onFocusFile],
+  );
+
+  const onDragOver = useCallback((id: string, e: DragEvent) => {
+    if (!live.current.dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const r = e.currentTarget.getBoundingClientRect();
+    const side = e.clientX < r.left + r.width / 2 ? "before" : "after";
+    setOver((o) => (o?.id === id && o.side === side ? o : { id, side }));
+  }, []);
+
+  const endDrag = useCallback(() => {
+    setDragging(null);
+    setOver(null);
+  }, []);
+
+  const ids = () => live.current.slots.flatMap((s) => (s.kind === "page" ? [s.id] : []));
+
+  const onDrop = (e: DragEvent) => {
+    if (!dragging) return;
+    e.preventDefault();
+    if (over) {
+      const order = ids();
+      const before = over.side === "before" ? over.id : (order[order.indexOf(over.id) + 1] ?? null);
+      state.movePages(dragging, before);
+    }
+    endDrag();
+  };
+
+  // After a keyboard move the page may sit under another run's bracket, a new element: focus follows it.
+  const refocus = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const id = refocus.current;
+    if (!id) return;
+    refocus.current = null;
+    const tile = [...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-page]") ?? [])].find((b) => b.dataset.page === id);
+    if (tile && document.activeElement !== tile) tile.focus();
+  });
+
+  const shift = (by: -1 | 1, id?: string) => {
+    const moving = id ? carried(id) : selection.ids;
+    if (!moving.size) return;
+    refocus.current = id ?? null;
+    state.shiftPages(moving, by);
+  };
+
+  // Arrow keys walk the tiles in reading order; alt+arrows move the page (and the rest of the pick) instead.
   const onKeyDown = (e: KeyboardEvent) => {
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!step) return;
     const tiles = [...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-page]") ?? [])];
     const at = tiles.indexOf(document.activeElement as HTMLButtonElement);
-    const next = tiles[at + step];
-    if (at < 0 || !next) return;
+    if (at < 0) return;
     e.preventDefault();
-    next.focus();
+    if (e.altKey) return shift(step, tiles[at]!.dataset.page);
+    tiles[at + step]?.focus();
   };
 
   return (
     <div className="flex flex-col gap-4">
       {/* What is picked and what can be done with it; the hint while nothing is. */}
-      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <p className="text-meta font-mono text-meta uppercase tabular-nums" aria-live="polite">
           {picked ? (
             <span className="text-ink">
               {pad(picked)} of {pad(total)} picked
             </span>
           ) : (
-            "click · shift-click · ⌘-click to pick"
+            "click · shift-click · ⌘-click to pick · drag to move"
           )}
         </p>
-        <span className="flex items-center gap-4">
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {picked ? (
             <>
               <TextButton onClick={state.clearPicked}>clear</TextButton>
-              <TextButton onClick={state.removePicked} data-tip="delete" className="tooltip">
+              <span className="flex items-center gap-2">
+                <IconButton label="move earlier · alt ←" onClick={() => shift(-1)}>
+                  <FiArrowLeft className="size-3.5" aria-hidden />
+                </IconButton>
+                <IconButton label="move later · alt →" onClick={() => shift(1)}>
+                  <FiArrowRight className="size-3.5" aria-hidden />
+                </IconButton>
+              </span>
+              {dealable ? (
+                <TextButton
+                  onClick={() => state.interleave(selection.ids)}
+                  aria-label="interleave"
+                  data-tip="one page from each file in turn"
+                  className="tooltip"
+                >
+                  interleave
+                </TextButton>
+              ) : null}
+              <TextButton
+                onClick={state.removePicked}
+                aria-label={`remove ${picked === 1 ? "page" : "pages"}`}
+                aria-keyshortcuts="Delete Backspace"
+                data-tip="delete"
+                className="tooltip"
+              >
                 remove {picked === 1 ? "page" : "pages"}
               </TextButton>
             </>
           ) : !state.untouched ? (
             <TextButton onClick={state.resetAll}>reset all</TextButton>
           ) : null}
+          <span className="flex items-center gap-4">
+            <TextButton
+              onClick={state.undo}
+              disabled={!state.canUndo}
+              aria-label="undo"
+              aria-keyshortcuts="Control+Z Meta+Z"
+              data-tip="⌘Z"
+              className="tooltip"
+            >
+              undo
+            </TextButton>
+            <TextButton
+              onClick={state.redo}
+              disabled={!state.canRedo}
+              aria-label="redo"
+              aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+              data-tip="⇧⌘Z"
+              data-tip-pos="top-right"
+              className="tooltip"
+            >
+              redo
+            </TextButton>
+          </span>
         </span>
       </div>
 
       {slots.length === 0 ? (
         <p className="text-meta font-sans text-body normal-case">
-          Every page has been taken out. Reset a file, or all of them, to put pages back.
+          Every page has been taken out. Reset a file, or all of them, to put pages back — or undo.
         </p>
       ) : (
-        <ol ref={list} className="flex flex-wrap items-start gap-x-3 gap-y-5" aria-label="pages in merge order" onKeyDown={onKeyDown}>
+        <ol
+          ref={list}
+          className="flex flex-wrap items-start gap-x-3 gap-y-5"
+          aria-label="pages in merge order"
+          onKeyDown={onKeyDown}
+          // The gaps between tiles take the drop too, landing where the rule was last drawn.
+          onDragOver={(e) => dragging && e.preventDefault()}
+          onDrop={onDrop}
+          onDragEnd={endDrag}
+        >
           {runs.map((run) => {
             const file = byKey.get(run.key);
             if (!file) return null;
@@ -97,15 +254,28 @@ export function PageGrid({
                 <ol className="flex flex-wrap gap-2">
                   {run.slots.map((slot, k) =>
                     slot.kind === "page" ? (
-                      <li key={slot.id}>
+                      <li key={slot.id} className="relative">
                         <PageTile
                           id={slot.id}
                           entry={file.entry}
                           page={slot.ref.page}
                           at={run.start + k}
                           picked={selection.ids.has(slot.id)}
+                          lifted={dragging?.has(slot.id) ?? false}
                           onPick={onPick}
+                          onDragStart={onDragStart}
+                          onDragOver={onDragOver}
                         />
+                        {/* The drop line: a 1px periwinkle rule in the gap on the side the block would land. */}
+                        {dragging && over?.id === slot.id ? (
+                          <span
+                            className={cn(
+                              "bg-indigo pointer-events-none absolute inset-y-0 w-px",
+                              over.side === "before" ? "-left-[5px]" : "-right-[5px]",
+                            )}
+                            aria-hidden
+                          />
+                        ) : null}
                       </li>
                     ) : (
                       <li key={slot.id}>
@@ -119,6 +289,13 @@ export function PageGrid({
           })}
         </ol>
       )}
+
+      {/* What the pointer carries when several pages move: a count, not one page's picture. Off screen until then. */}
+      <span
+        ref={ghost}
+        className="border-indigo bg-panel-high text-ink pointer-events-none fixed -top-24 left-0 rounded-xs border px-2 py-1 font-mono text-meta uppercase tabular-nums"
+        aria-hidden
+      />
     </div>
   );
 }
@@ -166,7 +343,7 @@ const TILE = "w-[5.5rem]";
  * One output page. The page is never dimmed: being picked is the frame, the
  * tick and the numbers going to full ink, as on the export sheet. Its number
  * in the output is on the left of the foot, the page it is in its file on the
- * right.
+ * right. It drags (see `PageGrid`); alt+arrows move it from the keyboard.
  */
 const PageTile = memo(function PageTile({
   id,
@@ -174,20 +351,30 @@ const PageTile = memo(function PageTile({
   page,
   at,
   picked,
+  lifted,
   onPick,
+  onDragStart,
+  onDragOver,
 }: {
   id: string;
   entry: MergeEntry;
   page: number;
   at: number;
   picked: boolean;
+  /** Being dragged: it fades where it was, as a file row does, until it lands. */
+  lifted: boolean;
   onPick: (id: string, key: string, e: MouseEvent) => void;
+  onDragStart: (id: string, key: string, e: DragEvent) => void;
+  onDragOver: (id: string, e: DragEvent) => void;
 }) {
   const image = entry.kind !== "pdf";
   return (
     <button
       type="button"
-      data-page
+      data-page={id}
+      draggable
+      onDragStart={(e) => onDragStart(id, entry.key, e)}
+      onDragOver={(e) => onDragOver(id, e)}
       aria-pressed={picked}
       aria-label={`page ${at + 1}: ${image ? entry.file.name : `page ${page + 1} of ${entry.file.name}`}`}
       onClick={(e) => onPick(id, entry.key, e)}
@@ -198,6 +385,7 @@ const PageTile = memo(function PageTile({
         "focus-visible:outline-indigo focus-visible:outline-1 focus-visible:outline-offset-2",
         TILE,
         picked ? "border-indigo bg-surface-high" : "border-hairline-faint bg-surface hover:border-edge",
+        lifted && "opacity-35",
       )}
     >
       <span className="flex aspect-[3/4] items-center justify-center p-1.5">
