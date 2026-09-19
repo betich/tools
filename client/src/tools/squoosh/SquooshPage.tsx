@@ -56,6 +56,7 @@ export function SquooshPage() {
               options={formats.map((f) => ({ value: f.value, label: f.label }))}
               className="flex-wrap"
             />
+            {meta.note ? <p className="text-meta font-sans text-label">{meta.note}</p> : null}
           </Section>
 
           <Section title="settings">
