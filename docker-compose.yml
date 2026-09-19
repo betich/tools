@@ -47,6 +47,31 @@ services:
     expose:
       - "8787"
 
+  # PDF compress/merge runs here, apart from the API, so a job that blows its
+  # memory takes down only itself. It shares the SQLite volume (job table,
+  # heartbeat) and the bulk drives (uploads, results) with the api.
+  pdf-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: tools-pdf-worker
+    restart: unless-stopped
+    environment:
+      WORKER_PORT: 8788
+      DATA_DIR: /data
+      WORK_DIR: /bulk/pdf-work
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 3
+    pids_limit: 256
+    logging: *logs
+    volumes:
+      - tools-data:/data
+      - ${BULK_DIR:-/mnt/media/tools}:/bulk
+    # Nothing calls it: the api reads its heartbeat from SQLite. The port is for the probe.
+    expose:
+      - "8788"
+
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: tools-tunnel

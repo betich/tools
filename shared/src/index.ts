@@ -4,3 +4,4 @@ export * from "./render";
 export * from "./defaults";
 export * from "./overrides";
 export * from "./pdf";
+export * from "./worker";

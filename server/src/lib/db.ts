@@ -7,6 +7,8 @@ export const db = new Database(paths.db, { create: true });
 
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
+// The pdf-worker writes to this file from its own container.
+db.exec("PRAGMA busy_timeout = 5000;");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS projects (
@@ -38,6 +40,13 @@ db.exec(`
     key        TEXT PRIMARY KEY,
     value      TEXT NOT NULL,
     expires_at INTEGER NOT NULL
+  );
+
+  -- Written every few seconds by the pdf-worker container (worker/src/heartbeat.ts).
+  CREATE TABLE IF NOT EXISTS worker_heartbeat (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    beat_at    INTEGER NOT NULL,
+    started_at INTEGER NOT NULL
   );
 `);
 

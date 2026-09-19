@@ -11,6 +11,7 @@ import { health } from "./routes/health";
 import { projects, shares } from "./routes/projects";
 import { render } from "./routes/render";
 import { tools } from "./routes/tools";
+import { worker } from "./routes/worker";
 
 ensureDirs();
 
@@ -43,6 +44,7 @@ export const app = new Elysia({ serve: { maxRequestBodySize: env.maxBodyBytes } 
   .use(shares)
   .use(render)
   .use(admin)
+  .use(worker)
   .listen(env.port);
 
 console.log(`  tools api  ->  http://localhost:${env.port}`);
