@@ -1,6 +1,7 @@
 import type { JobInfo, MergeResult, TaskInfo } from "@tools/shared";
 import { QueueNotice } from "@/components/QueueNotice";
 import { RetentionNote } from "@/components/RetentionNote";
+import { Button } from "@/components/ui";
 import { pdfJobs } from "@/lib/pdfjobs";
 import { bytes } from "@/lib/format";
 
@@ -22,8 +23,9 @@ export function latestMerge(job: JobInfo | null): TaskInfo | null {
  * runs, the worker's sentence if it failed, and once done the file — pages,
  * size, anything the worker had to say about it — with the download. The
  * download is a plain absolute link, so a large PDF streams to disk rather than
- * through a Blob. The retention note and discard sit under it from the moment
- * the server holds a job.
+ * through a Blob. Beside it, "compress this" hands the file to Compress (#18),
+ * which is also what "compress on export" does by itself. The retention note
+ * and discard sit under it from the moment the server holds a job.
  */
 export function MergeRun({
   job,
@@ -31,6 +33,9 @@ export function MergeRun({
   stale,
   error,
   onDiscard,
+  onCompress,
+  handing = false,
+  compressNext = false,
 }: {
   job: JobInfo;
   task: TaskInfo | null;
@@ -38,12 +43,21 @@ export function MergeRun({
   stale: boolean;
   error: string | null;
   onDiscard: () => unknown;
+  /** Opens the finished file in Compress. */
+  onCompress?: () => void;
+  /** The hand-off to Compress is in flight. */
+  handing?: boolean;
+  /** "Compress on export" was on for this merge, so Compress opens by itself once it is done. */
+  compressNext?: boolean;
 }) {
   const result = task?.state === "done" ? asMergeResult(task.result) : null;
 
   return (
     <div className="flex flex-col gap-4" aria-live="polite">
       {task && !result ? <QueueNotice task={task} /> : null}
+      {task && !result && compressNext && task.state !== "failed" ? (
+        <p className="text-meta text-body font-sans normal-case">Compress opens with the merged file when this is done.</p>
+      ) : null}
 
       {task && result ? (
         <div className="flex flex-col gap-3">
@@ -56,13 +70,20 @@ export function MergeRun({
                 {result.pages} {result.pages === 1 ? "page" : "pages"} · {bytes(result.bytes)}
               </span>
             </div>
-            <a
-              href={pdfJobs.resultUrl(job.id, task.id)}
-              download={result.fileName}
-              className="bg-ink text-paper text-meta hover:bg-indigo focus-visible:outline-indigo inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xs px-4 font-mono font-bold uppercase transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              download
-            </a>
+            <div className="flex flex-wrap items-center gap-3">
+              {onCompress ? (
+                <Button variant="outline" disabled={handing} onClick={onCompress}>
+                  {handing ? "opening compress…" : "compress this"}
+                </Button>
+              ) : null}
+              <a
+                href={pdfJobs.resultUrl(job.id, task.id)}
+                download={result.fileName}
+                className="bg-ink text-paper text-meta hover:bg-indigo focus-visible:outline-indigo inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xs px-4 font-mono font-bold uppercase transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                download
+              </a>
+            </div>
           </div>
           {stale ? (
             <p className="text-meta text-body font-sans normal-case">

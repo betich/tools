@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  DEFAULT_ENGINE,
   DEFAULT_MERGE_ITEM,
   imageDpi,
+  type EngineId,
   type ImageDpi,
   type MergeItemOptions,
   type MergeOutput,
@@ -243,8 +245,8 @@ export function useMergeFiles() {
   return { entries, add, remove, move, moveTo, setLayout, layoutToAll, retry, clear };
 }
 
-/** The merge request, once every file is on the server; null until then. */
-export function mergeParams(entries: MergeEntry[], output: MergeOutput): MergeParams | null {
+/** The merge request, once every file is on the server; null until then. `engine` is #18's picker. */
+export function mergeParams(entries: MergeEntry[], output: MergeOutput, engine: EngineId = DEFAULT_ENGINE): MergeParams | null {
   if (entries.length === 0) return null;
   const items: MergeParams["items"] = [];
   for (const e of entries) {
@@ -252,7 +254,7 @@ export function mergeParams(entries: MergeEntry[], output: MergeOutput): MergePa
     items.push({ upload: e.upload.result.id, name: e.file.name, kind: e.upload.result.kind, layout: e.layout });
   }
   const title = output.title?.trim() || null;
-  return { items, output: { ...output, title } };
+  return { items, output: { ...output, title }, engine };
 }
 
 /** The title a merge gets when none is typed: the first file's name without its extension, as the server does. */
