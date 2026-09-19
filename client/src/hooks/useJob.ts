@@ -82,6 +82,30 @@ export function useJob() {
     [jobId],
   );
 
+  /**
+   * Gives the job its password (#15). Resolves `null` once the server took it —
+   * the job then carries a fresh `analyse` task — or with the sentence to show
+   * beside the password field, which is where a wrong password belongs rather
+   * than in `error`.
+   */
+  const unlock = useCallback(
+    async (password: string): Promise<string | null> => {
+      if (!jobId) return null;
+      try {
+        const job = await pdfJobs.unlock(jobId, password);
+        setState((s) => ({ ...s, job, error: null }));
+        return null;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          setState({ ...EMPTY, expired: true });
+          return null;
+        }
+        return describe(error);
+      }
+    },
+    [jobId],
+  );
+
   /** Deletes everything on the server now and returns the page to its empty state. */
   const discard = useCallback(async (): Promise<boolean> => {
     unwatch.current?.();
@@ -123,7 +147,7 @@ export function useJob() {
     [tasks],
   );
 
-  return { ...state, activeTask, latestResult, createJob, attach, addTask, discard, reset };
+  return { ...state, activeTask, latestResult, createJob, attach, addTask, unlock, discard, reset };
 }
 
 /** Folds one stream event into the state. Tasks are upserted by id and kept in creation order. */
@@ -137,9 +161,10 @@ function apply(state: JobState, event: JobEvent): JobState {
   const known = job.tasks.some((t) => t.id === task.id);
   const tasks = known ? job.tasks.map((t) => (t.id === task.id ? task : t)) : [...job.tasks, task];
   tasks.sort((a, b) => a.createdAt - b.createdAt);
-  // The analysis also arrives in the next snapshot; taking it from the task saves waiting for one.
-  const analysis =
-    task.kind === "analyse" && task.state === "done" && job.analysis == null ? task.result : job.analysis;
+  // The analysis also arrives in the next snapshot; taking it from the task saves waiting for one. A locked
+  // analysis (#15) is only a placeholder, so the one that follows an unlock replaces it.
+  const replaceable = job.analysis == null || (job.analysis as { locked?: boolean }).locked === true;
+  const analysis = task.kind === "analyse" && task.state === "done" && replaceable ? task.result : job.analysis;
   return { ...state, job: { ...job, tasks, analysis } };
 }
 

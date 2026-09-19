@@ -9,11 +9,12 @@ import { useJob } from "@/hooks/useJob";
 import { useToast } from "@/hooks/useToast";
 import { useUpload } from "@/hooks/useUpload";
 import { bytes } from "@/lib/format";
-import { asAnalysis } from "./analysis";
+import { asAnalysis, pdfaName } from "./analysis";
 import { FontTable } from "./FontTable";
 import { ImageTable } from "./ImageTable";
 import { RunResults } from "./RunResults";
 import { describeParams, RunPanel } from "./RunPanel";
+import { SignatureDialog, UnlockPrompt } from "./SpecialInputs";
 import { SizeBreakdown } from "./SizeBreakdown";
 
 /**
@@ -203,15 +204,22 @@ export function CompressWorkbench() {
 function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeof useJob>; onDiscard: () => unknown }) {
   const input = info.inputs[0];
   const analysis = asAnalysis(info.analysis);
-  const analyse = info.tasks.find((t) => t.kind === "analyse") ?? null;
+  // An encrypted file's first analysis is a placeholder until its password is given (#15).
+  const locked = analysis?.locked === true;
+  const readable = locked ? null : analysis;
+  // The newest, because an unlock queues a second analysis after the locked one.
+  const analyse = [...info.tasks].reverse().find((t) => t.kind === "analyse") ?? null;
+  const reading = analyse?.state === "queued" || analyse?.state === "running";
   const runs = info.tasks.filter((t) => t.kind === "compress");
   // Anything the queue is doing for this job — the analysis, a run, a crop. One task at a time per caller.
   const busy = job.activeTask !== null;
   const [labels, setLabels] = useState(storedLabels);
   const [picked, setPicked] = useState<string | null>(null);
   const shown = runs.find((t) => t.id === picked) ?? runs[runs.length - 1] ?? null;
+  // A signed file's run waits here for the dialog's confirmation.
+  const [confirming, setConfirming] = useState<CompressParams | null>(null);
 
-  const run = useCallback(
+  const send = useCallback(
     async (params: CompressParams) => {
       const task = await job.addTask({ kind: "compress", params });
       if (!task) return;
@@ -223,6 +231,14 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
       });
     },
     [job],
+  );
+
+  const run = useCallback(
+    (params: CompressParams) => {
+      if (readable?.flags?.signed) setConfirming(params);
+      else void send(params);
+    },
+    [readable, send],
   );
 
   return (
@@ -240,15 +256,17 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
 
       <div className="grid items-start gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
         <aside className="order-last lg:sticky lg:top-20 lg:order-none lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1">
-          <RunPanel analysis={analysis} busy={busy} onRun={run} />
+          <RunPanel analysis={readable} busy={busy} onRun={run} />
         </aside>
 
         <div className="flex min-w-0 flex-col gap-10">
-          {analysis && shown ? (
-            <RunResults jobId={info.id} runs={runs} labels={labels} input={analysis} shown={shown} onShow={setPicked} />
+          {readable && shown ? (
+            <RunResults jobId={info.id} runs={runs} labels={labels} input={readable} shown={shown} onShow={setPicked} />
           ) : null}
-          {analysis ? (
-            <Analysis analysis={analysis} />
+          {readable ? (
+            <Analysis analysis={readable} />
+          ) : locked && !reading && analyse?.state !== "failed" ? (
+            <UnlockPrompt onUnlock={job.unlock} />
           ) : analyse ? (
             <Section title="analysis">
               <QueueNotice task={analyse} />
@@ -265,6 +283,18 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
           )}
         </div>
       </div>
+
+      {confirming ? (
+        <SignatureDialog
+          signers={readable?.flags?.signed ?? []}
+          onClose={() => setConfirming(null)}
+          onConfirm={() => {
+            const params = confirming;
+            setConfirming(null);
+            void send({ ...params, acceptSignatureLoss: true });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -273,14 +303,11 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
 function Facts({ analysis, size }: { analysis: PdfAnalysis | null; size: number | null }) {
   const parts = [
     bytes(analysis?.bytes ?? size ?? NaN),
-    analysis ? `${analysis.pages} ${analysis.pages === 1 ? "page" : "pages"}` : null,
+    analysis && !analysis.locked ? `${analysis.pages} ${analysis.pages === 1 ? "page" : "pages"}` : null,
     analysis?.version ? `PDF ${analysis.version}` : null,
-    analysis?.flags?.pdfa
-      ? /^pdf/i.test(analysis.flags.pdfa)
-        ? analysis.flags.pdfa
-        : `PDF/A-${analysis.flags.pdfa}`
-      : null,
+    analysis?.flags?.pdfa ? pdfaName(analysis.flags.pdfa) : null,
     analysis?.flags?.tagged ? "tagged" : null,
+    analysis?.flags?.encrypted ? "encrypted" : null,
   ].filter(Boolean);
   return <span className="text-label text-label font-mono tabular-nums tracking-normal">{parts.join(" · ")}</span>;
 }
@@ -324,18 +351,21 @@ function Analysis({ analysis }: { analysis: PdfAnalysis }) {
 /**
  * The flags #15 fills in that change what compressing will do, as sentences.
  * PDF/A and tagging are facts about the file, not cautions, so they sit in the
- * header line instead.
+ * header line instead; the run column warns when a setting would break them.
  */
 function flagNotes({ flags }: PdfAnalysis): string[] {
   if (!flags) return [];
   const notes: string[] = [];
-  if (flags.encrypted) notes.push("This file is encrypted.");
+  if (flags.encrypted)
+    notes.push("Encrypted — opened with the password you gave. The output has no password unless you keep it.");
   if (flags.signed?.length)
     notes.push(`Signed by ${flags.signed.join(", ")} — compressing it changes the bytes the signature covers.`);
   else if (flags.signed)
     notes.push("This file carries a digital signature. Compressing it changes the bytes it covers.");
   if (flags.repaired > 0)
-    notes.push(`Repaired ${flags.repaired} broken ${flags.repaired === 1 ? "object" : "objects"} while reading it.`);
+    notes.push(
+      `Repaired ${flags.repaired} broken ${flags.repaired === 1 ? "object" : "objects"}. The output is written from the repaired file.`,
+    );
   return notes;
 }
 

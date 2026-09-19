@@ -18,6 +18,13 @@ export const pdfJobs = {
   discard: (id: string) => request<null>(path(id), { method: "DELETE" }),
   addTask: (id: string, body: TaskCreate) =>
     request<TaskInfo>(`${path(id)}/tasks`, { method: "POST", body: JSON.stringify(body) }),
+  /**
+   * Opens an encrypted input (#15). The password stays on the job row, never in
+   * task params, and a fresh `analyse` task is queued with it; a wrong one is a
+   * 400 whose sentence is shown as-is.
+   */
+  unlock: (id: string, password: string) =>
+    request<JobInfo>(`${path(id)}/unlock`, { method: "POST", body: JSON.stringify({ password }) }),
   /** The output file of a compress/merge task — the latest finished one when `taskId` is left out. */
   resultUrl: (id: string, taskId?: string) =>
     url(`${path(id)}/result${taskId ? `?task=${encodeURIComponent(taskId)}` : ""}`),
