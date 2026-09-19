@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { emptyData, newDoc, type MergeDoc } from "@tools/shared";
+import { emptyData, newDoc, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { Shell } from "@/components/Shell";
 import { FiDownload, FiLink, FiLock } from "react-icons/fi";
@@ -12,7 +12,11 @@ import { cn } from "@/lib/cn";
 import { download, loadImage, readAsDataUrl } from "@/lib/download";
 import { CanvasStage } from "./CanvasStage";
 import { ExportSheet } from "./ExportSheet";
-import { DataPanel, LayersPanel } from "./Panels";
+import { DataPanel } from "./DataPanel";
+import { LayersPanel } from "./Panels";
+import { ReconcileDialog } from "./ReconcileDialog";
+import { RowEditor } from "./RowEditor";
+import { addRow, changeRow, record, reloadSheet, remapTokens, removeRow, rollback, severed } from "./rows";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
 import { ensureDocFonts, loadGoogleFont } from "./fonts";
@@ -48,6 +52,16 @@ export function MailMergePage() {
   // Below md the three columns become one, and one screen shows one job.
   const [pane, setPane] = useState<Pane>("setup");
   const editor = useRef<HTMLDivElement>(null);
+  // The row open in the popover, and what it currently says — drawn on the
+  // stage before anything is committed.
+  const [editing, setEditing] = useState<{ index: number | null; field?: string; anchor: HTMLElement } | null>(null);
+  const [draft, setDraft] = useState<MergeRow | null>(null);
+  const [reconciling, setReconciling] = useState(false);
+  // Where the browser can hand back a file handle, reload re-reads the same
+  // file without asking; elsewhere it opens the picker.
+  const sheetHandle = useRef<FileHandle | null>(null);
+  const [canReload, setCanReload] = useState(false);
+  const sheetInput = useRef<HTMLInputElement>(null);
 
   // Switching panes on a phone should land you at the top of the new one, not
   // halfway down it because that is where the last pane was scrolled to.
@@ -62,6 +76,10 @@ export function MailMergePage() {
   // ── loading ──────────────────────────────────────────────────────────────
   const hydrate = useCallback(
     async (incoming: MergeDoc) => {
+      sheetHandle.current = null;
+      setCanReload(false);
+      setEditing(null);
+      setDraft(null);
       await ensureDocFonts(incoming, []);
       if (incoming.base) {
         const src = incoming.base.src.startsWith("asset:") ? assetUrl(incoming.base.src) : incoming.base.src;
@@ -153,6 +171,152 @@ export function MailMergePage() {
       setBusy(null);
     }
   }, [data, doc, namePattern, rows.length, toast]);
+
+  // ── data ─────────────────────────────────────────────────────────────────
+  /**
+   * A sheet arriving. Into an empty merge it simply loads; over an existing
+   * sheet it is a reload — a step on the timeline that keeps the old rows, so
+   * it rolls back — and if the new columns no longer match the template's
+   * tokens, the matching dialog opens on its own.
+   */
+  const loadSheet = useCallback(
+    async (file: File) => {
+      let parsed: MergeData;
+      try {
+        parsed = { ...(await parseSheet(file)), source: file.name };
+      } catch {
+        toast("could not read that sheet");
+        return;
+      }
+      const reloading = data.fields.length > 0;
+      setEditing(null);
+      setDraft(null);
+      setData((prev) => (prev.fields.length > 0 ? reloadSheet(prev, parsed) : { ...parsed, history: [] }));
+      merge.setRowIndex((i) => Math.min(i, Math.max(0, parsed.rows.length - 1)));
+      const lost = severed(merge.usedFields, parsed.fields);
+      if (reloading && lost.length > 0) {
+        setReconciling(true);
+        toast(`${lost.length} ${lost.length === 1 ? "column no longer matches" : "columns no longer match"}`);
+      } else toast(`${parsed.rows.length} rows ${reloading ? "reloaded" : "loaded"}`);
+    },
+    [data.fields.length, merge, setData, toast],
+  );
+
+  const pickSheet = useCallback(async () => {
+    const picker = (window as PickerWindow).showOpenFilePicker;
+    if (!picker) return sheetInput.current?.click();
+    try {
+      const [handle] = await picker({
+        multiple: false,
+        types: [
+          {
+            description: "Spreadsheets",
+            accept: {
+              "text/csv": [".csv"],
+              "text/tab-separated-values": [".tsv"],
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+              "application/vnd.ms-excel": [".xls"],
+            },
+          },
+        ],
+      });
+      if (!handle) return;
+      sheetHandle.current = handle;
+      setCanReload(true);
+      await loadSheet(await handle.getFile());
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") sheetInput.current?.click();
+    }
+  }, [loadSheet]);
+
+  const reloadSheetFile = useCallback(async () => {
+    const handle = sheetHandle.current;
+    if (!handle) return void pickSheet();
+    try {
+      await loadSheet(await handle.getFile());
+    } catch {
+      // Moved, deleted, or the permission lapsed: ask for it again.
+      sheetHandle.current = null;
+      setCanReload(false);
+      void pickSheet();
+    }
+  }, [loadSheet, pickSheet]);
+
+  const openRow = useCallback(
+    (index: number | null, anchor: HTMLElement, field?: string) => {
+      setEditing({ index, field, anchor });
+      setDraft(null);
+      if (index !== null) merge.setRowIndex(index);
+      merge.setShowValues(true);
+    },
+    [merge],
+  );
+
+  const closeRow = useCallback(() => {
+    setEditing(null);
+    setDraft(null);
+  }, []);
+
+  const applyRow = useCallback(
+    (values: MergeRow) => {
+      if (!editing) return;
+      if (editing.index === null) {
+        setData((prev) => addRow(prev, values));
+        merge.setRowIndex(data.rows.length);
+      } else {
+        const index = editing.index;
+        setData((prev) => changeRow(prev, index, values));
+      }
+      closeRow();
+    },
+    [closeRow, data.rows.length, editing, merge, setData],
+  );
+
+  const stepRow = useCallback(
+    (values: MergeRow, direction: -1 | 1) => {
+      if (!editing || editing.index === null) return;
+      const index = editing.index;
+      const n = data.rows.length;
+      const next = (index + direction + n) % n;
+      setData((prev) => changeRow(prev, index, values));
+      setEditing({ ...editing, index: next });
+      setDraft(null);
+      merge.setRowIndex(next);
+    },
+    [data.rows.length, editing, merge, setData],
+  );
+
+  const deleteRow = useCallback(() => {
+    if (!editing || editing.index === null) return;
+    const index = editing.index;
+    setData((prev) => removeRow(prev, index));
+    merge.setRowIndex(Math.max(0, Math.min(index, data.rows.length - 2)));
+    closeRow();
+  }, [closeRow, data.rows.length, editing, merge, setData]);
+
+  const rollBack = useCallback(
+    (id: string) => {
+      const result = rollback(doc, data, id);
+      const undone = (data.history?.length ?? 0) - (result.data.history?.length ?? 0);
+      if (result.doc !== doc) setDoc(result.doc);
+      setData(result.data);
+      merge.setRowIndex((i) => Math.min(i, Math.max(0, result.data.rows.length - 1)));
+      closeRow();
+      toast(`rolled back ${undone} ${undone === 1 ? "edit" : "edits"}`);
+    },
+    [closeRow, data, doc, merge, setData, setDoc, toast],
+  );
+
+  const matchColumns = useCallback(
+    (map: Record<string, string>) => {
+      setDoc((prev) => remapTokens(prev, map));
+      setData((prev) => record(prev, { kind: "remap", map }, prev));
+      setReconciling(false);
+      const n = Object.keys(map).length;
+      toast(`${n} ${n === 1 ? "column" : "columns"} matched`);
+    },
+    [setData, setDoc, toast],
+  );
 
   // ── persistence ──────────────────────────────────────────────────────────
   const save = useCallback(async () => {
@@ -290,8 +454,9 @@ export function MailMergePage() {
     e.preventDefault();
     void save();
   });
-  useHotkey("ArrowLeft", () => merge.step(-1));
-  useHotkey("ArrowRight", () => merge.step(1));
+  // The row editor owns the arrows while it is open.
+  useHotkey("ArrowLeft", () => merge.step(-1), { enabled: !editing });
+  useHotkey("ArrowRight", () => merge.step(1), { enabled: !editing });
 
   const canvasField = (key: "width" | "height") => (
     <Field label={key}>
@@ -383,6 +548,7 @@ export function MailMergePage() {
       >
         {/* left — the merge: projects, document, artwork, layers, data */}
         <div
+          data-pane
           className={cn(
             "flex flex-col gap-8 md:order-2 lg:order-1",
             "lg:border-hairline-faint lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:px-6 lg:py-6 xl:px-7",
@@ -478,18 +644,48 @@ export function MailMergePage() {
             usedFields={merge.usedFields}
             rowIndex={merge.rowIndex}
             showValues={merge.showValues}
+            editing={editing ? (editing.index ?? "new") : null}
+            canReload={canReload}
             onShowValues={merge.setShowValues}
             onStep={merge.step}
-            onSample={() => setData(sampleData)}
-            onClear={() => setData({ fields: [], rows: [] })}
-            onFile={(file) =>
-              void parseSheet(file)
-                .then((parsed) => {
-                  setData(parsed);
-                  toast(`${parsed.rows.length} rows loaded`);
-                })
-                .catch(() => toast("could not read that sheet"))
-            }
+            onSelectRow={merge.setRowIndex}
+            onPick={() => void pickSheet()}
+            onReload={() => void reloadSheetFile()}
+            onDropFile={(file) => {
+              sheetHandle.current = null;
+              setCanReload(false);
+              void loadSheet(file);
+            }}
+            onSample={() => {
+              sheetHandle.current = null;
+              setCanReload(false);
+              setData({ ...sampleData, history: [] });
+            }}
+            onClear={() => {
+              sheetHandle.current = null;
+              setCanReload(false);
+              closeRow();
+              setData(emptyData);
+            }}
+            onEdit={openRow}
+            onRollback={rollBack}
+            onReconcile={() => setReconciling(true)}
+          />
+          <input
+            ref={sheetInput}
+            type="file"
+            accept=".csv,.tsv,.xlsx,.xls,text/csv"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              sheetHandle.current = null;
+              setCanReload(false);
+              void loadSheet(file);
+            }}
           />
         </div>
 
@@ -503,7 +699,7 @@ export function MailMergePage() {
           <div className="bg-paper/92 sticky top-12 z-30 order-first -mx-5 px-5 pb-3 backdrop-blur-xl sm:-mx-8 sm:px-8 md:static md:mx-0 md:bg-transparent md:px-0 md:pb-0 md:backdrop-blur-none lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
             <CanvasStage
               doc={doc}
-              row={merge.currentRow}
+              row={editing && draft ? draft : merge.currentRow}
               base={base}
               selectedId={selectedId}
               onSelect={setSelectedId}
@@ -547,6 +743,39 @@ export function MailMergePage() {
         />
       ) : null}
 
+      {editing && data.fields.length > 0 ? (
+        <RowEditor
+          key={editing.index ?? "new"}
+          fields={data.fields}
+          initial={
+            editing.index === null
+              ? Object.fromEntries(data.fields.map((f) => [f, ""]))
+              : (data.rows[editing.index] ?? {})
+          }
+          index={editing.index}
+          total={data.rows.length}
+          focusField={editing.field}
+          anchor={editing.anchor}
+          onDraft={setDraft}
+          onApply={applyRow}
+          onStep={stepRow}
+          onDelete={deleteRow}
+          onClose={closeRow}
+        />
+      ) : null}
+
+      {reconciling ? (
+        <ReconcileDialog
+          severed={severed(merge.usedFields, data.fields)}
+          matched={merge.usedFields.length - severed(merge.usedFields, data.fields).length}
+          fields={data.fields}
+          sample={data.rows[0]}
+          source={data.source}
+          onApply={matchColumns}
+          onClose={() => setReconciling(false)}
+        />
+      ) : null}
+
       {sharing ? (
         <ShareDialog
           name={doc.name}
@@ -568,6 +797,15 @@ export function MailMergePage() {
    screen. */
 
 type Pane = "setup" | "layer";
+
+/** The slice of the File System Access API this page uses; not in lib.dom yet. */
+type FileHandle = { getFile: () => Promise<File> };
+type PickerWindow = Window & {
+  showOpenFilePicker?: (options: {
+    multiple?: boolean;
+    types?: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<FileHandle[]>;
+};
 
 type GateTarget = { kind: "share"; slug: string } | { kind: "project"; id: string };
 

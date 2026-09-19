@@ -1,7 +1,6 @@
 import { FiChevronDown, FiChevronUp, FiCopy, FiEye, FiEyeOff, FiTrash2 } from "react-icons/fi";
-import type { MergeData, TextLayer } from "@tools/shared";
-import { Dropzone } from "@/components/Dropzone";
-import { Chip, Empty, IconButton, Section, TextButton, Toggle } from "@/components/ui";
+import type { TextLayer } from "@tools/shared";
+import { Empty, IconButton, Section, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
 
@@ -77,100 +76,6 @@ export function LayersPanel({
             </li>
           ))}
         </ul>
-      )}
-    </Section>
-  );
-}
-
-export function DataPanel({
-  data,
-  usedFields,
-  rowIndex,
-  showValues,
-  onFile,
-  onSample,
-  onClear,
-  onStep,
-  onShowValues,
-}: {
-  data: MergeData;
-  usedFields: string[];
-  rowIndex: number;
-  showValues: boolean;
-  onFile: (file: File) => void;
-  onSample: () => void;
-  onClear: () => void;
-  onStep: (direction: -1 | 1) => void;
-  onShowValues: (v: boolean) => void;
-}) {
-  const missing = usedFields.filter((f) => !data.fields.some((d) => d.toLowerCase() === f.toLowerCase()));
-
-  return (
-    <Section
-      title="data"
-      aside={
-        data.rows.length > 0 ? (
-          <TextButton onClick={onClear}>clear</TextButton>
-        ) : (
-          <TextButton onClick={onSample}>use sample</TextButton>
-        )
-      }
-    >
-      {data.rows.length === 0 ? (
-        <Dropzone
-          onFiles={(files) => files[0] && onFile(files[0])}
-          accept=".csv,.tsv,.xlsx,.xls,text/csv"
-          multiple={false}
-          label="drop a csv or xlsx"
-          hint="first row is the header"
-          className="py-6"
-        />
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {data.fields.map((field) => (
-              <Chip
-                key={field}
-                className={cn(!usedFields.some((u) => u.toLowerCase() === field.toLowerCase()) && "opacity-50")}
-              >
-                &lt;{field}&gt;
-              </Chip>
-            ))}
-          </div>
-
-          {missing.length > 0 ? (
-            <p className="text-meta text-meta font-mono uppercase">
-              not in this sheet: {missing.map((f) => `<${f}>`).join(" ")}
-            </p>
-          ) : null}
-
-          <div className="flex items-center justify-between gap-4">
-            <Toggle checked={showValues} onChange={onShowValues} label="show values" />
-            <div className="flex items-center gap-3">
-              <TextButton onClick={() => onStep(-1)} aria-label="previous row">
-                ←
-              </TextButton>
-              <span className="text-ink text-label font-mono tabular-nums">
-                {pad(Math.min(rowIndex, data.rows.length - 1) + 1)} / {pad(data.rows.length)}
-              </span>
-              <TextButton onClick={() => onStep(1)} aria-label="next row">
-                →
-              </TextButton>
-            </div>
-          </div>
-
-          <ul className="flex flex-col gap-1">
-            {data.fields.map((field) => (
-              <li key={field} className="flex items-baseline">
-                <span className="text-meta text-meta font-mono uppercase">{field}</span>
-                <span className="leader" aria-hidden />
-                <span className="text-ink text-label max-w-[55%] truncate font-mono tracking-normal">
-                  {data.rows[Math.min(rowIndex, data.rows.length - 1)]?.[field] || "—"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </Section>
   );

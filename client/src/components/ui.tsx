@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ export function NumberInput({ className, ...props }: InputHTMLAttributes<HTMLInp
   return <input type="number" {...props} className={cn(control, "tabular-nums", className)} />;
 }
 
-export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ className, children, ...props }: ComponentProps<"select">) {
   return (
     <select {...props} className={cn(control, "cursor-pointer", className)}>
       {children}

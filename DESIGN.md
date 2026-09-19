@@ -379,6 +379,26 @@ A full-bleed surface, portalled above the chrome, that replaces "render everythi
 - **The panel.** Format, quality (disabled and explained under png), and the file-name pattern. It states what will land — `12 jpg files · one zip` — directly above the solid `DOWNLOAD` button, bottom-right where the eye finishes. Under a hairline beneath it sits the other way out: one sentence of prose and an outline `RENDER ALL ON SERVER`, which has the api draw every row into one zip.
 - **Escape closes it**, unless a render is running.
 
+### Data section (mail merge)
+
+**One obvious action per state.** Empty, the action is loading a sheet: an outline `CHOOSE A SHEET` button inside the dashed drop target, and the sample offered under it in prose as the way to try the tool without a file. Loaded, the action is adjusting the row on the poster: the current row is a card whose values each open the row editor, with `EDIT ROW 02` across its foot. Reload, replace, the list of every row and the timeline sit below it, quieter.
+
+**Reload is a step, not a reset.** `RELOAD` re-reads the same file without asking where the browser can hold a file handle, and opens the picker elsewhere; dropping a file on the loaded section does the same. The old rows are kept inside the step, so a reload rolls back like any edit.
+
+**A severed column says so.** When the template asks for a column the sheet does not have, an edge-bordered block names the tokens in prose and offers `MATCH COLUMNS`. There is no warning colour: the block is ink, the icon is ink, and the button is the only way out.
+
+### Row editor (mail merge)
+
+A panel-high popover that docks beside the left pane, over the edge of the stage, so the poster it is changing stays in view; below `md` it is a sheet across the foot of the screen under the pinned stage. Every keystroke is drawn on the canvas as a draft. A changed field turns its label periwinkle, takes a periwinkle border, and shows `WAS` and the old value struck through, with a put-back glyph. `↵` applies, shift-`↵` breaks the line, escape discards, and a click outside keeps what was typed, because the timeline is the safety net. The header's arrows apply and move to the neighbouring row. Delete row is two taps.
+
+### Edit timeline (mail merge)
+
+Saved with the merge, newest first, at most 24 steps: a 1px rule running down through a 7px node per step, the newest filled, and a diamond marked `AS LOADED` at the foot. Each step says exactly what changed: the field, the old value struck through, the new one. `ROLL BACK` undoes a step and everything above it; pointing at it strikes through exactly the steps that would go and hollows their nodes in periwinkle, and it is two taps like delete (`UNDO 03?`).
+
+### Match columns (mail merge)
+
+The share dialog's frame at 38rem, laid out in two columns: `TEMPLATE ASKS FOR` on the left (each token as a chip, dashed until matched), `SHEET COLUMN` on the right (a select, pre-filled with a guess only when the names are close, and the column's first value underneath so `name` can be told from `nickname`). Applying rewrites the template's tokens to the sheet's names, so the next reload of the same file matches without asking, and records a step that rolls back with the reload that caused it.
+
 ### Button
 
 The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog.

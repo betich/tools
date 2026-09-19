@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { Button } from "./ui";
 
 /**
  * Drop target. The dashed hairline is the system's one documented departure
@@ -13,6 +14,8 @@ export function Dropzone({
   hint,
   className,
   children,
+  cta,
+  onPick,
 }: {
   onFiles: (files: File[]) => void;
   accept?: string;
@@ -21,6 +24,13 @@ export function Dropzone({
   hint?: string;
   className?: string;
   children?: ReactNode;
+  /**
+   * When the drop is the reason the section exists, the picker is a real
+   * outline button carrying this label, and `label` becomes the line under it.
+   */
+  cta?: ReactNode;
+  /** Replaces the hidden input — e.g. a picker that can hand back a file handle. */
+  onPick?: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -63,16 +73,27 @@ export function Dropzone({
         className="sr-only"
         aria-label={label}
       />
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        className={cn(
-          "cursor-pointer font-mono text-meta uppercase transition-colors duration-200",
-          over ? "text-indigo" : "text-label hover:text-indigo",
-        )}
-      >
-        {label}
-      </button>
+      {cta ? (
+        <>
+          <Button variant="outline" onClick={() => (onPick ? onPick() : input.current?.click())}>
+            {cta}
+          </Button>
+          <p className={cn("font-mono text-meta uppercase transition-colors duration-200", over ? "text-indigo" : "text-label")}>
+            {over ? "let go to load it" : label}
+          </p>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => (onPick ? onPick() : input.current?.click())}
+          className={cn(
+            "cursor-pointer font-mono text-meta uppercase transition-colors duration-200",
+            over ? "text-indigo" : "text-label hover:text-indigo",
+          )}
+        >
+          {label}
+        </button>
+      )}
       {hint ? <p className="text-meta font-mono text-meta uppercase opacity-80">{hint}</p> : null}
       {children}
     </div>

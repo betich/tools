@@ -89,7 +89,26 @@ export type MergeRow = Record<string, string>;
 export type MergeData = {
   fields: string[];
   rows: MergeRow[];
+  /** File name the rows came from, when they came from a file. */
+  source?: string;
+  /** Newest last. Each step carries what it needs to be undone. */
+  history?: DataEdit[];
 };
+
+/**
+ * One step on the data's edit timeline. Every kind is invertible from what it
+ * stores, so rolling back is replaying inverses newest-first — no snapshots of
+ * the whole sheet, except for a reload, which replaces the whole sheet.
+ */
+export type DataStep =
+  | { kind: "change"; row: number; changes: Record<string, [from: string, to: string]> }
+  | { kind: "add"; row: number; values: MergeRow }
+  | { kind: "remove"; row: number; values: MergeRow }
+  | { kind: "reload"; before: { fields: string[]; rows: MergeRow[]; source?: string }; source?: string; count: number }
+  /** Template tokens rewritten to follow a renamed column: `<from>` became `<to>`. */
+  | { kind: "remap"; map: Record<string, string> };
+
+export type DataEdit = DataStep & { id: string; at: string };
 
 export type Project = {
   id: string;
