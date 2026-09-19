@@ -9,10 +9,20 @@
  * MuPDF 1.25 runs ES5 in strict mode: var only, no arrows.
  *
  * spec = { title, bookmarks, pageLabels, pages,
- *          files: [{ title, label, start, count, source }] }
- *   start:  the file's first page in the joined PDF, 0-based
+ *          files: [{ title, label, start, count, source, from, whole, first }] }
+ *   Each entry is one contiguous run of pages from one file — the whole file
+ *   when merging by file, or one piece of it when merging by page (#39).
+ *   start:  the run's first page in the joined PDF, 0-based
+ *   count:  pages in the run
  *   label:  page-label prefix for the file (its short name)
  *   source: the original PDF's path, to read its outline and labels; null for images
+ *   from:   the run's first page in the source, 0-based
+ *   whole:  the run is the whole file
+ *   first:  the file's first run in the output; outline items that point at
+ *           no page of the file (web links, broken targets) go under it only
+ * A source bookmark goes under the run holding its page, once, and is left
+ * out when its page is not in the output; its children that are move up
+ * into its place.
  * Prints { pages, bookmarks } as JSON.
  */
 
@@ -51,26 +61,67 @@ function tolerant(fn, fallback) {
 var bookmarks = 0;
 var MAX_BOOKMARKS = 20000;
 
-/** Copies a source outline under the iterator's position, pointing links at the file's pages in the joined PDF. */
-function copyOutline(it, src, items, base, count) {
+/**
+ * A source's outline with every internal link resolved to its source page:
+ * [{ title, uri, page, down }], `page` -1 for an item that points at no page
+ * (a web link, no link, or a target MuPDF can't resolve — whose link is
+ * dropped). Read once per source, however many runs it is split into.
+ */
+var outlines = {};
+function resolvedOutline(src, path) {
+  if (path in outlines) return outlines[path];
+  function walk(items) {
+    var out = [];
+    for (var k = 0; k < items.length; k++) {
+      var o = items[k];
+      var uri = o.uri;
+      var p = -1;
+      if (uri && uri.charAt(0) === "#") {
+        try {
+          p = src.resolveLink(uri);
+        } catch (e) {
+          p = -1;
+        }
+        uri = undefined;
+      }
+      out.push({ title: o.title || "", uri: uri, page: p, down: o.down && o.down.length ? walk(o.down) : [] });
+    }
+    return out;
+  }
+  var items = tolerant(function () { return src.loadOutline(); }, null);
+  outlines[path] = items && items.length ? walk(items) : [];
+  return outlines[path];
+}
+
+/**
+ * The part of a resolved outline that belongs under this run, links pointed
+ * at the run's pages in the joined PDF. An item whose page is outside the
+ * run is left out and its children that remain take its place; one with no
+ * page stays under the file's first run only.
+ */
+function forRun(items, file) {
+  var out = [];
+  for (var k = 0; k < items.length; k++) {
+    var o = items[k];
+    var here = o.page >= file.from && o.page < file.from + file.count;
+    var down = forRun(o.down, file);
+    if (here) out.push({ title: o.title, uri: "#page=" + (file.start + o.page - file.from + 1), down: down });
+    else if (o.page < 0 && file.first) out.push({ title: o.title, uri: o.uri, down: down });
+    else out.push.apply(out, down);
+  }
+  return out;
+}
+
+/** Inserts an outline under the iterator's position. */
+function insertOutline(it, items) {
   for (var k = 0; k < items.length && bookmarks < MAX_BOOKMARKS; k++) {
     var o = items[k];
-    var uri = o.uri;
-    if (uri && uri.charAt(0) === "#") {
-      var p = -1;
-      try {
-        p = src.resolveLink(uri);
-      } catch (e) {
-        p = -1;
-      }
-      uri = p >= 0 && p < count ? "#page=" + (base + p + 1) : undefined;
-    }
-    it.insert({ title: o.title || "", uri: uri, open: false });
+    it.insert({ title: o.title, uri: o.uri, open: false });
     bookmarks++;
-    if (o.down && o.down.length) {
+    if (o.down.length) {
       it.prev();
       it.down();
-      copyOutline(it, src, o.down, base, count);
+      insertOutline(it, o.down);
       it.up();
       it.next();
     }
@@ -86,11 +137,11 @@ if (spec.bookmarks) {
     it.insert({ title: file.title, uri: "#page=" + (file.start + 1), open: false });
     bookmarks++;
     var src = source(file);
-    var items = src ? tolerant(function () { return src.loadOutline(); }, null) : null;
-    if (items && items.length) {
+    var items = src ? forRun(resolvedOutline(src, file.source), file) : [];
+    if (items.length) {
       it.prev();
       it.down();
-      copyOutline(it, src, items, file.start, file.count);
+      insertOutline(it, items);
       it.up();
       it.next();
     }
@@ -139,12 +190,21 @@ if (spec.pageLabels) {
   for (var g = 0; g < spec.files.length; g++) {
     var fl = spec.files[g];
     var fsrc = source(fl);
-    var ranges = fsrc ? tolerant(function () { return sourceLabels(fsrc); }, []) : [];
-    ranges = ranges.filter(function (r) { return r.index >= 0 && r.index < fl.count; });
+    var all = fsrc ? tolerant(function () { return sourceLabels(fsrc); }, []) : [];
+    // The run's pages keep the labels they have in the source: the range that
+    // covers the run's first page starts the run, counted on to that page.
+    var ranges = [];
+    for (var q = 0; q < all.length; q++) {
+      var sr = all[q];
+      var next = all[q + 1];
+      if (sr.index < 0 || sr.index >= fl.from + fl.count) continue;
+      if (sr.index > fl.from) ranges.push({ index: sr.index - fl.from, style: sr.style, prefix: sr.prefix, start: sr.start });
+      else if (!next || next.index > fl.from) ranges.push({ index: 0, style: sr.style, prefix: sr.prefix, start: sr.start + fl.from - sr.index });
+    }
     // Every file's labels start with its name; a PDF that numbers its own pages keeps its numbering after it.
     if (!ranges.length || ranges[0].index !== 0) {
-      if (fl.count === 1) doc.setPageLabels(fl.start, "", fl.label, 1);
-      else doc.setPageLabels(fl.start, "D", fl.label + " ", 1);
+      if (fl.count === 1 && fl.whole) doc.setPageLabels(fl.start, "", fl.label, 1);
+      else doc.setPageLabels(fl.start, "D", fl.label + " ", fl.from + 1);
     }
     for (var r = 0; r < ranges.length; r++) {
       var rg = ranges[r];
