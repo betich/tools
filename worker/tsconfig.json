@@ -7,5 +7,5 @@
     "paths": { "@tools/shared": ["../shared/src/index.ts"] },
     "baseUrl": "."
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }
