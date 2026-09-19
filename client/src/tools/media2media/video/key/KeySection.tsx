@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { ColorInput, Field, Section, Slider, TextButton, Toggle } from "@/components/ui";
+import { ColorInput, Field, Prose, Section, Slider, TextButton, Toggle } from "@/components/ui";
 import { download } from "@/lib/download";
 import { bytes } from "@/lib/format";
 import type { Capabilities } from "../probe";
 import type { SourceInfo, VideoEdit } from "../settings";
 import { canSaveToDisk, ExportCanceled, ExportError, MEMORY_LIMIT, pickDiskTarget, type ExportTarget } from "../target";
+import { fileStem } from "../../names";
 import { webglAvailable } from "./keyer";
-import { ALPHA_PLAYBACK_NOTE, KEYED_OUTPUT, sequenceBlocker, sequenceZipName, type KeySettings } from "./settings";
+import { ALPHA_PLAYBACK_NOTE, sequenceBlocker, sequenceZipName, withKey, type KeySettings } from "./settings";
 
 type Props = {
   edit: VideoEdit;
@@ -55,10 +56,8 @@ export function KeySection({
   const setKey = (next: Partial<KeySettings>, kind: "commit" | "preview" = "commit") =>
     (kind === "commit" ? onSet : onPreview)({ ...edit, key: { ...key, ...next } });
 
-  const toggle = (enabled: boolean) => {
-    // Transparency only survives in WebM with VP9: switch to it in the same step.
-    onSet({ ...edit, key: { ...key, enabled }, ...(enabled ? KEYED_OUTPUT : {}) });
-  };
+  // Transparency only survives in WebM with VP9: switch to it in the same step.
+  const toggle = (enabled: boolean) => onSet(withKey(edit, enabled));
 
   const seqBlocker = sequenceBlocker({ webgl: webglAvailable(), videoDecoder: caps ? caps.videoDecoder : null });
   const busy = job.phase === "running";
@@ -78,10 +77,9 @@ export function KeySection({
     try {
       // Mediabunny and the zipper load on the first sequence, not with the tab.
       const { exportPngSequence } = await import("./sequence");
-      const dot = file.name.lastIndexOf(".");
       const result = await exportPngSequence({
         file,
-        stem: (dot > 0 ? file.name.slice(0, dot) : file.name).trim() || "frame",
+        stem: fileStem(file.name, "frame"),
         edit,
         source,
         target,
@@ -136,8 +134,19 @@ export function KeySection({
                 </TextButton>
               }
             >
-              {/* Typing or dragging the native picker is one step, taken as it gets focus. */}
-              <div onFocusCapture={onGestureStart}>
+              {/*
+                Each pick is its own undo step: opening the native picker (by
+                pointer or keyboard) or starting to type snapshots, and the
+                picks within preview. A snapshot only turns into a step once
+                something changes, so the extra ones cost nothing.
+              */}
+              <div
+                onFocusCapture={onGestureStart}
+                onPointerDownCapture={onGestureStart}
+                onKeyDownCapture={(e) => {
+                  if (e.key === "Enter" || e.key === " ") onGestureStart();
+                }}
+              >
                 <ColorInput value={key.color} onChange={(color) => setKey({ color }, "preview")} />
               </div>
             </Field>
@@ -221,12 +230,8 @@ function KeySlider({
     <Field label={label}>
       <div className="flex items-center gap-3">
         <Slider min={0} max={100} step={1} value={value} onCommitStart={onGestureStart} onChange={onChange} />
-        <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums">{value}</span>
+        <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">{value}</span>
       </div>
     </Field>
   );
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }

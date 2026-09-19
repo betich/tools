@@ -21,10 +21,17 @@ export type ThumbnailProvider = (
   signal: AbortSignal,
 ) => Promise<ThumbSource | null>;
 
+/**
+ * How many thumbnails one timeline remembers. A provider that owns bitmaps
+ * can keep this many of its most recent answers and close the rest: anything
+ * older has already fallen out of the cache.
+ */
+export const THUMB_CACHE_LIMIT = 800;
+
 /** Per-timeline memory of thumbnails already fetched, keyed by frame id or quantised time. */
 export class ThumbCache {
   private map = new Map<string, ThumbSource | null>();
-  constructor(private readonly limit = 800) {}
+  constructor(private readonly limit = THUMB_CACHE_LIMIT) {}
 
   get(key: string): ThumbSource | null | undefined {
     return this.map.get(key);
@@ -121,7 +128,11 @@ function BitmapCanvas({ bitmap, className }: { bitmap: ImageBitmap; className?: 
     if (!c || !ctx) return;
     c.width = bitmap.width;
     c.height = bitmap.height;
-    ctx.drawImage(bitmap, 0, 0);
+    try {
+      ctx.drawImage(bitmap, 0, 0);
+    } catch {
+      // Closed by its provider after falling out of the cache; the tile stays blank.
+    }
   }, [bitmap]);
   return <canvas ref={ref} className={cn("pointer-events-none size-full object-cover", className)} />;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MIN_DELAY, MAX_DELAY, snapDelay } from "@/components/timeline/model";
 import { ColorInput, Field, NumberInput, Section, Sections, Segmented, Toggle } from "@/components/ui";
+import { normaliseHex } from "@/lib/color";
 import type { GifSession } from "./session";
 import { canvasSize, clampPlays, MAX_EDGE, MAX_PLAYS, resize, type Fit, type GifDoc } from "./model";
 
@@ -171,12 +172,6 @@ function BackgroundColour({ value, session }: { value: string; session: GifSessi
       />
     </div>
   );
-}
-
-function normaliseHex(v: string): string | null {
-  const s = v.trim().toLowerCase();
-  if (/^#[0-9a-f]{6}$/.test(s)) return s;
-  return null;
 }
 
 /** A number field holding its own draft; enter or leaving it commits, escape puts the value back. */

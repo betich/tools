@@ -30,7 +30,7 @@ describe("delays", () => {
     expect(snapDelay(3)).toBe(20);
     expect(snapDelay(-50)).toBe(20);
     expect(snapDelay(NaN)).toBe(20);
-    expect(snapDelay(123, 50, 50)).toBe(100);
+    expect(snapDelay(10_000_000)).toBe(60_000);
   });
   test("starts and the frame at a time", () => {
     const s = frameStarts(frames(100, 50, 200));

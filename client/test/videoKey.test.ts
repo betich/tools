@@ -8,7 +8,10 @@ import {
   NEEDS_WEBM_VP9,
   NO_ALPHA,
   NO_WEBGL,
+  CHECKING_ALPHA,
   frameName,
+  framesKeepAlpha,
+  withKey,
   keyBlocker,
   keyPixel,
   keyUniforms,
@@ -212,7 +215,7 @@ describe("the edit", () => {
 
 describe("blockers", () => {
   const edit = { ...defaultEdit(SOURCE), ...KEYED_OUTPUT, key: ON };
-  const ok = { vp9: { ok: true }, webgl: true, videoFrame: true };
+  const ok = { vp9: { ok: true }, webgl: true, alpha: true };
 
   test("nothing to say when the key is off or the output is audio", () => {
     expect(
@@ -227,9 +230,39 @@ describe("blockers", () => {
     expect(keyBlocker({ ...edit, container: "mp4", codec: "avc" }, ok)).toBe(NEEDS_WEBM_VP9);
     expect(keyBlocker({ ...edit, codec: "av1" }, ok)).toBe(NEEDS_WEBM_VP9);
     expect(keyBlocker(edit, { ...ok, vp9: { ok: false } })).toBe(NO_ALPHA);
-    expect(keyBlocker(edit, { ...ok, videoFrame: false })).toBe(NO_ALPHA);
-    // Probe not back yet: the general blocker says it's checking.
+    expect(keyBlocker(edit, { ...ok, alpha: false })).toBe(NO_ALPHA);
+    // Codec probe not back yet: the general blocker says it's checking.
     expect(keyBlocker(edit, { ...ok, vp9: null })).toBeNull();
+    // Alpha probe not back yet: the key says so itself.
+    expect(keyBlocker(edit, { ...ok, alpha: null })).toBe(CHECKING_ALPHA);
+    expect(keyBlocker(edit, { ...ok, vp9: { ok: false }, alpha: null })).toBe(NO_ALPHA);
+  });
+
+  test("switching the key on moves the output to WebM/VP9, so it isn't blocked", () => {
+    const plain = { ...defaultEdit(SOURCE), container: "mp4" as const, codec: "avc" as const };
+    const keyed = withKey(plain, true);
+    expect(keyed.key.enabled).toBe(true);
+    expect(keyed.container).toBe("webm");
+    expect(keyed.codec).toBe("vp9");
+    expect(keyBlocker(keyed, ok)).toBeNull();
+    // Off again: the output stays where it was put.
+    const off = withKey(keyed, false);
+    expect(off.key.enabled).toBe(false);
+    expect(off.container).toBe("webm");
+  });
+
+  test("the alpha probe: the frame's format must carry alpha, and read back both clear and opaque", () => {
+    const px = (...alphas: number[]) => new Uint8Array(alphas.flatMap((a) => [255, 255, 255, a]));
+    expect(framesKeepAlpha("RGBA", px(255, 0))).toBe(true);
+    expect(framesKeepAlpha("BGRA", null)).toBe(true);
+    expect(framesKeepAlpha("I420A", null)).toBe(true);
+    // Opaque formats: Mediabunny drops the alpha without a word.
+    expect(framesKeepAlpha("RGBX", px(255, 0))).toBe(false);
+    expect(framesKeepAlpha("I420", null)).toBe(false);
+    expect(framesKeepAlpha(null, null)).toBe(false);
+    // Claims alpha, but the clear half came back opaque (or the opaque half clear).
+    expect(framesKeepAlpha("RGBA", px(255, 255))).toBe(false);
+    expect(framesKeepAlpha("RGBA", px(0, 0))).toBe(false);
   });
 
   test("the alpha sentence is the one the issue asks for", () => {

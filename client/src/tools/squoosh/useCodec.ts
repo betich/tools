@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CodecPool, isImageFile, pixelsToBlob } from "@/lib/codecs";
+import { isImageFile, pixelsToBlob } from "@/lib/codecs";
+import { useCodecPool } from "@/hooks/useCodecPool";
+import { fileStem } from "@/tools/media2media/names";
 import { defaultOptions, formatMeta, type EncodeOptions, type Job } from "./types";
 
 /**
@@ -11,7 +13,6 @@ export function useCodec() {
   const [options, setOptions] = useState<EncodeOptions>(defaultOptions);
   const [jobs, setJobs] = useState<Job[]>([]);
 
-  const poolRef = useRef<CodecPool | null>(null);
   const runs = useRef(new Map<string, AbortController>());
   const jobsRef = useRef<Job[]>([]);
   jobsRef.current = jobs;
@@ -20,13 +21,11 @@ export function useCodec() {
     () => () => {
       for (const c of runs.current.values()) c.abort();
       runs.current.clear();
-      poolRef.current?.dispose();
-      poolRef.current = null;
     },
     [],
   );
-
-  const pool = useCallback(() => (poolRef.current ??= new CodecPool()), []);
+  // After the effect above, so the jobs are aborted before the pool goes.
+  const pool = useCodecPool();
 
   /** An upright PNG of the original, for sources the page can't show itself (HEIC outside Safari). */
   const preview = useCallback(async (file: File) => pixelsToBlob((await pool().decode(file)).image), [pool]);
@@ -134,8 +133,7 @@ export function useCodec() {
 
   const outputName = useCallback(
     (job: Job) => {
-      const stem = job.file.name.replace(/\.[^.]+$/, "");
-      return `${stem}.${formatMeta(options.format).ext}`;
+      return `${fileStem(job.file.name, "image")}.${formatMeta(options.format).ext}`;
     },
     [options.format],
   );

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { FiRotateCcw } from "react-icons/fi";
-import { Field, IconButton, Input, Section, TextButton } from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { Field, IconButton, Input, Prose, Section, TextButton, Value } from "@/components/ui";
 import { bytes, parseSize } from "@/lib/format";
 import { formatBitrate, formatOff, type Budget, type BudgetRefusal, type Outcome } from "./budget";
 import { outputSize, type SourceInfo, type VideoEdit } from "./settings";
@@ -165,12 +164,4 @@ export function TargetOutcome({
       ) : null}
     </div>
   );
-}
-
-function Value({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
-  return <span className={cn("tabular-nums tracking-normal", accent ? "text-indigo" : "text-ink")}>{children}</span>;
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }

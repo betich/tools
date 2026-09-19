@@ -1,4 +1,4 @@
-import { Field, Section, Segmented, Select, Slider, TextButton, Toggle } from "@/components/ui";
+import { Field, Prose, Section, Segmented, Select, Slider, TextButton, Toggle } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { audioCodecNote, silentReason, type Availability, type Capabilities } from "./probe";
 import {
@@ -233,7 +233,7 @@ export function EditSection({
               onCommitStart={onGestureStart}
               onChange={(i) => onPreview({ ...edit, speed: SPEEDS[i] ?? 1 })}
             />
-            <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums">
+            <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">
               {edit.speed}×
             </span>
           </div>
@@ -284,8 +284,4 @@ function Choice<T extends string>({
       ))}
     </div>
   );
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }

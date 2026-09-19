@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { ThumbnailProvider } from "@/components/timeline";
+import { THUMB_CACHE_LIMIT, type ThumbnailProvider } from "@/components/timeline";
 import type { FramesRequest, FramesResponse } from "./frames.worker";
 
 export type Frames = {
@@ -13,9 +13,11 @@ export type Frames = {
 };
 
 /**
- * The worker that pulls pictures out of `file`. One per file; every bitmap
- * handed to the timeline is kept here and closed when the file changes,
- * since the timeline never closes what it's given.
+ * The worker that pulls pictures out of `file`. One per file. The timeline
+ * never closes what it's given, so bitmaps handed to it are owned here: one
+ * whose tile was cancelled is closed at once, only the most recent
+ * `THUMB_CACHE_LIMIT` are kept (older ones have left the timeline's cache),
+ * and the rest are closed when the file changes.
  */
 export function useFrames(file: File | null): Frames {
   const worker = useRef<Worker | null>(null);
@@ -80,7 +82,14 @@ export function useFrames(file: File | null): Frames {
     async (req, size, signal) => {
       if (req.kind !== "time") return null;
       const bitmap = await ask(req.ms, size, "cover", signal);
-      if (bitmap) given.current.push(bitmap);
+      if (!bitmap) return null;
+      if (signal.aborted) {
+        bitmap.close();
+        return null;
+      }
+      const owned = given.current;
+      owned.push(bitmap);
+      while (owned.length > THUMB_CACHE_LIMIT) owned.shift()!.close();
       return bitmap;
     },
     // A new file must bring a new provider, so the timeline drops its cache.

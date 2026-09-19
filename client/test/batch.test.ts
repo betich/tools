@@ -6,7 +6,7 @@ import {
   resolveOptions,
   setOverride,
 } from "../src/tools/media2media/batch";
-import { outputName, outputStem, uniqueNames } from "../src/tools/media2media/names";
+import { fileStem, outputName, outputStem, uniqueNames } from "../src/tools/media2media/names";
 
 describe("filenames", () => {
   test("swap the extension and keep Unicode", () => {
@@ -74,5 +74,18 @@ describe("per-file overrides", () => {
     const a = optionsKey(resolveOptions(defaultBatch, undefined));
     expect(optionsKey(resolveOptions(defaultBatch, {}))).toBe(a);
     expect(optionsKey(resolveOptions({ ...defaultBatch, keepLocation: true }, undefined))).not.toBe(a);
+  });
+});
+
+describe("fileStem", () => {
+  test("drops the extension only; Unicode and spaces stay", () => {
+    expect(fileStem("งานวันเกิด 2026.mov", "video")).toBe("งานวันเกิด 2026");
+    expect(fileStem("archive.tar.gz", "x")).toBe("archive.tar");
+    expect(fileStem("noext", "x")).toBe("noext");
+    expect(fileStem(".mov", "video")).toBe(".mov");
+    expect(fileStem("  .mp4", "video")).toBe("video");
+  });
+  test("NFC, so a decomposed macOS name matches a typed one", () => {
+    expect(fileStem("café.mov", "video")).toBe("café");
   });
 });

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { History } from "@/lib/history";
+import type { AnimFormat } from "./encode/types";
 import { FrameStore, type IncomingFrame } from "./frames";
 import { emptyDoc, withFrames, type GifDoc } from "./model";
 
@@ -19,6 +20,12 @@ export class GifSession {
   private history = new History<GifDoc>(emptyDoc());
   private listeners = new Set<() => void>();
   private state: GifState = this.read();
+  /**
+   * The export panel's format. Not part of the doc (no undo step); kept here
+   * so it survives a tab switch and so a sender can choose it — keyed video
+   * arrives with APNG picked, since GIF would throw its soft edges away.
+   */
+  exportFormat: AnimFormat = "gif";
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);

@@ -9,6 +9,7 @@
 
 import type { Trim } from "@/components/timeline/model";
 import { DEFAULT_KEY, type KeySettings } from "./key/settings";
+import { fileStem } from "../names";
 
 export type Container = "mp4" | "webm";
 export type VideoCodecId = "avc" | "hevc" | "vp9" | "av1";
@@ -252,7 +253,7 @@ export const MIME: Record<string, string> = {
 /** The source's name with the new extension. Unicode stays — a Thai filename is still a Thai filename. */
 export function outputName(sourceName: string, edit: Pick<VideoEdit, "output" | "container" | "audioOutput">): string {
   const dot = sourceName.lastIndexOf(".");
-  const stem = (dot > 0 ? sourceName.slice(0, dot) : sourceName).trim() || "video";
+  const stem = fileStem(sourceName, "video");
   const ext = extensionFor(edit);
   const clash = dot > 0 && sourceName.slice(dot + 1).toLowerCase() === ext;
   return `${stem}${clash ? "-edit" : ""}.${ext}`;

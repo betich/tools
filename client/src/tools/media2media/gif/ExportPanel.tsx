@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FiDownload } from "react-icons/fi";
-import { Button, Field, Input, Section, Sections, Slider, Stat, TextButton } from "@/components/ui";
+import { Button, Field, Input, Prose, Section, Sections, Slider, Stat, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { bytes, delta, ms, parseSize } from "@/lib/format";
@@ -21,13 +21,16 @@ import {
   type EncodeResult,
   type Support,
 } from "./encode";
-import type { FrameStore } from "./frames";
 import type { GifDoc } from "./model";
+import type { GifSession } from "./session";
 
 type Settings = { format: AnimFormat; options: EncodeOptions };
 
-/** Kept at module level, like the session, so the choices survive a tab switch. */
-let remembered: Settings = { format: "gif", options: DEFAULT_OPTIONS };
+/**
+ * Kept at module level, like the session, so the choices survive a tab
+ * switch. The format lives on the session itself, where a sender can pick it.
+ */
+let rememberedOptions: EncodeOptions = DEFAULT_OPTIONS;
 
 type Job = { fraction: number; label: string };
 type Done = EncodeResult & { format: AnimFormat; doc: GifDoc; key: string; raw: number };
@@ -45,16 +48,20 @@ const DITHERS: { value: Dither; label: string }[] = [
  * makes the panel jump. Encoding runs in a worker; the result says how big
  * the pixels were, how big the file is, and whether it met the target.
  */
-export function ExportPanel({ doc, store }: { doc: GifDoc; store: FrameStore }) {
-  const [settings, setSettings] = useState<Settings>(remembered);
+export function ExportPanel({ doc, session }: { doc: GifDoc; session: GifSession }) {
+  const [settings, setSettings] = useState<Settings>(() => ({
+    format: session.exportFormat,
+    options: rememberedOptions,
+  }));
   const [job, setJob] = useState<Job | null>(null);
   const [done, setDone] = useState<Done | null>(null);
   const [error, setError] = useState<string | null>(null);
   const running = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    remembered = settings;
-  }, [settings]);
+    session.exportFormat = settings.format;
+    rememberedOptions = settings.options;
+  }, [session, settings]);
   useEffect(() => () => running.current?.abort(), []);
 
   const { format, options } = settings;
@@ -74,7 +81,7 @@ export function ExportPanel({ doc, store }: { doc: GifDoc; store: FrameStore }) 
     setJob({ fraction: 0, label: "drawing frames" });
     try {
       const raw = rawBytes(doc);
-      const frames = await framesFor(doc, store, ctrl.signal, (p) =>
+      const frames = await framesFor(doc, session.store, ctrl.signal, (p) =>
         setJob({ fraction: p.fraction * 0.15, label: p.label }),
       );
       const result = await encodeAnimation(format, frames, resolved, ctrl.signal, (p) =>
@@ -383,10 +390,6 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </div>
   );
-}
-
-function Prose({ children }: { children: ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }
 
 /** A slider's value beside it, one width for all so the tracks line up. */
