@@ -6,13 +6,15 @@ import { bytes, pad } from "@/lib/format";
 import { pdfJobs } from "@/lib/pdfjobs";
 import { asRunResult, change } from "./analysis";
 import { SizeBreakdown } from "./SizeBreakdown";
+import { TargetOutcome, targetOutcome } from "./target";
 
 /**
  * The runs of this job, newest on top. The chosen one — the newest unless
  * another row was picked — is shown in full: where it stands in the queue
  * while it waits or works, and once done the size change, the before/after
  * breakdown, what was skipped and why, the worker's notes as written, and the
- * download. Earlier runs stay listed underneath in one line each, so trying
+ * download; a run with a target size (#12) says first whether it got there.
+ * Earlier runs stay listed underneath in one line each, so trying
  * other settings never loses a result that was better.
  */
 export function RunResults({
@@ -117,6 +119,7 @@ function Outcome({ jobId, task, input }: { jobId: string; task: TaskInfo; input:
     );
   }
   const smaller = result.bytes < result.inputBytes;
+  const target = targetOutcome(result);
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,6 +134,8 @@ function Outcome({ jobId, task, input }: { jobId: string; task: TaskInfo; input:
         </a>
       </div>
 
+      {target ? <TargetOutcome outcome={target} /> : null}
+
       <div className="flex flex-col gap-1.5">
         <span className="text-label min-w-0 truncate font-mono tracking-normal" title={result.fileName}>
           {result.fileName}
@@ -140,7 +145,7 @@ function Outcome({ jobId, task, input }: { jobId: string; task: TaskInfo; input:
             Already as small as these settings make it — kept the original.
           </p>
         ) : null}
-        {result.notes.map((note, i) => (
+        {(target?.rest ?? result.notes).map((note, i) => (
           <p key={i} className="text-prose text-body font-sans normal-case">
             {note}
           </p>

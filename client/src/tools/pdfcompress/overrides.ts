@@ -96,11 +96,13 @@ export const centreBox = (image: PdfImage): Box => boxAround(image, image.width 
 /**
  * The crop task's params. Only this image's override is sent, so changing
  * another row's override doesn't redraw this one — the params double as the
- * cache key for a crop already drawn.
+ * cache key for a crop already drawn. A crop draws the settings as set and
+ * never searches, so the target size (#12) is left off and editing it doesn't
+ * ask the worker again.
  */
 export function cropParams(params: CompressParams, imageId: string, box: Box | null): CropParams {
   const own = params.overrides[imageId];
-  return { imageId, params: { ...params, overrides: own ? { [imageId]: own } : {} }, box };
+  return { imageId, params: { ...params, overrides: own ? { [imageId]: own } : {}, target: null }, box };
 }
 
 /** A crop task's `result`, checked before its names go into URLs. */
