@@ -5,3 +5,4 @@ export * from "./defaults";
 export * from "./overrides";
 export * from "./pdf";
 export * from "./pdfcaps";
+export * from "./uploads";
