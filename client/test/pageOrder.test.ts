@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_MERGE_ITEM, parsePageRange, type MergeItem } from "@tools/shared";
 import {
+  canInterleave,
   filePages,
+  interleavePages,
   layout,
   moveFile,
+  movePages,
   NO_SELECTION,
   orderRequest,
   pagesOf,
@@ -13,6 +16,7 @@ import {
   removePages,
   resetFile,
   setFilePages,
+  shiftPages,
   type OrderFile,
   type PageOrder,
 } from "../src/tools/pdfmerge/pageOrder";
@@ -206,5 +210,112 @@ describe("orderRequest", () => {
 
   test("refId is key#page", () => {
     expect(refId({ key: "m3", page: 4 })).toBe("m3#4");
+  });
+});
+
+describe("moving pages", () => {
+  const files = [A, B];
+
+  test("a drop before a page, across files", () => {
+    expect(show(movePages(null, files, new Set(["b#1"]), "a#1"), files)).toBe("a1 b2 a2 a3 a4 a5 b1 b3");
+  });
+
+  test("a drop at the end", () => {
+    expect(show(movePages(null, files, new Set(["a#0"]), null), files)).toBe("a2 a3 a4 a5 b1 b2 b3 a1");
+  });
+
+  test("several pages move as one block, in the order shown", () => {
+    const next = movePages(null, files, new Set(["b#2", "a#0", "a#3"]), "b#1");
+    expect(show(next, files)).toBe("a2 a3 a5 b1 a1 a4 b3 b2");
+  });
+
+  test("a drop on one of the pages moving lands before the next page that stays", () => {
+    expect(show(movePages(null, files, new Set(["a#0", "a#2"]), "a#2"), files)).toBe("a2 a1 a3 a4 a5 b1 b2 b3");
+  });
+
+  test("a drop where the pages already are is no change at all", () => {
+    const edited = removePages(null, files, new Set(["b#0"]));
+    expect(movePages(edited, files, new Set(["a#1"]), "a#2")).toBe(edited);
+    expect(movePages(edited, files, new Set(["a#1"]), "a#1")).toBe(edited);
+    expect(movePages(null, files, new Set(["b#2"]), null)).toBeNull();
+  });
+
+  test("moving back where they were is untouched again", () => {
+    const moved = movePages(null, files, new Set(["a#0"]), null);
+    expect(movePages(moved, files, new Set(["a#0"]), "a#1")).toBeNull();
+  });
+
+  test("the spec's A 1–3, B 2, A 4– is a range and one drag", () => {
+    // B's range box: "2". Then drag B's page 2 in before A's page 4.
+    let order = setFilePages(null, files, "b", range("2", 3));
+    order = movePages(order, files, new Set(["b#1"]), "a#3");
+    expect(show(order, files)).toBe("a1 a2 a3 b2 a4 a5");
+    expect(orderRequest(order, files, [item("A"), item("B")])).toEqual({ state: "pages", pages: [[0, 0, 2], [1, 1, 1], [0, 3, 4]] });
+  });
+
+  test("a file still counting stays whole after the pages", () => {
+    const counting = { key: "c", pages: undefined };
+    const next = movePages(null, [A, counting, B], new Set(["b#0"]), "a#0");
+    expect(show(next, [A, counting, B])).toBe("b1 a1 a2 a3 a4 a5 b2 b3 c:counting");
+  });
+});
+
+describe("shifting pages (the keyboard's move)", () => {
+  const files = [A, B];
+
+  test("one step either way, across a file boundary", () => {
+    expect(show(shiftPages(null, files, new Set(["b#0"]), -1), files)).toBe("a1 a2 a3 a4 b1 a5 b2 b3");
+    expect(show(shiftPages(null, files, new Set(["a#4"]), 1), files)).toBe("a1 a2 a3 a4 b1 a5 b2 b3");
+  });
+
+  test("a scattered pick gathers where its first page is, then steps", () => {
+    expect(show(shiftPages(null, files, new Set(["a#1", "a#3"]), 1), files)).toBe("a1 a3 a2 a4 a5 b1 b2 b3");
+  });
+
+  test("stops at the ends", () => {
+    expect(shiftPages(null, files, new Set(["a#0"]), -1)).toBeNull();
+    expect(shiftPages(null, files, new Set(["b#2"]), 1)).toBeNull();
+    expect(shiftPages(null, files, new Set(), 1)).toBeNull();
+  });
+});
+
+describe("interleaving", () => {
+  const scan = (key: string, pages = 20): OrderFile => ({ key, pages });
+  const all = (files: OrderFile[]) => new Set(layout(null, files).flatMap((s) => (s.kind === "page" ? [s.id] : [])));
+
+  test("two 20-page scans, fronts and backs: pick all, interleave", () => {
+    const files = [scan("f"), scan("b")];
+    const order = interleavePages(null, files, all(files));
+    const shown = show(order, files).split(" ");
+    expect(shown.slice(0, 6)).toEqual(["f1", "b1", "f2", "b2", "f3", "b3"]);
+    expect(shown).toHaveLength(40);
+    expect(shown.at(-1)).toBe("b20");
+    const r = orderRequest(order, files, [item("fronts"), item("backs")]);
+    expect(r.state === "pages" && r.pages).toHaveLength(40);
+  });
+
+  test("backs scanned last page first: \"20-1\" in their range box, then interleave", () => {
+    const files = [scan("f"), scan("b")];
+    const order = interleavePages(setFilePages(null, files, "b", range("20-1", 20)), files, all(files));
+    expect(show(order, files).split(" ").slice(0, 4)).toEqual(["f1", "b20", "f2", "b19"]);
+  });
+
+  test("only the picked pages are dealt, where the first of them is; a shorter file drops out", () => {
+    const files = [A, B];
+    const order = interleavePages(null, files, new Set(["a#1", "a#2", "a#3", "b#0", "b#1"]));
+    expect(show(order, files)).toBe("a1 a2 b1 a3 b2 a4 a5 b3");
+  });
+
+  test("files take turns in the order their pages first appear", () => {
+    const files = [A, B];
+    const moved = movePages(null, files, new Set(["b#0", "b#1", "b#2"]), "a#0");
+    expect(show(interleavePages(moved, files, all(files)), files)).toBe("b1 a1 b2 a2 b3 a3 a4 a5");
+  });
+
+  test("needs pages from two files", () => {
+    const files = [A, B];
+    expect(interleavePages(null, files, new Set(["a#0", "a#1"]))).toBeNull();
+    expect(canInterleave(layout(null, files), new Set(["a#0", "a#1"]))).toBe(false);
+    expect(canInterleave(layout(null, files), new Set(["a#0", "b#1"]))).toBe(true);
   });
 });
