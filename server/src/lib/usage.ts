@@ -22,21 +22,35 @@ db.exec(`
   );
 `);
 
+/**
+ * Calls that come in bursts or on their own — the health poll, an upload's
+ * 32 MB parts and resume checks, an event stream's reconnects — would drown
+ * the calls that stand for something a person did. Their callers still count.
+ */
+const NOISY = new Set([
+  "GET /api/health",
+  "GET /api/pdf/uploads/:id",
+  "GET /api/pdf/uploads/:id/thumbnail.png",
+  "PUT /api/pdf/uploads/:id/parts/:n",
+  "GET /api/pdf/jobs/:id",
+  "GET /api/pdf/jobs/:id/events",
+  "GET /api/pdf/jobs/:id/tasks/:taskId/file/:name",
+]);
+
 const today = () => new Date().toISOString().slice(0, 10);
 const bump = db.prepare("INSERT INTO usage (day, route, hits) VALUES (?, ?, 1) ON CONFLICT (day, route) DO UPDATE SET hits = hits + 1");
 const seen = db.prepare("INSERT OR IGNORE INTO visitors (day, who) VALUES (?, ?)");
 
 /**
  * `route` is the matched pattern (`/api/projects/:id`), so a thousand projects
- * are one row. The client's health poll counts its caller but not as a hit —
- * it fires every few seconds and would drown everything else.
+ * are one row. The noisy calls above count their caller but not as a hit.
  */
 export function recordUsage(method: string, route: string, ip: string): void {
   if (!route || route === "/health" || route.startsWith("/api/admin") || method === "OPTIONS") return;
   const day = today();
   try {
     seen.run(day, createHash("sha256").update(`${day}:${ip}`).digest("hex").slice(0, 16));
-    if (route !== "/api/health") bump.run(day, `${method} ${route}`);
+    if (!NOISY.has(`${method} ${route}`)) bump.run(day, `${method} ${route}`);
   } catch (error) {
     console.error("[usage]", error); // never worth failing a request over
   }

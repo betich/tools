@@ -1,7 +1,8 @@
 import type { ExportFormat, GoogleFont, MergeData, MergeDoc, PdfLayout, Project, ToolMeta } from "@tools/shared";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-const url = (path: string) => `${BASE}${path}`;
+/** Absolute URL for an API path — the client and the API are separate origins in production. */
+export const url = (path: string) => `${BASE}${path}`;
 
 /**
  * Absolute URL for a stored asset. The client and the API are separate origins
@@ -28,7 +29,7 @@ export function refusal(error: unknown): string | null {
   return error instanceof ApiError && [413, 429, 503, 507].includes(error.status) ? error.message : null;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url(path), {
     ...init,
     headers: init?.body instanceof FormData ? init.headers : { "content-type": "application/json", ...init?.headers },

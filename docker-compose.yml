@@ -28,6 +28,8 @@ services:
       # /mnt/media); SQLite stays on the named volume, on the SD card.
       ASSETS_DIR: /bulk/assets
       FONTS_DIR: /bulk/fonts
+      # Upload parts and PDF job files; swept an hour after they are last touched.
+      JOBS_DIR: /bulk/jobs
       MIN_FREE_BYTES: ${MIN_FREE_BYTES:-2147483648}
       MAX_ASSET_BYTES: ${MAX_ASSET_BYTES:-21474836480}
       RENDER_CONCURRENCY: ${RENDER_CONCURRENCY:-1}
@@ -46,6 +48,39 @@ services:
     # Not published to the host: the tunnel reaches it over the compose network.
     expose:
       - "8787"
+
+  # PDF compress/merge runs here, apart from the API, so a job that blows its
+  # memory takes down only itself. It shares the SQLite volume (job table,
+  # heartbeat) and the bulk drives (uploads, results) with the api.
+  pdf-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    # A fixed tag, whatever the compose project name, so the image can be run on its own.
+    image: tools-pdf-worker:latest
+    container_name: tools-pdf-worker
+    restart: unless-stopped
+    environment:
+      WORKER_PORT: 8788
+      # Must match the api's DATA_DIR and JOBS_DIR: the job table is in its
+      # SQLite, the uploads and results under its jobs dir.
+      DATA_DIR: /data
+      JOBS_DIR: /bulk/jobs
+      WORK_DIR: /bulk/pdf-work
+      # mem_limit is not enforced on this Pi (cgroup_disable=memory); this
+      # budget, applied to every child through prlimit, is the real cap.
+      WORKER_MEMORY_BYTES: ${WORKER_MEMORY_BYTES:-3221225472}
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 3
+    pids_limit: 256
+    logging: *logs
+    volumes:
+      - tools-data:/data
+      - ${BULK_DIR:-/mnt/media/tools}:/bulk
+    # Nothing calls it: the api reads its heartbeat from SQLite. The port is for the probe.
+    expose:
+      - "8788"
 
   tunnel:
     image: cloudflare/cloudflared:latest

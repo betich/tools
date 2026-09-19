@@ -277,7 +277,7 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 **Top bar.** Sticky, hairline bottom, `backdrop-blur-xl` over the ground at 70% so content dissolves under it rather than colliding. Wordmark left, API state right.
 
-**Bottom rail.** Fixed, three equal cells, hairline top, blurred ground at 80%. The active cell takes a 7% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
+**Bottom rail.** Fixed, three equal cells, hairline top, blurred ground at 80%. The active cell takes a 7% ink fill and a 1px periwinkle line across its top edge. The `MADE WITH <3 BY BETICH.ME · SOURCE` line sits beneath the cells behind a fainter hairline — exactly the reference's arrangement. `SOURCE` links the repository, which the AGPL-3.0 PDF engines oblige every page to offer. Content reserves `9rem` at the bottom so nothing is ever trapped under it.
 
 **Three measures and a room.** `max-w-3xl` for reading, `max-w-6xl` for squoosh, `max-w-[1600px]` for the index and any wide page. A tool takes the narrowest measure that fits its work — except the merge editor, which from a laptop up is not a page at all but a room (below). The index takes the widest measure on purpose: its two doors are meant to be billboards.
 

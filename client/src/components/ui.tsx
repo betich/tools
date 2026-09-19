@@ -32,6 +32,28 @@ export function TextButton({
   );
 }
 
+type ButtonLook = {
+  variant?: "primary" | "outline" | "ghost";
+  /** `sm` is a section's own action, set in its header: 28px, the same voice at half the weight. */
+  size?: "md" | "sm";
+};
+
+/** The button's classes, for the one place a link must look like one — a download served by another origin. */
+export function buttonClass({ variant = "primary", size = "md" }: ButtonLook = {}, className?: string) {
+  return cn(
+    "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-meta whitespace-nowrap uppercase",
+    size === "sm" ? "h-7 gap-1.5 px-2.5" : "h-9 gap-2 px-4",
+    "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
+    "disabled:cursor-not-allowed disabled:opacity-35",
+    variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
+    variant === "outline" &&
+      "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
+    variant === "ghost" && size === "md" && "px-3",
+    variant === "ghost" && "text-label hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
+    className,
+  );
+}
+
 /**
  * A real button, for the one action a surface exists to perform — export, copy
  * the link, download. `primary` is the only solid-ink shape in the chrome, so
@@ -40,34 +62,8 @@ export function TextButton({
  * `ghost` is a button only by its height and its hover wash — for an action
  * that belongs in the row but should not compete with the other two.
  */
-export function Button({
-  className,
-  variant = "primary",
-  size = "md",
-  ...props
-}: ComponentProps<"button"> & {
-  variant?: "primary" | "outline" | "ghost";
-  /** `sm` is a section's own action, set in its header: 28px, the same voice at half the weight. */
-  size?: "md" | "sm";
-}) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className={cn(
-        "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-meta whitespace-nowrap uppercase",
-        size === "sm" ? "h-7 gap-1.5 px-2.5" : "h-9 gap-2 px-4",
-        "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
-        "disabled:cursor-not-allowed disabled:opacity-35",
-        variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
-        variant === "outline" &&
-          "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
-        variant === "ghost" && size === "md" && "px-3",
-        variant === "ghost" && "text-label hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
-        className,
-      )}
-    />
-  );
+export function Button({ className, variant, size, ...props }: ComponentProps<"button"> & ButtonLook) {
+  return <button type="button" {...props} className={buttonClass({ variant, size }, className)} />;
 }
 
 export function IconButton({

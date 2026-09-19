@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test test"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
