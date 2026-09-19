@@ -1,6 +1,6 @@
 #!/bin/sh
-# Generates the #8 analysis and #9 compress fixtures into $1 (default: ./out). Needs the
-# worker image's toolchain (mutool, vips, gs, qpdf); run it inside
+# Generates the #8 analysis and #9/#11 compress fixtures into $1 (default: ./out). Needs the
+# worker image's toolchain (mutool, vips, gs, qpdf, bun); run it inside
 # tools-pdf-worker. Nothing binary is checked in — together they are ~2 MB.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
@@ -34,6 +34,8 @@ gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dEmbedAllFonts=true -dSubsetF
   -c "<< /NeverEmbed [ ] >> setdistillerparams" -f deck.pdf
 # Uncompressed, with duplicates, metadata, extras and annotations for the compress passes (#9).
 mutool run "$here/bloated.js" bloated.pdf photo.jpg
+# Two whole Sarabun fonts (Thai + Latin) with a few glyphs used, for font subsetting (#11).
+bun "$here/thai.ts" thai.pdf
 # Encrypted with a user password: nothing past the dictionaries can be read.
 qpdf --encrypt --user-password=secret --owner-password=owner --bits=256 -- deck.pdf locked.pdf
 

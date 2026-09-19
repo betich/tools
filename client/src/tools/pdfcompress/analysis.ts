@@ -26,7 +26,16 @@ export function asRunResult(value: unknown): RunResult | null {
   if (!value || typeof value !== "object") return null;
   const r = value as Partial<RunResult>;
   if (typeof r.bytes !== "number" || typeof r.inputBytes !== "number" || !asAnalysis(r.analysis)) return null;
-  return { ...r, skipped: Array.isArray(r.skipped) ? r.skipped : [], notes: Array.isArray(r.notes) ? r.notes : [] } as RunResult;
+  const fontBytes =
+    r.fontBytes && typeof r.fontBytes === "object" && Object.values(r.fontBytes).every((b) => typeof b === "number")
+      ? r.fontBytes
+      : undefined;
+  return {
+    ...r,
+    skipped: Array.isArray(r.skipped) ? r.skipped : [],
+    notes: Array.isArray(r.notes) ? r.notes : [],
+    fontBytes,
+  } as RunResult;
 }
 
 /** `1–3, 7, 9–12` — consecutive pages folded into ranges; past `max` parts the rest is counted, not listed. */

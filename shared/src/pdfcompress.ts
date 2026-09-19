@@ -36,6 +36,11 @@ export type RunResult = {
   /** Sentences shown as-is: "Repaired 3 broken objects", "reached 12.4 MB of 10 MB — non-image data is 9.8 MB of that". */
   notes: string[];
   fileName: string;
+  /**
+   * #11: each input font's bytes in the served file, keyed by the input's
+   * PdfFont.id. Fonts that couldn't be told apart in the output are missing.
+   */
+  fontBytes?: Record<string, number>;
   /** #12 */
   target?: { reached: boolean; bytes: number };
 };
