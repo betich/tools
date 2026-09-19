@@ -1,50 +1,120 @@
-import type { PdfAnalysis } from "@tools/shared";
-import { registerHandler } from "../jobs";
-import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_PAGES } from "../limits";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { PdfAnalysis, PdfFont, PdfImage, SizeCategory } from "@tools/shared";
+import { registerHandler, TaskError } from "../jobs";
+import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_OBJECTS, ANALYSIS_MAX_PAGES, ANALYSIS_TIMEOUT_MS } from "../limits";
 
 /**
- * Placeholder analysis until #8's `mutool run` walk lands: it only counts
- * page objects and reports the byte size, so the queue, progress and result
- * path can be exercised end to end without the toolchain. Pages in compressed
- * object streams are not seen — #8 replaces this whole file.
+ * The compress workbench's first view: where a PDF's bytes go (images, fonts,
+ * content, metadata, other) and which images and fonts it carries. The walk is
+ * `worker/scripts/analyse.js` under `mutool run` — its header explains how
+ * bytes are attributed and how effective DPI is measured. This side runs it,
+ * relays its progress file, and hands the result on in the contract's shape.
  */
 
-const PAGE = /\/Type\s*\/Page(?![A-Za-z])/g;
+const SCRIPT = join(import.meta.dir, "../../scripts/analyse.js");
+/** The script stops walking at this share of the deadline and reports what it has, marked truncated. */
+const SOFT_DEADLINE = 0.75;
+const POLL_MS = 250;
 
-registerHandler("analyse", async ({ inputs, progress }) => {
+const CATEGORIES: SizeCategory[] = ["images", "fonts", "content", "metadata", "other"];
+
+/** What the script writes: the contract's fields plus a couple of its own. */
+type ScriptOutput = PdfAnalysis & { error?: string; message?: string; locked?: boolean };
+
+registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
   const input = inputs[0];
   if (!input) throw new Error("analyse needs one input");
-  const file = Bun.file(input.path);
-  const total = Math.min(file.size, ANALYSIS_MAX_BYTES_READ);
-  let pages = 0;
-  let read = 0;
-  let carry = "";
-  let version = "";
-  const reader = file.slice(0, total).stream().getReader();
-  for (let next = await reader.read(); !next.done; next = await reader.read()) {
-    // latin1 keeps one char per byte, so a match can be counted exactly once across chunk edges.
-    const text = carry + Buffer.from(next.value).toString("latin1");
-    if (!version) version = /%PDF-(\d\.\d)/.exec(text)?.[1] ?? "";
-    const tail = Math.max(0, text.length - 16);
-    for (const m of text.matchAll(PAGE)) if (m.index < tail) pages++;
-    carry = text.slice(tail);
-    read += next.value.byteLength;
-    progress("reading", read, total);
-    if (pages >= ANALYSIS_MAX_PAGES) break;
-  }
-  // The last carry has not been counted.
-  pages += carry.match(PAGE)?.length ?? 0;
-  await reader.cancel().catch(() => {});
+  const out = join(workDir, "analysis.json");
+  const progressFile = join(workDir, "progress.txt");
+  const deadline = Date.now() + ANALYSIS_TIMEOUT_MS * SOFT_DEADLINE;
 
-  const analysis: PdfAnalysis = {
-    bytes: file.size,
-    pages: Math.min(pages, ANALYSIS_MAX_PAGES),
-    version,
-    breakdown: { images: 0, fonts: 0, content: 0, metadata: 0, other: file.size },
-    images: [],
-    fonts: [],
-    flags: { encrypted: false, signed: null, pdfa: null, tagged: false, repaired: 0 },
-    truncated: total < file.size || pages >= ANALYSIS_MAX_PAGES,
-  };
-  return { result: analysis };
+  progress("opening", 0, 0);
+  const poll = setInterval(async () => {
+    const line = await readFile(progressFile, "utf8").catch(() => "");
+    const [stage, done, total] = line.trim().split("\t");
+    if (stage && total) progress(stage, Number(done), Number(total));
+  }, POLL_MS);
+
+  try {
+    await run(
+      "mutool",
+      [
+        "run",
+        SCRIPT,
+        input.path,
+        out,
+        progressFile,
+        String(input.size),
+        String(ANALYSIS_MAX_PAGES),
+        String(ANALYSIS_MAX_BYTES_READ),
+        String(ANALYSIS_MAX_OBJECTS),
+        String(deadline),
+      ],
+      { timeoutMs: ANALYSIS_TIMEOUT_MS, label: "The analysis", where: "while reading the file" },
+    );
+  } finally {
+    clearInterval(poll);
+  }
+
+  let raw: ScriptOutput;
+  try {
+    raw = JSON.parse(await readFile(out, "utf8"));
+  } catch {
+    throw new TaskError("The analysis could not read this file.");
+  }
+  if (raw.error) throw new TaskError("This file could not be opened as a PDF.");
+  return { result: shape(raw, input.size) };
 });
+
+/**
+ * Only the contract's fields, so the stored result stays the shape the client
+ * checks. The attributed bytes are estimates for dictionaries (serialised
+ * size), so "other" gives way if the parts ever add up past the file.
+ */
+function shape(raw: ScriptOutput, size: number): PdfAnalysis {
+  const breakdown = Object.fromEntries(CATEGORIES.map((c) => [c, Math.max(0, raw.breakdown?.[c] ?? 0)])) as Record<
+    SizeCategory,
+    number
+  >;
+  const over = CATEGORIES.reduce((n, c) => n + breakdown[c], 0) - size;
+  if (over > 0) breakdown.other = Math.max(0, breakdown.other - over);
+
+  const images: PdfImage[] = (raw.images ?? []).map((i) => ({
+    id: i.id,
+    pages: i.pages,
+    width: i.width,
+    height: i.height,
+    dpi: i.dpi,
+    colorSpace: i.colorSpace,
+    bitsPerComponent: i.bitsPerComponent,
+    filter: i.filter,
+    alpha: i.alpha,
+    bytes: i.bytes,
+  }));
+  const fonts: PdfFont[] = (raw.fonts ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    type: f.type,
+    embedded: f.embedded,
+    subset: f.subset,
+    bytes: f.bytes,
+  }));
+  const flags: Partial<PdfAnalysis["flags"]> = raw.flags ?? {};
+  return {
+    bytes: size,
+    pages: raw.pages ?? 0,
+    version: raw.version ?? "",
+    breakdown,
+    images,
+    fonts,
+    flags: {
+      encrypted: !!flags.encrypted,
+      signed: flags.signed ?? null,
+      pdfa: flags.pdfa ?? null,
+      tagged: !!flags.tagged,
+      repaired: flags.repaired ?? 0,
+    },
+    truncated: !!raw.truncated,
+  };
+}
