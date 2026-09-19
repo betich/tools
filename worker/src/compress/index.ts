@@ -2,6 +2,7 @@
  * The compress pipeline and its steps, registered in import order within each
  * phase (see ./pipeline). A ticket that adds a step adds its import here.
  */
+import "./images";
 import "./jpegs";
 import "./fonts";
 import "./qpdf";

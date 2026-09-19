@@ -121,6 +121,15 @@ function renderDifference(before: string, after: string): number {
   return off / total;
 }
 
+/** An override that skips every image in the file (#10), keyed by object number. */
+function skipAll(file: string): CompressParams["overrides"] {
+  const list = join(root, `images-${Math.random().toString(36).slice(2)}.json`);
+  const script = join(import.meta.dir, "../scripts/images.js");
+  expect(Bun.spawnSync(["mutool", "run", script, "list", file, list, "all", "all", "5000", "60000"]).exitCode).toBe(0);
+  const ids: { id: number }[] = JSON.parse(readFileSync(list, "utf8"));
+  return Object.fromEntries(ids.map((i) => [String(i.id), { skip: true }]));
+}
+
 const show = (file: string, what: string) =>
   Bun.spawnSync(["mutool", "show", file, what]).stdout.toString();
 
@@ -135,9 +144,10 @@ describe.skipIf(!hasTools)("compress", () => {
 
   for (const name of ["deck.pdf", "deck-gs.pdf", "scan.pdf", "bloated.pdf", "thai.pdf"]) {
     for (const preset of ["ebook", "print"] as const) {
-      test(`${name}, ${preset}: never larger, every page renders identically`, async () => {
+      // Every image set to "leave it as it is" (#10), so only the lossless passes change the file.
+      test(`${name}, ${preset}, images skipped: never larger, every page renders identically`, async () => {
         const file = join(fixtures, name);
-        const { result, out } = await compress(file, defaultCompressParams(preset));
+        const { result, out } = await compress(file, { ...defaultCompressParams(preset), overrides: skipAll(file) });
         expect(result.bytes).toBe(statSync(out).size);
         expect(result.bytes).toBeLessThanOrEqual(result.inputBytes);
         expect(result.inputBytes).toBe(statSync(file).size);
@@ -158,6 +168,7 @@ describe.skipIf(!hasTools)("compress", () => {
     // Two identical photos became one; the thumbnail stays (extras are opt-in).
     expect(analysis.images.filter((i) => i.width === 1200)).toHaveLength(1);
     expect(stages).toEqual([
+      "re-encoding images",
       "repacking JPEG images",
       "subsetting fonts",
       "rewriting the file",
@@ -174,7 +185,7 @@ describe.skipIf(!hasTools)("compress", () => {
     expect(trailer).toContain("/Root");
 
     const passes = result.skipped.map((s) => s.pass).sort();
-    expect(passes).toEqual(["downsample", "reencode-images"]);
+    expect(passes).toEqual([]);
     for (const s of result.skipped) expect(s.reason).toMatch(/\.$/);
   });
 
@@ -248,7 +259,8 @@ describe.skipIf(!hasTools)("compress", () => {
     );
     // Ghostscript's output is subset already, as CFF — which MuPDF garbles if let at it.
     const file = join(fixtures, "deck-gs.pdf");
-    const gs = await compress(file, defaultCompressParams("print"));
+    // Images left as they are (#10), so the fonts are all that could change.
+    const gs = await compress(file, { ...defaultCompressParams("print"), overrides: skipAll(file) });
     expect(gs.result.skipped.map((s) => s.pass)).not.toContain("subset-fonts");
     expect(gs.result.notes).toEqual([]);
     expectSameRender(file, gs.out);
@@ -292,12 +304,11 @@ describe.skipIf(!hasTools)("compress", () => {
     expect(renderDifference(file, out)).toBeLessThan(0.001);
   });
 
-  test("grayscale is skipped with a reason", async () => {
+  test("grayscale runs (images, #10)", async () => {
     const file = join(fixtures, "deck.pdf");
     const gray = await compress(file, { ...defaultCompressParams("print"), advanced: ["grayscale"] });
-    expect(gray.result.skipped.find((s) => s.pass === "grayscale")?.reason).toBe(
-      "Converting to grayscale isn't available yet.",
-    );
+    expect(gray.result.skipped.map((s) => s.pass)).not.toContain("grayscale");
+    expect(show(gray.out, "grep")).not.toContain("DeviceRGB");
     // The other engines (#13) are covered in engines.test.ts.
   });
 

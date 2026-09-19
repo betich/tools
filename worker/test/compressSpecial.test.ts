@@ -101,7 +101,10 @@ describe.skipIf(!hasTools)("compress: special inputs", () => {
 
   test("encrypted: decrypted by default, pages unchanged", async () => {
     const file = join(fixtures, "locked.pdf");
-    const { result, out } = await compress(file, "secret", { acceptSignatureLoss: true });
+    // Images left as they are (#10), so decryption alone must leave the pixels exact.
+    const images = (await analyse(file, "secret")).images;
+    const overrides = Object.fromEntries(images.map((i) => [i.id, { skip: true }]));
+    const { result, out } = await compress(file, "secret", { acceptSignatureLoss: true, overrides });
     expect(result.keptOriginal).toBe(false);
     expect(encryption(out)).toContain("File is not encrypted");
     expect(result.analysis.pages).toBe(3);

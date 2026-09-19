@@ -35,7 +35,8 @@ registerStep({
       label: "MuPDF",
       where: "while reading the images",
     });
-    const found: Extracted[] = JSON.parse(await readFile(list, "utf8"));
+    // An image the user set to "leave it as it is" (#10 override skip) keeps even its bytes.
+    const found = (JSON.parse(await readFile(list, "utf8")) as Extracted[]).filter((i) => !run.params.overrides[String(i.id)]?.skip);
 
     const better: { id: number; file: string }[] = [];
     for (const [i, image] of found.entries()) {
