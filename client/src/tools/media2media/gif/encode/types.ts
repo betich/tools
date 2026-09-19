@@ -3,17 +3,16 @@
 
    One table (`FORMATS`) says, per format, which controls mean something and
    why the others don't, so the export panel can dim an option with its
-   reason instead of offering a knob the encoder ignores. A new format
-   (animated WebP, #27) is a new key here, a new entry in the worker's
-   registry, and nothing else.
+   reason instead of offering a knob the encoder ignores. A new format is a
+   new key here, a new entry in the worker's registry, and nothing else.
    ─────────────────────────────────────────────────────────────────────────── */
 
-export type AnimFormat = "gif" | "apng";
+export type AnimFormat = "gif" | "apng" | "webp";
 
 export type Dither = "off" | "ordered" | "diffusion";
 
 export type EncodeOptions = {
-  /** 1–100. gifski's quality, which also sets how lossy it is. */
+  /** 1–100. gifski's quality, which also sets how lossy it is; WebP's, where 100 is lossless. */
   quality: number;
   /** 0 is every colour (full colour, lossless); otherwise the palette size, 2–256. */
   colours: number;
@@ -117,7 +116,37 @@ export const FORMATS: Record<AnimFormat, FormatInfo> = {
       };
     },
   },
+  webp: {
+    label: "webp",
+    ext: "webp",
+    mime: "image/webp",
+    blurb:
+      "Animated WebP — every colour and full transparency, usually the smallest of the three. Quality 100 is lossless.",
+    controls: {
+      quality: true,
+      colours: "WebP keeps every colour; lower the quality to make it smaller.",
+      dither: "WebP keeps every colour, so there is nothing to dither.",
+      tolerance: true,
+    },
+    dithers: () => {
+      const why = "WebP keeps every colour, so there is nothing to dither.";
+      return { off: true, ordered: why, diffusion: why };
+    },
+    resolve: (o) => ({
+      ...o,
+      quality: clampQuality(o.quality),
+      colours: 0,
+      dither: "off",
+      tolerance: clampTolerance(o.tolerance),
+    }),
+  },
 };
+
+/** Formats whose size knob is quality (the rest cut the palette). */
+export const QUALITY_FORMATS: readonly AnimFormat[] = ["gif", "webp"];
+
+/** WebP at this quality is written lossless. */
+export const WEBP_LOSSLESS = 100;
 
 export const ANIM_FORMATS = Object.keys(FORMATS) as AnimFormat[];
 
@@ -146,7 +175,8 @@ export function clampTolerance(n: number): number {
 /** What one rung of a size search changed, in words: `quality 64`, `48 colours · tolerance 6`. */
 export function describeOptions(format: AnimFormat, o: EncodeOptions): string {
   const parts: string[] = [];
-  if (format === "gif") parts.push(`quality ${o.quality}`);
+  if (format === "webp") parts.push(o.quality >= WEBP_LOSSLESS ? "lossless" : `quality ${o.quality}`);
+  else if (format === "gif") parts.push(`quality ${o.quality}`);
   else parts.push(o.colours === 0 ? "every colour" : `${o.colours} colours`);
   if (o.tolerance > 0) parts.push(`tolerance ${o.tolerance}`);
   return parts.join(" · ");
