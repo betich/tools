@@ -20,14 +20,15 @@ check qpdf         qpdf --version
 check gs           gs --version
 check vips         vips --version
 check cjpeg        sh -c 'cjpeg -version 2>&1 | grep -i mozjpeg'
-check opj_compress sh -c 'opj_compress -h 2>&1 | grep -i "openjp2 v"'
+check opj_compress sh -c 'opj_compress -h 2>&1 | grep -i "openjp2 library"'
 check cjxl         cjxl --version
-check ssimulacra2  sh -c 'ssimulacra2 2>&1 | head -n 1; test -x "$(command -v ssimulacra2)"'
-check butteraugli  sh -c 'butteraugli 2>&1 | head -n 1; test -x "$(command -v butteraugli)"'
-check zopfli       sh -c 'zopfli -h 2>&1 | head -n 1; dpkg-query -W -f="(deb \${Version})" zopfli'
+# The metric tools have no version flag; the libjxl tag they were built from is recorded beside them.
+check ssimulacra2  sh -c 'ssimulacra2 2>&1 | grep -q Usage && echo "libjxl $(cat /opt/jxl/VERSION)"'
+check butteraugli  sh -c 'butteraugli 2>&1 | grep -q Usage && echo "libjxl $(cat /opt/jxl/VERSION)"'
+check zopfli       sh -c 'zopfli -h 2>&1 | grep -q Usage && dpkg-query -W -f="zopfli \${Version} (deb)" zopfli'
 check libdeflate   libdeflate-gzip -V
 check heif         heif-info --version
-check "heif codecs" sh -c 'heif-info --list-decoders 2>&1 | tr "\n" " "'
+check "heif codecs" sh -c 'heif-dec --list-decoders 2>&1 | grep "^- " | tr "\n" " "'
 check prlimit      prlimit --version
 check bun          bun --version
 
