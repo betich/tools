@@ -4,6 +4,7 @@ import {
   imageDpi,
   type ImageDpi,
   type MergeItemOptions,
+  type MergeOutput,
   type MergeParams,
   type UploadedFile,
   type UploadKind,
@@ -229,16 +230,33 @@ export function useMergeFiles() {
 
   const retry = useCallback((key: string) => patch(key, (e) => ({ ...e, upload: { phase: "queued" } })), [patch]);
 
-  return { entries, add, remove, move, moveTo, setLayout, layoutToAll, retry };
+  /** Empties the list — after a discard, when the server no longer has any of the files. */
+  const clear = useCallback(() => {
+    active.current?.ctrl.abort();
+    active.current = null;
+    setEntries((list) => {
+      for (const e of list) if (e.source.state === "image") e.source.bitmap.close();
+      return [];
+    });
+  }, []);
+
+  return { entries, add, remove, move, moveTo, setLayout, layoutToAll, retry, clear };
 }
 
 /** The merge request, once every file is on the server; null until then. */
-export function mergeParams(entries: MergeEntry[]): MergeParams | null {
+export function mergeParams(entries: MergeEntry[], output: MergeOutput): MergeParams | null {
   if (entries.length === 0) return null;
   const items: MergeParams["items"] = [];
   for (const e of entries) {
     if (e.upload.phase !== "done") return null;
     items.push({ upload: e.upload.result.id, name: e.file.name, kind: e.upload.result.kind, layout: e.layout });
   }
-  return { items };
+  const title = output.title?.trim() || null;
+  return { items, output: { ...output, title } };
+}
+
+/** The title a merge gets when none is typed: the first file's name without its extension, as the server does. */
+export function defaultTitle(name: string | undefined): string {
+  if (!name) return "merged";
+  return name.replace(/\.[^./\\]+$/, "") || name;
 }

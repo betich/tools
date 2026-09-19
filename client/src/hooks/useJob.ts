@@ -65,11 +65,12 @@ export function useJob() {
     [watch],
   );
 
+  /** `id` defaults to the current job; pass it when the job was created in the same handler, before a re-render. */
   const addTask = useCallback(
-    async (body: TaskCreate): Promise<TaskInfo | null> => {
-      if (!jobId) return null;
+    async (body: TaskCreate, id: string | null = jobId): Promise<TaskInfo | null> => {
+      if (!id) return null;
       try {
-        const task = await pdfJobs.addTask(jobId, body);
+        const task = await pdfJobs.addTask(id, body);
         setState((s) => ({ ...apply(s, { type: "task", task }), error: null }));
         return task;
       } catch (error) {
