@@ -231,10 +231,10 @@ export function parsePageRange(text: string, count: number): PageRangeResult {
 
 /**
  * The inverse of `parsePageRange`: 0-based pages, in order, as the text a
- * person would type for them — "1-3, 5, 8-". Consecutive pages fold in
- * either direction, and a run up to the last page drops its end ("8-").
+ * person would type for them — "1-3, 5, 8-10". Consecutive pages fold in
+ * either direction. Ends are always written, so a whole file reads "1-10".
  */
-export function formatPageRange(pages: readonly number[], count: number): string {
+export function formatPageRange(pages: readonly number[]): string {
   const runs: [number, number][] = [];
   for (const p of pages) {
     const last = runs[runs.length - 1];
@@ -243,7 +243,7 @@ export function formatPageRange(pages: readonly number[], count: number): string
     else runs.push([p, p]);
   }
   return runs
-    .map(([a, b]) => (a === b ? `${a + 1}` : b === count - 1 && b > a ? `${a + 1}-` : `${a + 1}-${b + 1}`))
+    .map(([a, b]) => (a === b ? `${a + 1}` : `${a + 1}-${b + 1}`))
     .join(", ");
 }
 

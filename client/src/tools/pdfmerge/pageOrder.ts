@@ -78,12 +78,15 @@ function materialize(order: PageOrder, files: readonly OrderFile[]): { refs: Pag
   return { refs: pagesOf(layout(order, files)), taken: [...taken] };
 }
 
-/** Back to `null` when the edit lands on exactly what an untouched order shows, so Reset really is untouched. */
-function settle(order: PageOrder, files: readonly OrderFile[]): PageOrder {
-  if (!order) return null;
-  const mine = layout(order, files);
+/** True when `slots` are exactly what an untouched order shows: every file whole, in file order. */
+export function isWhole(slots: readonly Slot[], files: readonly OrderFile[]): boolean {
   const whole = layout(null, files);
-  return mine.length === whole.length && mine.every((s, i) => s.id === whole[i]!.id) ? null : order;
+  return slots.length === whole.length && slots.every((s, i) => s.id === whole[i]!.id);
+}
+
+/** Back to `null` when the edit lands on every file whole, so Reset really is untouched. */
+function settle(order: PageOrder, files: readonly OrderFile[]): PageOrder {
+  return order && isWhole(layout(order, files), files) ? null : order;
 }
 
 /** Takes the pages in `ids` (see `refId`) out of the output. */
