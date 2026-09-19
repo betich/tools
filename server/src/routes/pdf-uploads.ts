@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
+import { copyFile, link, mkdir, open, readdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Elysia, t } from "elysia";
@@ -73,6 +73,41 @@ const partBytes = (row: Row, n: number) => (n < row.parts - 1 ? row.part_size : 
 export async function dropUpload(uploadId: string): Promise<void> {
   db.run("DELETE FROM uploads WHERE id = ?", [uploadId]);
   await rm(dirOf(uploadId), { recursive: true, force: true });
+}
+
+/**
+ * Registers a file already on the server — a finished merge handed to
+ * Compress (#18) — as a completed upload, without sending it through the
+ * client. It is hard-linked in, so the source stays where it is (the merge's
+ * download keeps working) and no bytes are copied; a copy only when the two
+ * are on different file systems. `null` when the file is not a kind we take.
+ */
+export async function adoptUpload(source: string, name: string, caller: string): Promise<(UploadedFile & { path: string }) | null> {
+  const uploadId = id("up");
+  const bytes = (await stat(source)).size;
+  // The row goes in first, so a sweep running meanwhile does not take the directory for a leftover.
+  db.run(
+    "INSERT INTO uploads (id, name, type, bytes, part_size, parts, caller, kind, touched_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+    [uploadId, name, "application/pdf", bytes, UPLOAD_PART_BYTES, Math.max(1, Math.ceil(bytes / UPLOAD_PART_BYTES)), caller, Date.now(), nowIso()],
+  );
+  try {
+    await mkdir(dirOf(uploadId), { recursive: true });
+    const out = uploadPath(uploadId);
+    await link(source, out).catch(async (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EXDEV" && err.code !== "EPERM" && err.code !== "EMLINK") throw err;
+      await copyFile(source, out);
+    });
+    const kind = sniff(await head(out));
+    if (!kind) {
+      await dropUpload(uploadId);
+      return null;
+    }
+    db.run("UPDATE uploads SET kind = ?, touched_at = ? WHERE id = ?", [kind, Date.now(), uploadId]);
+    return { id: uploadId, name, size: bytes, kind, path: out };
+  } catch (err) {
+    await dropUpload(uploadId);
+    throw err;
+  }
 }
 
 // ── sniffing ───────────────────────────────────────────────────────────────

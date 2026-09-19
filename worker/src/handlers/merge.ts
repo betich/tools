@@ -25,6 +25,7 @@ import {
   type Orientation,
 } from "../images";
 import { predownsampleSize } from "../limits";
+import { mergeJoinFor } from "../mergeEngines";
 
 /**
  * Merge (#17): PDFs and images, in the order given, into one PDF.
@@ -38,7 +39,8 @@ import { predownsampleSize } from "../limits";
  *    for byte as DCTDecode and its EXIF orientation becomes the placement
  *    matrix; a plain PNG's IDAT stream goes in as FlateDecode without being
  *    decoded; everything else is normalised by vips (or libheif) to PNG first.
- * 2. qpdf joins the original PDFs and those image PDFs page by page. It reads
+ * 2. qpdf joins the original PDFs and those image PDFs page by page (the
+ *    engine's join, #18 — see mergeEngines.ts; MuPDF and qpdf both use qpdf's). It reads
  *    each source lazily and writes as it goes, where MuPDF's graft would copy
  *    every stream of every input into memory until the save — a 900 MB merge
  *    on a Pi that shares its 8 GB is the case this is built for.
@@ -336,9 +338,10 @@ async function pdfPages(ctx: TaskContext, item: Item): Promise<number> {
 
 registerHandler("merge", async (ctx) => {
   const { items, output } = optionsOf(ctx.task.params, ctx.inputs);
+  const engine = mergeJoinFor((ctx.task.params as { engine?: unknown } | null)?.engine);
   const title = output.title ?? stem(items[0]!.name);
   const fileName = mergeFileName(title);
-  const notes: string[] = [];
+  const notes: string[] = engine.note ? [engine.note] : [];
   const parts: string[] = [];
   const files: FileEntry[] = [];
   let total = 0;
@@ -375,11 +378,7 @@ registerHandler("merge", async (ctx) => {
 
   ctx.progress("joining", 0, 1, `${total} pages`);
   const joined = join(ctx.workDir, "joined.pdf");
-  await ctx.run("qpdf", ["--warning-exit-0", "--empty", "--pages", ...parts, "--", joined], {
-    label: "qpdf",
-    where: "while joining the files",
-    hint: "Try merging fewer files at once.",
-  });
+  await engine.join(ctx, parts, joined);
 
   ctx.progress("bookmarks", 0, 1);
   const finishSpec = join(ctx.workDir, "finish.json");
