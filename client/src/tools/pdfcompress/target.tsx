@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { RunResult, TargetSize } from "@tools/shared";
 import { Field, Input, Slider } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { bytes } from "@/lib/format";
+import { bytes, parseSize } from "@/lib/format";
 import { PutBack } from "./controls";
 import { DPI_MIN, clampDpi, clampQuality } from "./overrides";
 
@@ -24,25 +24,11 @@ export const SEARCH_DEFAULTS: SearchSettings = { timeBudgetMs: 120_000, qualityF
 
 /** Binary megabytes, the same unit `bytes()` prints, so a typed "10" reads back as "10 MB". */
 const MB = 1024 * 1024;
-const UNITS: Record<string, number> = { b: 1, k: 1024, kb: 1024, m: MB, mb: MB, g: 1024 * MB, gb: 1024 * MB };
 
 const BUDGET_MIN = 15_000;
 const BUDGET_MAX = 600_000;
 const BUDGET_STEP = 15_000;
 const DPI_FLOOR_MAX = 300;
-
-/**
- * `10` / `10.5` / `10,5` / `800 kb` / `1.2G` → bytes; a bare number is MB.
- * `null` for an empty box (no target), `undefined` for anything unreadable.
- */
-export function parseSize(text: string): number | null | undefined {
-  const t = text.trim().toLowerCase().replace(",", ".");
-  if (!t) return null;
-  const m = /^(\d+(?:\.\d*)?|\.\d+)\s*([kmg]?b?|b)?$/.exec(t);
-  if (!m) return undefined;
-  const n = Number(m[1]) * (UNITS[m[2] || "mb"] ?? MB);
-  return Number.isFinite(n) && n >= 1024 ? Math.round(n) : undefined;
-}
 
 /** The box's text for a size: MB with at most two decimals. */
 const draftFor = (n: number | null) => (n === null ? "" : String(Math.round((n / MB) * 100) / 100));

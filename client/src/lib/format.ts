@@ -32,3 +32,19 @@ export const pad = (n: number, width = 2): string => String(n).padStart(width, "
 export function ms(n: number): string {
   return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`;
 }
+
+const MB = 1024 * 1024;
+const SIZE_UNITS: Record<string, number> = { b: 1, k: 1024, kb: 1024, m: MB, mb: MB, g: 1024 * MB, gb: 1024 * MB };
+
+/**
+ * `10` / `10.5` / `10,5` / `800 kb` / `1.2G` → bytes; a bare number is MB.
+ * `null` for an empty box (no target), `undefined` for anything unreadable.
+ */
+export function parseSize(text: string): number | null | undefined {
+  const t = text.trim().toLowerCase().replace(",", ".");
+  if (!t) return null;
+  const m = /^(\d+(?:\.\d*)?|\.\d+)\s*([kmg]?b?|b)?$/.exec(t);
+  if (!m) return undefined;
+  const n = Number(m[1]) * (SIZE_UNITS[m[2] || "mb"] ?? MB);
+  return Number.isFinite(n) && n >= 1024 ? Math.round(n) : undefined;
+}
