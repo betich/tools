@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { FiArrowDown, FiArrowUp } from "react-icons/fi";
 import type { PdfImage } from "@tools/shared";
 import { TextButton } from "@/components/ui";
@@ -27,7 +27,9 @@ const value: Record<SortKey, (i: PdfImage) => number> = {
  *
  * Seams for later tickets: `onSelect`/`selected` make a row pressable for the
  * before/after crop panel (#10), and `override` adds a trailing cell per row
- * for its per-image setting, headed by `overrideLabel`.
+ * for its per-image setting, headed by `overrideLabel`. `detail` draws a
+ * full-width row under the selected one — the crop panel — so it opens where
+ * the eye already is rather than above a long table.
  */
 export function ImageTable({
   images,
@@ -36,6 +38,7 @@ export function ImageTable({
   onSelect,
   override,
   overrideLabel = "override",
+  detail,
   className,
 }: {
   images: PdfImage[];
@@ -45,6 +48,7 @@ export function ImageTable({
   onSelect?: (id: string) => void;
   override?: (image: PdfImage) => ReactNode;
   overrideLabel?: string;
+  detail?: (image: PdfImage) => ReactNode;
   className?: string;
 }) {
   const [sort, setSort] = useState<Sort>({ key: "bytes", desc: true });
@@ -98,36 +102,56 @@ export function ImageTable({
             {shown.map((image) => {
               const on = selected === image.id;
               return (
-                <tr
-                  key={image.id}
-                  onClick={onSelect ? () => onSelect(image.id) : undefined}
-                  aria-selected={onSelect ? on : undefined}
-                  className={cn(
-                    "border-hairline-faint text-label border-b font-mono tabular-nums tracking-normal transition-colors duration-200",
-                    onSelect && "hover:bg-hover-wash cursor-pointer",
-                    on && "bg-surface-high",
-                  )}
-                >
-                  <Cell
-                    className={on ? "text-indigo" : "text-ink"}
-                    title={`pages ${pageRanges(image.pages, Infinity)}`}
+                <Fragment key={image.id}>
+                  <tr
+                    onClick={onSelect ? () => onSelect(image.id) : undefined}
+                    onKeyDown={
+                      onSelect
+                        ? (e) => {
+                            if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+                            e.preventDefault();
+                            onSelect(image.id);
+                          }
+                        : undefined
+                    }
+                    tabIndex={onSelect ? 0 : undefined}
+                    aria-selected={onSelect ? on : undefined}
+                    className={cn(
+                      "border-hairline-faint text-label border-b font-mono tabular-nums tracking-normal transition-colors duration-200",
+                      onSelect &&
+                        "hover:bg-hover-wash focus-visible:outline-indigo cursor-pointer focus-visible:outline-1",
+                      on && "bg-surface-high",
+                    )}
                   >
-                    {pageRanges(image.pages)}
-                  </Cell>
-                  <Cell className="text-label">
-                    {image.width}×{image.height}
-                  </Cell>
-                  <Cell className="text-label text-right">{image.dpi == null ? "—" : Math.round(image.dpi)}</Cell>
-                  <Cell className="text-label" title={image.colorSpace}>
-                    {colourName(image)}
-                  </Cell>
-                  <Cell className="text-label" title={image.filter}>
-                    {codecName(image.filter)}
-                  </Cell>
-                  <Cell className="text-ink text-right">{bytes(image.bytes)}</Cell>
-                  <Cell className="text-meta text-right">{share(image.bytes, total)}</Cell>
-                  {override ? <Cell>{override(image)}</Cell> : null}
-                </tr>
+                    <Cell
+                      className={on ? "text-indigo" : "text-ink"}
+                      title={`pages ${pageRanges(image.pages, Infinity)}`}
+                    >
+                      {pageRanges(image.pages)}
+                    </Cell>
+                    <Cell className="text-label">
+                      {image.width}×{image.height}
+                    </Cell>
+                    <Cell className="text-label text-right">{image.dpi == null ? "—" : Math.round(image.dpi)}</Cell>
+                    <Cell className="text-label" title={image.colorSpace}>
+                      {colourName(image)}
+                    </Cell>
+                    <Cell className="text-label" title={image.filter}>
+                      {codecName(image.filter)}
+                    </Cell>
+                    <Cell className="text-ink text-right">{bytes(image.bytes)}</Cell>
+                    <Cell className="text-meta text-right">{share(image.bytes, total)}</Cell>
+                    {override ? <Cell>{override(image)}</Cell> : null}
+                  </tr>
+                  {on && detail ? (
+                    <tr className="border-hairline-faint border-b">
+                      <td colSpan={override ? 8 : 7} className="p-0">
+                        {/* The table scrolls sideways on a phone; the panel stays pinned to the visible width. */}
+                        <div className="sticky left-0 max-w-[calc(100vw-2rem)]">{detail(image)}</div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
           </tbody>

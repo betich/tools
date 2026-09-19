@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { CompressParams, JobInfo, PdfAnalysis } from "@tools/shared";
+import {
+  defaultCompressParams,
+  type CompressParams,
+  type ImageOverride,
+  type JobInfo,
+  type PdfAnalysis,
+} from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { QueueNotice } from "@/components/QueueNotice";
 import { RetentionNote } from "@/components/RetentionNote";
@@ -10,11 +16,14 @@ import { useToast } from "@/hooks/useToast";
 import { useUpload } from "@/hooks/useUpload";
 import { bytes } from "@/lib/format";
 import { asAnalysis } from "./analysis";
+import { CropPanel } from "./CropPanel";
 import { FontTable } from "./FontTable";
 import { ImageTable } from "./ImageTable";
+import { cropParams, describeOverride, type Box } from "./overrides";
 import { RunResults } from "./RunResults";
 import { describeParams, RunPanel } from "./RunPanel";
 import { SizeBreakdown } from "./SizeBreakdown";
+import { useCrop } from "./useCrop";
 
 /**
  * The open job's id, per tab. A reload re-attaches to it while the server still
@@ -211,8 +220,36 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
   const [picked, setPicked] = useState<string | null>(null);
   const shown = runs.find((t) => t.id === picked) ?? runs[runs.length - 1] ?? null;
 
+  // The settings column's params as they stand, and the per-image overrides laid over them at RUN (#10).
+  const [settings, setSettings] = useState<CompressParams>(() => defaultCompressParams());
+  const [overrides, setOverrides] = useState<Record<string, ImageOverride>>({});
+  const [selected, setSelected] = useState<string | null>(null);
+  const [boxes, setBoxes] = useState<Record<string, Box | null>>({});
+  const held = useHeld();
+
+  const image = (selected && analysis?.images.find((i) => i.id === selected)) || null;
+  const crop = useCrop({
+    jobId: info.id,
+    tasks: info.tasks,
+    params:
+      image && !overrides[image.id]?.skip
+        ? cropParams({ ...settings, overrides }, image.id, boxes[image.id] ?? null)
+        : null,
+    busy,
+    held: held.on,
+  });
+
+  const override = (id: string, o: ImageOverride | null) =>
+    setOverrides((all) => {
+      const next = { ...all };
+      if (o) next[id] = o;
+      else delete next[id];
+      return next;
+    });
+
   const run = useCallback(
-    async (params: CompressParams) => {
+    async (panel: CompressParams) => {
+      const params = { ...panel, overrides };
       const task = await job.addTask({ kind: "compress", params });
       if (!task) return;
       setPicked(null);
@@ -222,8 +259,42 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
         return next;
       });
     },
-    [job],
+    [job, overrides],
   );
+
+  const imageTable = analysis ? (
+    <ImageTable
+      images={analysis.images}
+      total={analysis.bytes}
+      selected={selected}
+      onSelect={(id) => setSelected((s) => (s === id ? null : id))}
+      overrideLabel="override"
+      override={(i) => {
+        const text = describeOverride(overrides[i.id]);
+        return text ? (
+          <span className="text-ink">{text}</span>
+        ) : (
+          <span className="text-meta" aria-label="follows the run">
+            —
+          </span>
+        );
+      }}
+      detail={(i) => (
+        <CropPanel
+          jobId={info.id}
+          image={i}
+          params={settings}
+          override={overrides[i.id]}
+          onOverride={(o) => override(i.id, o)}
+          box={boxes[i.id] ?? null}
+          onBox={(box) => setBoxes((b) => ({ ...b, [i.id]: box }))}
+          crop={crop}
+          onCommitStart={held.hold}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    />
+  ) : null;
 
   return (
     <div className="flex flex-col gap-10">
@@ -240,7 +311,7 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
 
       <div className="grid items-start gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
         <aside className="order-last lg:sticky lg:top-20 lg:order-none lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-1">
-          <RunPanel analysis={analysis} busy={busy} onRun={run} />
+          <RunPanel analysis={analysis} busy={busy} onRun={run} onChange={setSettings} onCommitStart={held.hold} />
         </aside>
 
         <div className="flex min-w-0 flex-col gap-10">
@@ -248,7 +319,7 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
             <RunResults jobId={info.id} runs={runs} labels={labels} input={analysis} shown={shown} onShow={setPicked} />
           ) : null}
           {analysis ? (
-            <Analysis analysis={analysis} />
+            <Analysis analysis={analysis} images={imageTable} />
           ) : analyse ? (
             <Section title="analysis">
               <QueueNotice task={analyse} />
@@ -286,7 +357,7 @@ function Facts({ analysis, size }: { analysis: PdfAnalysis | null; size: number 
 }
 
 /** What the file is carrying, in the order the eye asks: where the bytes go, then the images, then the fonts. */
-function Analysis({ analysis }: { analysis: PdfAnalysis }) {
+function Analysis({ analysis, images }: { analysis: PdfAnalysis; images: ReactNode }) {
   const notes = flagNotes(analysis);
   return (
     <>
@@ -310,9 +381,7 @@ function Analysis({ analysis }: { analysis: PdfAnalysis }) {
         <SizeBreakdown analysis={analysis} />
       </Section>
 
-      <Section title={`images · ${analysis.images.length}`}>
-        <ImageTable images={analysis.images} total={analysis.bytes} />
-      </Section>
+      <Section title={`images · ${analysis.images.length}`}>{images}</Section>
 
       <Section title={`fonts · ${analysis.fonts.length}`}>
         <FontTable fonts={analysis.fonts} />
@@ -345,4 +414,22 @@ function Frame({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+/**
+ * Whether a slider is being dragged. `hold` is the sliders' `onCommitStart`;
+ * the hold lasts until the pointer or key is let go anywhere on the page, so
+ * the before/after crop is asked for once, on release, not once a frame.
+ */
+function useHeld() {
+  const [on, setOn] = useState(false);
+  const hold = useCallback(() => {
+    setOn(true);
+    const release = () => {
+      setOn(false);
+      for (const type of ["pointerup", "pointercancel", "keyup"] as const) window.removeEventListener(type, release);
+    };
+    for (const type of ["pointerup", "pointercancel", "keyup"] as const) window.addEventListener(type, release);
+  }, []);
+  return { on, hold };
 }

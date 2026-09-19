@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FiChevronDown } from "react-icons/fi";
 import {
+  DEFAULT_CODEC,
   PRESET_IDS,
   PRESETS,
   defaultCompressParams,
@@ -13,8 +14,11 @@ import {
   type PdfAnalysis,
   type PresetId,
 } from "@tools/shared";
-import { Button, Section, Sections, Segmented, Toggle } from "@/components/ui";
+import { Button, Field, Section, Sections, Segmented, Toggle } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { CodecSection } from "./CodecSection";
+import { DpiControl, PutBack, QualityControl } from "./controls";
+import { CODEC_SHORT } from "./overrides";
 
 /** What each preset is for, in one line under the picker. */
 const PURPOSE: Record<PresetId, string> = {
@@ -30,14 +34,19 @@ const CONSEQUENCE: Partial<Record<PassId, string>> = {
   grayscale: "Turns colour into shades of grey.",
 };
 
-/** `Ebook · 150 dpi · q75 · grayscale` — a run's settings in one line, for its row in the history. */
+/** `Ebook · 150 dpi · q75 · jpeg 2000 · grayscale · 2 overrides` — a run's settings in one line, for its row in the history. */
 export function describeParams(params: CompressParams): string {
+  const overrides = Object.keys(params.overrides ?? {}).length;
   return [
     PRESETS[params.preset]?.label ?? params.preset,
     params.dpiCap ? `${params.dpiCap} dpi` : "full resolution",
     `q${params.quality}`,
+    params.codec && params.codec !== DEFAULT_CODEC ? (CODEC_SHORT[params.codec] ?? params.codec) : null,
     ...params.advanced.map((p) => passInfo(p)?.verb ?? p),
-  ].join(" · ");
+    overrides ? `${overrides} ${overrides === 1 ? "override" : "overrides"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**
@@ -48,18 +57,31 @@ export function describeParams(params: CompressParams): string {
  * fill it: the engine (#13), the codecs (#10), these opt-ins, then the time
  * budget of a target size (#12). `busy` while the queue holds a task for this
  * job — one at a time per caller — and RUN says why it waits.
+ *
+ * The DPI cap and quality start at the preset's and can be edited (#10);
+ * picking a preset puts them back. `onChange` reports every settings change so
+ * the page can draw the before/after crop under them, and `onCommitStart` is
+ * the sliders' drag start, when the page holds that crop until release.
+ * Per-image overrides live with the image table, not here: the page lays them
+ * over these params.
  */
 export function RunPanel({
   analysis,
   busy,
   onRun,
+  onChange,
+  onCommitStart,
 }: {
   analysis: PdfAnalysis | null;
   busy: boolean;
   onRun?: (params: CompressParams) => void;
+  onChange?: (params: CompressParams) => void;
+  onCommitStart?: () => void;
 }) {
   const [params, setParams] = useState<CompressParams>(() => defaultCompressParams());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => onChange?.(params), [params]); // eslint-disable-line react-hooks/exhaustive-deps -- report changes only
 
   // The preset owns the numbers; the opt-ins and anything later tickets add survive a change of preset.
   const pick = (id: PresetId) =>
@@ -72,7 +94,8 @@ export function RunPanel({
     setParams((p) => ({ ...p, advanced: on ? [...p.advanced, pass] : p.advanced.filter((x) => x !== pass) }));
 
   const optIns = passesIn("advanced");
-  const on = params.advanced.length;
+  const on = params.advanced.length + (params.codec !== DEFAULT_CODEC ? 1 : 0);
+  const preset = PRESETS[params.preset];
 
   return (
     <Sections>
@@ -83,9 +106,44 @@ export function RunPanel({
           options={PRESET_IDS.map((id) => ({ value: id, label: PRESETS[id].label }))}
         />
         <p className="text-prose text-body font-sans normal-case">{PURPOSE[params.preset]}</p>
+        <Field
+          label="downsample above"
+          changed={params.dpiCap !== preset.dpiCap}
+          action={
+            params.dpiCap !== preset.dpiCap ? (
+              <PutBack
+                label={`back to ${preset.dpiCap} dpi`}
+                onClick={() => setParams((p) => ({ ...p, dpiCap: preset.dpiCap }))}
+              />
+            ) : null
+          }
+        >
+          <DpiControl
+            value={params.dpiCap}
+            fallback={preset.dpiCap}
+            onChange={(dpiCap) => setParams((p) => ({ ...p, dpiCap }))}
+            onCommitStart={onCommitStart}
+          />
+        </Field>
+        <Field
+          label="quality"
+          changed={params.quality !== preset.quality}
+          action={
+            params.quality !== preset.quality ? (
+              <PutBack
+                label={`back to ${preset.quality}`}
+                onClick={() => setParams((p) => ({ ...p, quality: preset.quality }))}
+              />
+            ) : null
+          }
+        >
+          <QualityControl
+            value={params.quality}
+            onChange={(quality) => setParams((p) => ({ ...p, quality }))}
+            onCommitStart={onCommitStart}
+          />
+        </Field>
         <dl className="flex flex-col">
-          <Fact label="images above" value={params.dpiCap ? `${params.dpiCap} dpi` : "kept"} />
-          <Fact label="quality" value={String(params.quality)} />
           <Fact label="metadata" value={params.stripMetadata ? "stripped" : "kept"} />
         </dl>
       </Section>
@@ -131,6 +189,11 @@ export function RunPanel({
         {advancedOpen ? (
           <div className="flex flex-col gap-6">
             {/* #13 engine picker goes first, then #10 codecs, above the opt-ins. */}
+            <CodecSection
+              engine={params.engine}
+              codec={params.codec}
+              onChange={(codec) => setParams((p) => ({ ...p, codec }))}
+            />
             <div className="flex flex-col gap-4">
               <span className="text-meta text-meta font-mono uppercase">changes the document</span>
               {optIns.map((pass) => {
