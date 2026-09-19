@@ -35,6 +35,7 @@ const BATCH_TIMEOUT_MS = 60_000;
 /** qpdf reads only the xref and the page tree, but a 1 GB file is still a read. */
 const COUNT_TIMEOUT_MS = 30_000;
 
+/** Where the API keeps uploads, one directory each. The lane takes it as a parameter so tests can point it elsewhere. */
 const UPLOADS = join(env.jobsDir, "uploads");
 
 /**
@@ -163,8 +164,8 @@ const knownPages = (uploadId: string) =>
     ?.pages ?? null;
 
 /** Counts the pages unless that is done, then draws page 1 unless it is already there. */
-async function drawFirst(uploadId: string): Promise<void> {
-  const dir = join(UPLOADS, uploadId);
+async function drawFirst(uploads: string, uploadId: string): Promise<void> {
+  const dir = join(uploads, uploadId);
   const pdf = join(dir, "file");
   const png = join(dir, THUMBNAIL_FILE);
   let ok = false;
@@ -187,8 +188,8 @@ async function drawFirst(uploadId: string): Promise<void> {
 }
 
 /** Draws one batch of page thumbnails. The API queues one only once the count is known. */
-async function drawBatch(uploadId: string, batch: number): Promise<void> {
-  const dir = join(UPLOADS, uploadId);
+async function drawBatch(uploads: string, uploadId: string, batch: number): Promise<void> {
+  const dir = join(uploads, uploadId);
   let ok = false;
   try {
     const pages = knownPages(uploadId) ?? 0;
@@ -217,15 +218,15 @@ async function drawBatch(uploadId: string, batch: number): Promise<void> {
  * a file's first page and count are what the merge list waits on and each is
  * one cheap render. Returns false when there was nothing to do.
  */
-export async function drawNext(): Promise<boolean> {
+export async function drawNext(uploads: string = UPLOADS): Promise<boolean> {
   const first = claimFirst();
   if (first) {
-    await drawFirst(first);
+    await drawFirst(uploads, first);
     return true;
   }
   const batch = claimBatch();
   if (batch) {
-    await drawBatch(batch.upload_id, batch.batch);
+    await drawBatch(uploads, batch.upload_id, batch.batch);
     return true;
   }
   return false;
