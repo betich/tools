@@ -12,3 +12,16 @@ export type UploadSession = { id: string; partSize: number; parts: number };
 export type UploadStatus = UploadSession & { received: number[]; complete: boolean };
 /** POST /api/pdf/uploads/:id/complete → 200. Also returned by GET once complete. */
 export type UploadedFile = { id: string; name: string; size: number; kind: UploadKind };
+
+/**
+ * Page view (#37): per-page thumbnails of a PDF upload. The worker draws them
+ * in batches of PAGE_THUMB_BATCH (page n is in batch ⌊(n−1)/B⌋), each at most
+ * PAGE_THUMB_EDGE px on its long side — a grid tile is ~100 CSS px, so this is
+ * sharp at 2×. The API, the worker and the client all key on these.
+ */
+export const PAGE_THUMB_BATCH = 24;
+export const PAGE_THUMB_EDGE = 200;
+/** 0-based batch holding 1-based `page`. */
+export const pageThumbBatch = (page: number) => Math.floor((page - 1) / PAGE_THUMB_BATCH);
+/** GET /api/pdf/uploads/:id/pages → 200. The count qpdf gives, the same one Merge uses. */
+export type PdfPageCount = { pages: number };
