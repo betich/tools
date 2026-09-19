@@ -103,6 +103,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS pdf_tasks_queue ON pdf_tasks(state, priority, created_at);
   CREATE INDEX IF NOT EXISTS pdf_tasks_job ON pdf_tasks(job_id);
 
+  -- First-page thumbnails of PDF uploads (#17), drawn by the worker's priority
+  -- lane next to the upload (uploads/<id>/thumbnail.png). No job needed.
+  CREATE TABLE IF NOT EXISTS pdf_thumbnails (
+    upload_id    TEXT PRIMARY KEY REFERENCES uploads(id) ON DELETE CASCADE,
+    state        TEXT NOT NULL,
+    requested_at INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+  );
+
   -- Written every few seconds by the pdf-worker container (worker/src/heartbeat.ts).
   CREATE TABLE IF NOT EXISTS worker_heartbeat (
     id         INTEGER PRIMARY KEY CHECK (id = 1),

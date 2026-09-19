@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  DEFAULT_MERGE_OUTPUT,
   DEFAULT_MERGE_ITEM,
   imageDpi,
   type ImageDpi,
@@ -240,5 +241,6 @@ export function mergeParams(entries: MergeEntry[]): MergeParams | null {
     if (e.upload.phase !== "done") return null;
     items.push({ upload: e.upload.result.id, name: e.file.name, kind: e.upload.result.kind, layout: e.layout });
   }
-  return { items };
+  // Output options arrive with the #17 frontend; until then the defaults.
+  return { items, output: DEFAULT_MERGE_OUTPUT };
 }

@@ -141,10 +141,11 @@ export const ANALYSIS_TIMEOUT_MS = 2 * 60_000;
  * (checked against 1.25), gs "VMerror", vips "out of memory"/"memory
  * allocation failed", C++ `std::bad_alloc`, Python `MemoryError`, Bun/V8
  * "out of memory" — and under a cap too small to load the tool at all, the
- * dynamic loader's "failed to map segment from shared object".
+ * dynamic loader's "failed to map segment from shared object". vips (glib)
+ * says "Error creating thread" when the cap leaves no room for a thread's stack.
  */
 const OOM_TEXT =
-  /out of memory|cannot allocate memory|malloc\b[^\n]*\bfailed|failed to allocate|allocation failed|memory allocation|bad_alloc|VMerror|MemoryError|ENOMEM|failed to map segment/i;
+  /out of memory|cannot allocate memory|malloc\b[^\n]*\bfailed|failed to allocate|allocation failed|memory allocation|bad_alloc|VMerror|MemoryError|ENOMEM|failed to map segment|error creating thread/i;
 
 /** Whether a finished child ran out of memory, judged by its signal and stderr. */
 export function ranOutOfMemory(r: { code: number | null; signal: string | null; timedOut: boolean; aborted: boolean; stderr: string }): boolean {

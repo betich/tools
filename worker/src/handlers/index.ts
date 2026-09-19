@@ -4,3 +4,5 @@
  * merge and thumbnail) adds its line here.
  */
 import "./analyse";
+import "./merge";
+import "./thumbnail";

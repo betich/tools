@@ -84,6 +84,9 @@ export function registerHandler(kind: TaskKind, handler: Handler): void {
   handlers.set(kind, handler);
 }
 
+/** The handler registered for a kind — for tests that drive one without the queue. */
+export const handlerFor = (kind: TaskKind): Handler | undefined => handlers.get(kind);
+
 /**
  * A download name built like `fileNameFor`: letters, digits and marks of any
  * script survive, so a Thai file name stays Thai.
