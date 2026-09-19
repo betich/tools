@@ -11,6 +11,10 @@ import { bytes } from "@/lib/format";
 import { budgetFor, correctedBitrate, outcome, type Outcome } from "./video/budget";
 import { EditSection, OutputSection } from "./video/Controls";
 import type { ExportProgress } from "./video/export";
+import { createKeyer } from "./video/key/keyer";
+import { KeySection } from "./video/key/KeySection";
+import { ALPHA_PLAYBACK_NOTE } from "./video/key/settings";
+import { keyExportBlocker, useKey } from "./video/key/useKey";
 import { Preview } from "./video/Preview";
 import { decodeNote, exportBlocker, NO_WEBCODECS_DECODE, saveNote } from "./video/probe";
 import {
@@ -135,6 +139,7 @@ function Editor({
     output: source.hasVideo ? "video" : "audio",
   }));
   const edit = history.value;
+  const key = useKey(edit, (next) => history.set(next(history.value)));
   const [cropAspect, setCropAspect] = useState("none");
   const [job, setJob] = useState<Job>({ phase: "idle" });
   const busy = job.phase === "running";
@@ -181,7 +186,10 @@ function Editor({
 
   const [targetBytes, setTargetBytes] = useState<number | null>(null);
   const budget = budgetFor(edit, source, caps?.containerAudio ?? null, targetBytes);
-  const blocker = exportBlocker(edit, source, caps) ?? (budget && !budget.ok ? budget.reason : null);
+  const blocker =
+    keyExportBlocker(edit, caps) ??
+    exportBlocker(edit, source, caps) ??
+    (budget && !budget.ok ? budget.reason : null);
   const summary = editSummary(edit, source);
   const name = outputName(file.name, edit);
   const notes = [
@@ -207,6 +215,8 @@ function Editor({
     const toDisk = target.kind === "stream";
     setJob({ phase: "running", progress: null, stop: () => controller.abort(), toDisk });
     const aim = budget?.ok ? { ...budget, videoBitrate: retryBitrate ?? budget.videoBitrate } : null;
+    // Its own GL context, so the preview can repaint while the export draws.
+    const keyer = edit.output === "video" && edit.key.enabled ? createKeyer() : null;
     try {
       // Mediabunny and the pipeline load on the first export, not with the tab.
       const { exportVideo } = await import("./video/export");
@@ -217,6 +227,7 @@ function Editor({
         target,
         videoBitrate: aim?.videoBitrate,
         audio: aim?.audio,
+        frameHook: keyer?.hookFor(edit.key),
         signal: controller.signal,
         onProgress: (progress) => setJob((j) => (j.phase === "running" ? { ...j, progress } : j)),
       });
@@ -232,7 +243,8 @@ function Editor({
                   : null,
             }
           : null;
-      setJob({ phase: "done", name, bytes: result.bytes, notes: result.notes, toDisk, target: targetDone });
+      const notes = keyer ? [...result.notes, ALPHA_PLAYBACK_NOTE] : result.notes;
+      setJob({ phase: "done", name, bytes: result.bytes, notes, toDisk, target: targetDone });
       onDone(toDisk ? `${name} saved` : `${name} downloaded`);
     } catch (e) {
       if (e instanceof ExportCanceled) setJob({ phase: "idle" });
@@ -241,6 +253,8 @@ function Editor({
           phase: "failed",
           message: e instanceof ExportError ? e.message : "The export stopped for a reason this browser didn't give.",
         });
+    } finally {
+      keyer?.dispose();
     }
   };
 
@@ -277,6 +291,7 @@ function Editor({
           />
         ) : null}
         <EditSection {...controls} />
+        <KeySection {...controls} file={file} picking={key.picking} onPicking={key.setPicking} />
       </aside>
 
       <div className="flex min-w-0 flex-col gap-6">
@@ -294,6 +309,8 @@ function Editor({
           cropAspect={aspectRatio}
           onCrop={setCrop}
           onGestureStart={history.snapshot}
+          frameHook={key.frameHook}
+          onPick={key.onPick}
         />
 
         <Timeline
@@ -334,12 +351,11 @@ function Editor({
           onRetry={(bitrate) => void run(bitrate)}
         />
 
-        {/* frameHook: the tab's active hook (the chroma keyer, #30), once there is one. */}
         <SendToGif
           file={file}
           source={source}
           edit={edit}
-          frameHook={null}
+          frameHook={key.frameHook}
           disabled={busy}
           onStart={() => playback.setPlaying(false)}
         />

@@ -77,15 +77,15 @@ export async function framesForGif(req: SendRequest): Promise<IncomingFrame[]> {
         });
       }
       // Copied at once: the hook and the sink may both reuse their canvases.
-      made.push(
-        picture === null
-          ? null
-          : {
-              image: await createImageBitmap(picture as ImageBitmapSource),
-              name: gifFrameName(req.name, index, times.length),
-              delay: 0,
-            },
-      );
+      let image: ImageBitmap | null = null;
+      try {
+        if (picture !== null) image = await createImageBitmap(picture as ImageBitmapSource);
+      } finally {
+        // A VideoFrame from the hook (the keyer's) is ours to close.
+        if (picture !== wrapped.canvas && typeof VideoFrame !== "undefined" && picture instanceof VideoFrame)
+          picture.close();
+      }
+      made.push(image === null ? null : { image, name: gifFrameName(req.name, index, times.length), delay: 0 });
       req.onProgress?.(index + 1, times.length);
     }
     if (signal?.aborted) throw new SendCanceled();
