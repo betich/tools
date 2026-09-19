@@ -3,8 +3,13 @@ import { extname, join } from "node:path";
 import { Elysia, t } from "elysia";
 import {
   MAX_QUEUED_TASKS,
+  NEEDS_PASSWORD,
+  signatureGuard,
+  WRONG_PASSWORD,
+  type CompressParams,
   type JobEvent,
   type JobInfo,
+  type PdfAnalysis,
   type PdfTool,
   type TaskInfo,
   type TaskKind,
@@ -15,7 +20,8 @@ import {
 } from "@tools/shared";
 import { env, paths } from "../env";
 import { db, id } from "../lib/db";
-import { clientIp, DISK_FULL, diskHasRoom, rateLimit, refuse } from "../lib/limits";
+import { clientIp, DISK_FULL, diskHasRoom, guessesLeft, rateLimit, refuse, wrongGuess } from "../lib/limits";
+import { checkPdfPassword } from "../lib/pdfPassword";
 import { workerStatus } from "../lib/worker";
 import { completedUpload, dropUpload } from "./pdf-uploads";
 
@@ -32,7 +38,8 @@ import { completedUpload, dropUpload } from "./pdf-uploads";
  * files are served, so a partial output can never be downloaded.
  */
 
-type JobRow = { id: string; tool: PdfTool; caller: string; touched_at: number; created_at: number };
+/** `password` is an encrypted input's (#15), set by unlock and read by the worker; it never leaves the server. */
+type JobRow = { id: string; tool: PdfTool; caller: string; touched_at: number; created_at: number; password: string | null };
 type TaskRow = {
   id: string;
   job_id: string;
@@ -115,9 +122,12 @@ function inputsOf(jobId: string): UploadedFile[] {
     .flatMap((u) => (u.kind ? [{ id: u.id, name: u.name, size: u.bytes, kind: u.kind }] : []));
 }
 
+/** The newest finished analysis — after an unlock, the one read with the password. */
+const latestAnalysis = (rows: TaskRow[]) => rows.filter((r) => r.kind === "analyse" && r.state === "done").pop();
+
 function jobInfo(job: JobRow, order = queueOrder()): JobInfo {
   const tasks = taskRows.all(job.id);
-  const analysed = tasks.filter((r) => r.kind === "analyse" && r.state === "done").pop();
+  const analysed = latestAnalysis(tasks);
   return {
     id: job.id,
     tool: job.tool,
@@ -224,7 +234,8 @@ type Watcher = {
   caller: string;
   /** The last TaskInfo JSON sent per task, to send only changes. */
   sent: Map<string, string>;
-  analysed: boolean;
+  /** The analyse task whose result the last snapshot carried; a newer one (after an unlock) sends a fresh snapshot. */
+  analysis: string | null;
   lastWrite: number;
   write(chunk: string): void;
   close(): void;
@@ -241,7 +252,7 @@ const frame = (event: JobEvent) => `event: ${event.type}\ndata: ${JSON.stringify
 function sendSnapshot(w: Watcher, job: JobInfo): void {
   w.write(frame({ type: "job", job }));
   w.sent = new Map(job.tasks.map((task) => [task.id, JSON.stringify(task)]));
-  w.analysed = job.analysis !== null;
+  w.analysis = latestAnalysis(taskRows.all(job.id))?.id ?? null;
 }
 
 function poll(): void {
@@ -264,10 +275,10 @@ function poll(): void {
       continue;
     }
     const rows = taskRows.all(jobId);
-    const analysed = rows.some((r) => r.kind === "analyse" && r.state === "done");
+    const analysed = latestAnalysis(rows)?.id ?? null;
     for (const w of list) {
       // The analysis lands on the job itself, so it goes out as a fresh snapshot.
-      if (analysed && !w.analysed) {
+      if (analysed !== w.analysis) {
         sendSnapshot(w, jobInfo(job, order));
         continue;
       }
@@ -292,7 +303,7 @@ function openStream(job: JobRow, caller: string, abort: AbortSignal): Response {
         jobId: job.id,
         caller,
         sent: new Map(),
-        analysed: false,
+        analysis: null,
         lastWrite: Date.now(),
         write(chunk) {
           try {
@@ -445,6 +456,13 @@ export const pdfJobs = new Elysia({ prefix: "/api/pdf/jobs" })
       const inputs = inputsOf(job.id);
       const want = db.query<{ n: number }, [string]>("SELECT COUNT(*) AS n FROM pdf_job_inputs WHERE job_id = ?").get(job.id)?.n;
       if (inputs.length !== want) return refuse(set, 410, INPUT_GONE);
+      if (body.kind === "compress") {
+        // Refused here so the dialog comes up at once; the worker checks again in case the analysis landed later.
+        const analysis = parse<PdfAnalysis>(latestAnalysis(taskRows.all(job.id))?.result ?? null);
+        if (analysis?.locked) return refuse(set, 400, NEEDS_PASSWORD);
+        const signature = signatureGuard(body.params as Partial<CompressParams> | null, analysis);
+        if (signature) return refuse(set, 400, signature);
+      }
       const bytes = inputs.reduce((sum, u) => sum + u.size, 0);
       if (!(await diskHasRoom(paths.jobs, bytes * 2))) return refuse(set, 507, DISK_FULL);
 
@@ -463,6 +481,47 @@ export const pdfJobs = new Elysia({ prefix: "/api/pdf/jobs" })
         params: t.Unknown(),
       }),
       beforeHandle: rateLimit("pdf-task", 30),
+    },
+  )
+  .post(
+    "/:id/unlock",
+    async (ctx) => {
+      const { body, params, set } = ctx;
+      const job = jobRow(params.id);
+      if (!job) return refuse(set, 404, EXPIRED);
+      // Failures count per caller and per job, like a locked project's password.
+      const limited = guessesLeft(ctx, `pdf-job:${job.id}`);
+      if (limited) return limited;
+      const rows = taskRows.all(job.id);
+      if (rows.some((r) => r.kind === "analyse" && (r.state === "queued" || r.state === "running"))) {
+        return refuse(set, 409, "The file is still being read — try again in a moment.");
+      }
+      const analysis = parse<PdfAnalysis>(latestAnalysis(rows)?.result ?? null);
+      if (!analysis?.locked) return refuse(set, 400, "This file isn't locked.");
+      const input = inputsOf(job.id)[0];
+      const upload = input ? completedUpload(input.id) : null;
+      if (!upload) return refuse(set, 410, INPUT_GONE);
+
+      // "unknown" (a handler we cannot check here) goes to the worker, whose analysis stays locked if it was wrong.
+      if ((await checkPdfPassword(upload.path, body.password)) === "wrong") {
+        wrongGuess(ctx, `pdf-job:${job.id}`);
+        return refuse(set, 400, WRONG_PASSWORD);
+      }
+      const caller = clientIp(ctx);
+      const queued = db.transaction((): Refusal | null => {
+        const refusal = admission(caller);
+        if (refusal) return refusal;
+        db.run("UPDATE pdf_jobs SET password = ? WHERE id = ?", [body.password, job.id]);
+        enqueue(job.id, "analyse", null, caller);
+        return null;
+      })();
+      if (queued) return refuse(set, queued.status, queued.error);
+      touch(job.id);
+      return jobInfo({ ...job, touched_at: Date.now() });
+    },
+    {
+      body: t.Object({ password: t.String({ minLength: 1, maxLength: 1024 }) }),
+      beforeHandle: rateLimit("pdf-unlock", 30),
     },
   )
   .get(

@@ -4,6 +4,7 @@
  *
  *   mutool run analyse.js <in.pdf> <out.json> <progress.txt> <fileBytes>
  *                         <maxPages> <maxBytesRead> <maxObjects> <deadlineEpochMs>
+ *                         [<passwordFile>]
  *
  * MuPDF 1.25 runs this under MuJS: ES5, strict mode, no let/const/arrows.
  * `print` goes to stdout and a NUL would truncate it, so the result is written
@@ -38,6 +39,10 @@
  *
  * Caps (pages, stream bytes read, objects, wall clock) stop a walk early and
  * set `truncated`; everything counted so far is still reported.
+ *
+ * An encrypted file is opened with the password in <passwordFile> (its first
+ * line; a file, so the password never shows in a process list). Without the
+ * right one it is `locked` and only the dictionaries can be read.
  */
 
 var args = scriptArgs;
@@ -45,6 +50,7 @@ var IN = args[0], OUT = args[1], PROGRESS = args[2];
 var FILE_BYTES = Number(args[3]);
 var MAX_PAGES = Number(args[4]), MAX_READ = Number(args[5]), MAX_OBJECTS = Number(args[6]);
 var DEADLINE = Number(args[7]);
+var PASSWORD_FILE = args[8] || "";
 
 var truncated = false;
 var bytesRead = 0;
@@ -119,7 +125,15 @@ try {
 }
 
 var locked = false;
-if (pdf.needsPassword()) locked = !pdf.authenticatePassword("");
+if (pdf.needsPassword()) {
+  var password = "";
+  if (PASSWORD_FILE) {
+    try {
+      password = read(PASSWORD_FILE).split(/\r?\n/)[0];
+    } catch (e) {}
+  }
+  locked = !password || !pdf.authenticatePassword(password);
+}
 
 var version = "";
 try {
@@ -413,6 +427,31 @@ function placementDpi(img, m) {
   return Math.min((img.getWidth() * 72) / ex, (img.getHeight() * 72) / ey);
 }
 
+// A signature's /V often has no /Name (mutool sign, most signing tools put
+// the signer only in the certificate). The widget can read the certificate's
+// distinguished name, so pages with a signed field are asked for theirs.
+var signatories = {}; // field object num → common name from the certificate
+function noteSignatories(page, pageObj) {
+  var any = false;
+  each(get(pageObj, "Annots"), function (a) {
+    if (nameOf(get(a, "FT")) === "Sig" || nameOf(get(get(a, "Parent"), "FT")) === "Sig") any = true;
+  });
+  if (!any) return;
+  try {
+    page.getWidgets().forEach(function (w) {
+      if (w.getFieldType() !== "signature" || !w.isSigned()) return;
+      var dn = String(w.getSignatory() || "");
+      var cn = /(?:^|,\s*)cn=([^,]+)/i.exec(dn);
+      var who = (cn ? cn[1] : "").trim();
+      if (!who) return;
+      var obj = w.getObject();
+      signatories[refNum(obj)] = who;
+      var parent = get(obj, "Parent");
+      if (parent) signatories[refNum(parent)] = who;
+    });
+  } catch (e) {}
+}
+
 var walked = 0;
 var pagesToWalk = locked ? 0 : Math.min(pageCount, MAX_PAGES);
 if (pageCount > MAX_PAGES || locked) truncated = true;
@@ -435,6 +474,7 @@ for (var p = 0; p < pagesToWalk; p++) {
         collect(get(form, "Resources"), found, seen, 1);
       });
     });
+    noteSignatories(page, pageObj);
     var c = get(pageObj, "Contents");
     if (c && c.isArray()) each(c, function (part) { bytesRead += streamBytes(refNum(part)); });
     else bytesRead += streamBytes(refNum(c));
@@ -495,6 +535,7 @@ function sigFields(field, inheritedFT, depth) {
     if (signed === null) signed = [];
     var who = get(v, "Name");
     var name = who && who.isString() ? who.asString().trim() : "";
+    if (!name) name = signatories[refNum(field)] || "";
     if (name && signed.indexOf(name) < 0) signed.push(name);
   }
   each(get(field, "Kids"), function (kid) {

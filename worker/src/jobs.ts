@@ -41,7 +41,8 @@ export type RunOptions = {
 
 export type TaskContext = {
   task: { id: string; kind: TaskKind; params: unknown };
-  job: { id: string; tool: PdfTool };
+  /** `password` is an encrypted input's, set by `POST /jobs/:id/unlock` (#15); null until then. */
+  job: { id: string; tool: PdfTool; password: string | null };
   /** The job's uploads, in order. */
   inputs: TaskInput[];
   /** The job's latest finished analysis (`PdfAnalysis`, #8), if any. */
@@ -252,14 +253,16 @@ async function runTask(row: TaskRow): Promise<void> {
     if (!handler) throw new TaskError("This step is not available on the server yet.");
     const inputs = inputsOf(row.job_id);
     if (!inputs) throw new TaskError("The uploaded file has expired — upload it again.");
-    const job = db.query<{ tool: PdfTool }, [string]>("SELECT tool FROM pdf_jobs WHERE id = ?").get(row.job_id);
+    const job = db
+      .query<{ tool: PdfTool; password: string | null }, [string]>("SELECT tool, password FROM pdf_jobs WHERE id = ?")
+      .get(row.job_id);
     if (!job) throw new Discarded();
     await mkdir(partDir, { recursive: true });
     await mkdir(workDir, { recursive: true });
 
     const ctx: TaskContext = {
       task: { id: row.id, kind: row.kind, params: JSON.parse(row.params) },
-      job: { id: row.job_id, tool: job.tool },
+      job: { id: row.job_id, tool: job.tool, password: job.password },
       inputs,
       analysis: analysisOf(row.job_id),
       outDir: partDir,

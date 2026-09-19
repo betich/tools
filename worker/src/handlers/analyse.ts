@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { PdfAnalysis, PdfFont, PdfImage, SizeCategory } from "@tools/shared";
+import { UNNAMED_SIGNER, type PdfAnalysis, type PdfFont, type PdfImage, type SizeCategory } from "@tools/shared";
 import { registerHandler, TaskError } from "../jobs";
 import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_OBJECTS, ANALYSIS_MAX_PAGES, ANALYSIS_TIMEOUT_MS } from "../limits";
+import { passwordFile, repairCount } from "../special";
 
 /**
  * The compress workbench's first view: where a PDF's bytes go (images, fonts,
@@ -10,6 +11,11 @@ import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_OBJECTS, ANALYSIS_MAX_PAGES, ANAL
  * `worker/scripts/analyse.js` under `mutool run` — its header explains how
  * bytes are attributed and how effective DPI is measured. This side runs it,
  * relays its progress file, and hands the result on in the contract's shape.
+ *
+ * An encrypted file is read with the job's password once `unlock` has set it
+ * (#15); without it the result is `locked`, with empty inventories rather
+ * than whatever the dictionaries happened to show. A file MuPDF had to repair
+ * gets a real count of broken objects from qpdf (`repairCount`).
  */
 
 const SCRIPT = join(import.meta.dir, "../../scripts/analyse.js");
@@ -22,9 +28,10 @@ const CATEGORIES: SizeCategory[] = ["images", "fonts", "content", "metadata", "o
 /** What the script writes: the contract's fields plus a couple of its own. */
 type ScriptOutput = PdfAnalysis & { error?: string; message?: string; locked?: boolean };
 
-registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
+registerHandler("analyse", async ({ job, inputs, workDir, progress, run }) => {
   const input = inputs[0];
   if (!input) throw new Error("analyse needs one input");
+  const pwFile = job.password ? await passwordFile(workDir, job.password) : null;
   const out = join(workDir, "analysis.json");
   const progressFile = join(workDir, "progress.txt");
   const deadline = Date.now() + ANALYSIS_TIMEOUT_MS * SOFT_DEADLINE;
@@ -50,6 +57,7 @@ registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
         String(ANALYSIS_MAX_BYTES_READ),
         String(ANALYSIS_MAX_OBJECTS),
         String(deadline),
+        ...(pwFile ? [pwFile] : []),
       ],
       { timeoutMs: ANALYSIS_TIMEOUT_MS, label: "The analysis", where: "while reading the file" },
     );
@@ -64,6 +72,10 @@ registerHandler("analyse", async ({ inputs, workDir, progress, run }) => {
     throw new TaskError("The analysis could not read this file.");
   }
   if (raw.error) throw new TaskError("This file could not be opened as a PDF.");
+  if (raw.flags?.repaired) {
+    progress("checking the repair", 0, 0);
+    raw.flags.repaired = await repairCount(run, input.path, pwFile);
+  }
   return { result: shape(raw, input.size) };
 });
 
@@ -101,6 +113,22 @@ function shape(raw: ScriptOutput, size: number): PdfAnalysis {
     bytes: f.bytes,
   }));
   const flags: Partial<PdfAnalysis["flags"]> = raw.flags ?? {};
+  // A signature field with a value but no name we could read still names someone in the dialog.
+  const signed = flags.signed ? (flags.signed.length ? flags.signed : [UNNAMED_SIGNER]) : null;
+  if (raw.locked) {
+    // Strings and streams are still ciphertext: signer names and XMP wait for the password too.
+    return {
+      bytes: size,
+      pages: 0,
+      version: raw.version ?? "",
+      breakdown: Object.fromEntries(CATEGORIES.map((c) => [c, 0])) as Record<SizeCategory, number>,
+      images: [],
+      fonts: [],
+      flags: { encrypted: true, signed: null, pdfa: null, tagged: !!flags.tagged, repaired: flags.repaired ?? 0 },
+      truncated: false,
+      locked: true,
+    };
+  }
   return {
     bytes: size,
     pages: raw.pages ?? 0,
@@ -110,7 +138,7 @@ function shape(raw: ScriptOutput, size: number): PdfAnalysis {
     fonts,
     flags: {
       encrypted: !!flags.encrypted,
-      signed: flags.signed ?? null,
+      signed,
       pdfa: flags.pdfa ?? null,
       tagged: !!flags.tagged,
       repaired: flags.repaired ?? 0,

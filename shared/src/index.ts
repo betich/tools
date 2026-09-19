@@ -10,3 +10,4 @@ export * from "./worker";
 export * from "./pageLayout";
 export * from "./pdfjobs";
 export * from "./pdfcompress";
+export * from "./pdfspecial";

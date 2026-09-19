@@ -35,5 +35,26 @@ gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dEmbedAllFonts=true -dSubsetF
 # Encrypted with a user password: nothing past the dictionaries can be read.
 qpdf --encrypt --user-password=secret --owner-password=owner --bits=256 -- deck.pdf locked.pdf
 
-rm -f ./*.v photo.jpg alpha.png page.jpg
+# #15 special inputs.
+# Signed for real: a self-signed certificate (CN "Test Signer"), and a field
+# `mutool sign` fills. The signer's name lives only in the certificate.
+mutool run "$here/special.js" sigfield sigfield.pdf
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 3650 \
+  -subj "/CN=Test Signer/O=Fixtures" 2>/dev/null
+openssl pkcs12 -export -inkey key.pem -in cert.pem -out cert.pfx -passout pass:fixture
+field=$(mutool show sigfield.pdf grep | sed -n 's/^\([0-9]*\) 0 obj.*\/FT\/Sig.*/\1/p' | head -n 1)
+mutool sign -s cert.pfx -P fixture -o signed.pdf sigfield.pdf "$field" >/dev/null
+# PDF/A-2b as Ghostscript writes it (XMP identification in attribute form).
+gs -q -dSAFER -dBATCH -dNOPAUSE -dPDFA=2 -dPDFACompatibilityPolicy=1 -sColorConversionStrategy=RGB \
+  -sDEVICE=pdfwrite -o pdfa.pdf sigfield.pdf
+mutool run "$here/special.js" tagged tagged.pdf
+# Damaged twice over: every xref offset shifted by junk after the header (the
+# objects are fine), and the file cut off mid-object (they are not).
+head -c 15 sigfield.pdf > shifted.pdf
+printf '%%junkjunkjunk\n' >> shifted.pdf
+tail -c +16 sigfield.pdf >> shifted.pdf
+size=$(wc -c < sigfield.pdf)
+head -c $((size * 6 / 10)) sigfield.pdf > truncated.pdf
+
+rm -f ./*.v photo.jpg alpha.png page.jpg key.pem cert.pem cert.pfx
 ls -l ./*.pdf
