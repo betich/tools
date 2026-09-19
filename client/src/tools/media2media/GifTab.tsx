@@ -5,6 +5,7 @@ import { TextButton } from "@/components/ui";
 import { useToast } from "@/hooks/useToast";
 import { CodecPool, IMAGE_ACCEPT } from "@/lib/codecs";
 import { cn } from "@/lib/cn";
+import { ExportPanel } from "./gif/ExportPanel";
 import { canvasSize, playDuration, playOrder, timelineTime } from "./gif/model";
 import { Preview } from "./gif/Preview";
 import { gifSession, useGifSession } from "./gif/session";
@@ -80,7 +81,12 @@ export function GifTab() {
             </span>
           </p>
         </div>
-        <Settings doc={doc} session={session} />
+        <div className="flex flex-col gap-7">
+          <Settings doc={doc} session={session} />
+          <div className="border-hairline-faint border-t pt-7">
+            <ExportPanel doc={doc} store={session.store} />
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">
