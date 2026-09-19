@@ -243,6 +243,7 @@ const ROUTES: Record<string, string> = {
   "POST /api/pdf/jobs": "Opened a PDF job",
   "DELETE /api/pdf/jobs/:id": "Discarded a PDF job",
   "POST /api/pdf/jobs/:id/tasks": "Ran a PDF task",
+  "POST /api/pdf/jobs/:id/handoff": "Sent a merge to Compress",
   "GET /api/pdf/jobs/:id/result": "Downloaded a PDF result",
   "GET /api/pdf/worker": "Checked the PDF worker",
 };

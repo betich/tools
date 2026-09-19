@@ -23,7 +23,7 @@ import { db, id } from "../lib/db";
 import { clientIp, DISK_FULL, diskHasRoom, guessesLeft, rateLimit, refuse, wrongGuess } from "../lib/limits";
 import { checkPdfPassword } from "../lib/pdfPassword";
 import { workerStatus } from "../lib/worker";
-import { completedUpload, dropUpload } from "./pdf-uploads";
+import { adoptUpload, completedUpload, dropUpload } from "./pdf-uploads";
 
 /**
  * PDF job sessions (#6). A job holds a caller's uploads, the analysis and
@@ -178,6 +178,26 @@ function enqueue(jobId: string, kind: TaskKind, params: unknown, caller: string)
     [taskId, jobId, kind, JSON.stringify(params ?? null), PRIORITY[kind], caller, now, now],
   );
   return db.query<TaskRow, [string]>("SELECT * FROM pdf_tasks WHERE id = ?").get(taskId)!;
+}
+
+/**
+ * A new job over completed uploads, admitted like a task: creating one
+ * queues work (a compress job's analysis) or is about to, so the queue rules
+ * apply here too.
+ */
+function createJob(tool: PdfTool, inputs: { id: string }[], caller: string): JobRow | Refusal {
+  return db.transaction((): JobRow | Refusal => {
+    const refusal = admission(caller);
+    if (refusal) return refusal;
+    const jobId = id("job");
+    const now = Date.now();
+    db.run("INSERT INTO pdf_jobs (id, tool, caller, touched_at, created_at) VALUES (?, ?, ?, ?, ?)", [jobId, tool, caller, now, now]);
+    inputs.forEach((u, position) =>
+      db.run("INSERT INTO pdf_job_inputs (job_id, position, upload_id) VALUES (?, ?, ?)", [jobId, position, u.id]),
+    );
+    if (tool === "compress") enqueue(jobId, "analyse", null, caller);
+    return db.query<JobRow, [string]>("SELECT * FROM pdf_jobs WHERE id = ?").get(jobId)!;
+  })();
 }
 
 // ── discarding and sweeping ────────────────────────────────────────────────
@@ -395,25 +415,7 @@ export const pdfJobs = new Elysia({ prefix: "/api/pdf/jobs" })
       const bytes = inputs.reduce((sum, u) => sum + u.size, 0);
       if (!(await diskHasRoom(paths.jobs, bytes * 2))) return refuse(set, 507, DISK_FULL);
 
-      const created = db.transaction((): JobRow | Refusal => {
-        // Creating a job queues work (an analysis) or is about to, so the queue rules apply here too.
-        const refusal = admission(caller);
-        if (refusal) return refusal;
-        const jobId = id("job");
-        const now = Date.now();
-        db.run("INSERT INTO pdf_jobs (id, tool, caller, touched_at, created_at) VALUES (?, ?, ?, ?, ?)", [
-          jobId,
-          body.tool,
-          caller,
-          now,
-          now,
-        ]);
-        inputs.forEach((u, position) =>
-          db.run("INSERT INTO pdf_job_inputs (job_id, position, upload_id) VALUES (?, ?, ?)", [jobId, position, u.id]),
-        );
-        if (body.tool === "compress") enqueue(jobId, "analyse", null, caller);
-        return db.query<JobRow, [string]>("SELECT * FROM pdf_jobs WHERE id = ?").get(jobId)!;
-      })();
+      const created = createJob(body.tool, inputs, caller);
       if ("status" in created) return refuse(set, created.status, created.error);
       return jobInfo(created);
     },
@@ -481,6 +483,49 @@ export const pdfJobs = new Elysia({ prefix: "/api/pdf/jobs" })
         params: t.Unknown(),
       }),
       beforeHandle: rateLimit("pdf-task", 30),
+    },
+  )
+  .post(
+    "/:id/handoff",
+    async (ctx) => {
+      // Merge → Compress (#18): the merged file becomes the single input of a new compress job, without leaving the server.
+      const { body, params, set } = ctx;
+      const job = jobRow(params.id);
+      if (!job) return refuse(set, 404, EXPIRED);
+      const task = TASK_ID.test(body.task)
+        ? db.query<TaskRow, [string, string]>("SELECT * FROM pdf_tasks WHERE id = ? AND job_id = ?").get(body.task, job.id)
+        : null;
+      if (!task) return refuse(set, 404, "That merge isn't part of this job — merge again.");
+      if (task.kind !== "merge" || task.state !== "done" || !task.output_file) {
+        return refuse(set, 400, "Only a finished merge can be compressed.");
+      }
+      const source = join(taskDir(job.id, task.id), task.output_file);
+      const file = Bun.file(source);
+      if (!(await file.exists())) return refuse(set, 404, EXPIRED);
+      touch(job.id);
+
+      const caller = clientIp(ctx);
+      // Checked before any file work; checked again, atomically, when the job is created.
+      const early = admission(caller);
+      if (early) return refuse(set, early.status, early.error);
+      // A hard link costs nothing, but the fallback copy and the compress run each need room for the file.
+      if (!(await diskHasRoom(paths.jobs, file.size * 3))) return refuse(set, 507, DISK_FULL);
+
+      const upload = await adoptUpload(source, task.output_name ?? task.output_file, caller);
+      if (!upload || upload.kind !== "pdf") {
+        if (upload) await dropUpload(upload.id);
+        return refuse(set, 400, "Only a finished merge can be compressed.");
+      }
+      const created = createJob("compress", [upload], caller);
+      if ("status" in created) {
+        await dropUpload(upload.id);
+        return refuse(set, created.status, created.error);
+      }
+      return jobInfo(created);
+    },
+    {
+      body: t.Object({ task: t.String({ maxLength: 64 }) }),
+      beforeHandle: rateLimit("pdf-handoff", 20),
     },
   )
   .post(
