@@ -29,6 +29,13 @@ export const env = {
    * cap below this fails them before they do any work.
    */
   childMemoryFloorBytes: int(process.env.CHILD_MEMORY_FLOOR_BYTES, 768 * 1024 * 1024),
+  /**
+   * The `--as` cap is the headroom times this. Address space runs ahead of
+   * resident memory (thread stacks, arenas, mapped files), so a cap equal to
+   * the headroom fails tools that would have fit. Tune against the real
+   * image; a child that truly exhausts RAM is still caught by its SIGKILL.
+   */
+  childAddressFactor: Number(process.env.CHILD_AS_FACTOR) > 0 ? Number(process.env.CHILD_AS_FACTOR) : 1.5,
   /** How long one child process may run. */
   childTimeoutMs: int(process.env.CHILD_TIMEOUT_MS, 10 * 60_000),
   /** How often an idle worker looks for a queued task. */

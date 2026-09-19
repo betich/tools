@@ -71,11 +71,12 @@ export function headroom(): number {
 
 /**
  * The `prlimit --as` cap for the next child. `--as` counts address space the
- * child reserves, which runs well ahead of what it touches, so the cap never
- * goes below a floor that the tools need just to start.
+ * child reserves, which runs well ahead of what it touches, so the cap is the
+ * headroom with some slack (`CHILD_AS_FACTOR`) and never below a floor the
+ * tools need just to start. Plan work against `headroom()`, not this.
  */
 export function childMemoryLimit(): number {
-  return Math.max(headroom(), env.childMemoryFloorBytes);
+  return Math.floor(Math.max(headroom() * env.childAddressFactor, env.childMemoryFloorBytes));
 }
 
 // ── images ─────────────────────────────────────────────────────────────────
@@ -136,12 +137,14 @@ export const ANALYSIS_TIMEOUT_MS = 2 * 60_000;
 
 /**
  * Tool output that means an allocation failed under the `--as` cap. Each
- * tool says it differently: mutool "malloc failed"/"out of memory", gs
- * "VMerror", vips "out of memory"/"memory allocation failed", C++
- * `std::bad_alloc`, Python `MemoryError`, Bun/V8 "out of memory".
+ * tool says it differently: mutool "malloc (1615680000 bytes) failed"
+ * (checked against 1.25), gs "VMerror", vips "out of memory"/"memory
+ * allocation failed", C++ `std::bad_alloc`, Python `MemoryError`, Bun/V8
+ * "out of memory" — and under a cap too small to load the tool at all, the
+ * dynamic loader's "failed to map segment from shared object".
  */
 const OOM_TEXT =
-  /out of memory|cannot allocate memory|malloc failed|failed to allocate|allocation failed|memory allocation|bad_alloc|VMerror|MemoryError|ENOMEM/i;
+  /out of memory|cannot allocate memory|malloc\b[^\n]*\bfailed|failed to allocate|allocation failed|memory allocation|bad_alloc|VMerror|MemoryError|ENOMEM|failed to map segment/i;
 
 /** Whether a finished child ran out of memory, judged by its signal and stderr. */
 export function ranOutOfMemory(r: { code: number | null; signal: string | null; timedOut: boolean; aborted: boolean; stderr: string }): boolean {

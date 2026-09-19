@@ -335,6 +335,11 @@ async function recover(): Promise<void> {
   for (const name of await readdir(env.workDir).catch(() => [] as string[])) {
     await rm(join(env.workDir, name), { recursive: true, force: true });
   }
+  for (const jobId of await readdir(RESULTS).catch(() => [] as string[])) {
+    for (const name of await readdir(join(RESULTS, jobId)).catch(() => [] as string[])) {
+      if (name.endsWith(".part")) await rm(join(RESULTS, jobId, name), { recursive: true, force: true });
+    }
+  }
 }
 
 export async function startJobs(): Promise<void> {

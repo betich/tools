@@ -234,7 +234,7 @@ const watchers = new Set<Watcher>();
 let poller: ReturnType<typeof setInterval> | null = null;
 const POLL_MS = 500;
 /** A comment line this often keeps Cloudflare (100 s idle cutoff) and proxies from closing a quiet stream. */
-const KEEPALIVE_MS = 20_000;
+const KEEPALIVE_MS = 15_000;
 
 const frame = (event: JobEvent) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 
@@ -477,6 +477,8 @@ export const pdfJobs = new Elysia({ prefix: "/api/pdf/jobs" })
         return refuse(set, 429, "Too many open job pages — close one and try again.");
       }
       touch(job.id);
+      // Bun closes a connection idle for 10 s; a stream is quiet for minutes while a task waits its turn.
+      ctx.server?.timeout(request, 0);
       return openStream({ ...job, touched_at: Date.now() }, caller, request.signal);
     },
     { beforeHandle: rateLimit("pdf-job-events", 30) },
