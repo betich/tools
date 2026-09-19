@@ -4,6 +4,7 @@ import {
   DEFAULT_MERGE_OUTPUT,
   defaultRuns,
   expandRuns,
+  formatPageRange,
   isDefaultOrder,
   MAX_MERGE_RUNS,
   mergePagesProblem,
@@ -188,5 +189,25 @@ describe("encoding", () => {
   test("an untouched merge sends no `pages`, so the request is today's", () => {
     const params: MergeParams = { items: [pdf("up_a")], output: DEFAULT_MERGE_OUTPUT };
     expect("pages" in params).toBe(false);
+  });
+});
+
+describe("formatPageRange", () => {
+  test("folds consecutive pages, 1-based, in the order given", () => {
+    expect(formatPageRange([0, 1, 2, 4, 7, 8, 9], 10)).toBe("1-3, 5, 8-");
+    expect(formatPageRange([0, 1, 2, 4, 7, 8], 10)).toBe("1-3, 5, 8-9");
+    expect(formatPageRange([4, 3, 2, 9], 10)).toBe("5-3, 10");
+    expect(formatPageRange([0], 1)).toBe("1");
+    expect(formatPageRange([], 5)).toBe("");
+  });
+
+  test("a whole file reads as 1-", () => {
+    expect(formatPageRange([0, 1, 2], 3)).toBe("1-");
+  });
+
+  test("round-trips through parsePageRange", () => {
+    for (const list of [[0, 1, 2, 4, 7, 8, 9], [9, 8, 7, 0], [3], [0, 2, 4, 6], [5, 4, 3, 2, 1, 0]]) {
+      expect(pages(formatPageRange(list, 10), 10)).toEqual(list);
+    }
   });
 });
