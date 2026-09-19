@@ -34,17 +34,25 @@ export class GifSession {
   /**
    * The one way frames arrive, whatever made them. `"replace"` starts a new
    * animation — history is cleared, since the old frames' pixels are freed —
-   * while `"append"` adds them after the ones there as one undo step.
+   * while `"append"` adds them after the ones there as one undo step, and
+   * `"swap"` puts them in place of the ones there as one undo step (the old
+   * pixels are kept so undo can bring them back). `patch` rides along in the
+   * same step — the spin generator sets the background with its frames.
    */
-  addFrames(incoming: readonly IncomingFrame[], how: "replace" | "append"): void {
+  addFrames(
+    incoming: readonly IncomingFrame[],
+    how: "replace" | "append" | "swap",
+    patch: Partial<Omit<GifDoc, "frames">> = {},
+  ): void {
     if (incoming.length === 0) return;
     const frames = this.store.admit(incoming);
+    const doc = { ...this.doc, ...patch };
     if (how === "replace" || this.doc.frames.length === 0) {
-      const next = withFrames(this.doc, frames, "replace");
+      const next = withFrames(doc, frames, "replace");
       this.history.reset(next);
       this.store.release(new Set(frames.map((f) => f.id)));
     } else {
-      this.history.set(withFrames(this.doc, frames, "append"));
+      this.history.set(withFrames(doc, frames, how === "swap" ? "replace" : "append"));
     }
     this.emit();
   }

@@ -9,6 +9,7 @@ import { canvasSize, playDuration, playOrder, timelineTime } from "./gif/model";
 import { Preview } from "./gif/Preview";
 import { gifSession, useGifSession } from "./gif/session";
 import { Settings } from "./gif/Settings";
+import { SpinSource } from "./gif/SpinSource";
 import { framesFromFiles } from "./gif/sources/files";
 
 type How = "replace" | "append";
@@ -22,6 +23,7 @@ export function GifTab() {
   const session = gifSession;
   const { doc, canUndo } = useGifSession(session);
   const { load, loading, cancel } = useFrameLoader();
+  const [spinning, setSpinning] = useState(false);
 
   const order = useMemo(() => playOrder(doc.frames.length, doc.pingPong), [doc.frames.length, doc.pingPong]);
   const duration = useMemo(() => playDuration(doc), [doc]);
@@ -33,6 +35,8 @@ export function GifTab() {
       (kind === "commit" ? session.set : session.preview)({ ...session.doc, frames }),
     [session],
   );
+
+  if (spinning) return <SpinSource onClose={() => setSpinning(false)} />;
 
   if (doc.frames.length === 0) {
     return (
@@ -50,6 +54,11 @@ export function GifTab() {
           </FolderPicker>
         </Dropzone>
         {loading ? <LoadProgress {...loading} onCancel={cancel} /> : null}
+        {!loading ? (
+          <TextButton className="self-start" onClick={() => setSpinning(true)}>
+            or spin one image
+          </TextButton>
+        ) : null}
         {canUndo && !loading ? (
           <TextButton className="self-start" onClick={session.undo}>
             undo · bring the frames back
@@ -92,6 +101,9 @@ export function GifTab() {
           <FolderPicker onFiles={(files) => load(files, "append")} disabled={!!loading}>
             add a folder
           </FolderPicker>
+          <TextButton onClick={() => setSpinning(true)} disabled={!!loading}>
+            spin an image
+          </TextButton>
           <TextButton onClick={() => session.clear()} disabled={!!loading}>
             start over
           </TextButton>
