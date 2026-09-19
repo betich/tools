@@ -16,7 +16,7 @@ import { bytes as formatBytes } from "@/lib/format";
 import type { FrameHook } from "./frameHook";
 import { planConversion, type OutputKind } from "./plan";
 import { discardReason } from "./probe";
-import { MIME, extensionFor, outputFrameCount, type SourceInfo, type VideoEdit } from "./settings";
+import { MIME, extensionFor, outputFrameCount, outputSize, type SourceInfo, type VideoEdit } from "./settings";
 import { ExportCanceled, ExportError, MEMORY_LIMIT, type ExportTarget } from "./target";
 import { ProgressMeter, Retimer, retimeAudio, type ProgressReading } from "./timing";
 
@@ -34,6 +34,8 @@ export type ExportRequest = {
   target: ExportTarget;
   /** Bits per second; overrides the edit's quality level. */
   videoBitrate?: number | null;
+  /** Re-encode the audio at this codec and bitrate (target size), instead of copying it where possible. */
+  audio?: { codec: string; bitrate: number } | null;
   /** Every video frame passes through this, after rotate/crop/resize and before the speed change. */
   frameHook?: FrameHook | null;
   signal?: AbortSignal;
@@ -47,6 +49,8 @@ export type ExportResult = {
   mime: string;
   /** Things the user should know — a track that was left out, say. */
   notes: string[];
+  /** How an explicit `videoBitrate` was spent; null without one. */
+  bitrateMode: "constant" | "variable" | null;
 };
 
 const PROGRESS_EVERY_MS = 150;
@@ -59,7 +63,12 @@ export async function exportVideo(req: ExportRequest): Promise<ExportResult> {
     throw new ExportError("This file has no video in it — extract its audio instead.");
 
   const mb = await import("mediabunny");
-  const plan = planConversion(edit, source, { videoBitrate: req.videoBitrate });
+  const bitrateMode = req.videoBitrate ? await pickBitrateMode(mb, edit, source, req.videoBitrate) : null;
+  const plan = planConversion(edit, source, {
+    videoBitrate: req.videoBitrate,
+    bitrateMode: bitrateMode ?? undefined,
+    audio: req.audio,
+  });
   const limit = req.target.kind === "memory" ? (req.target.limit ?? MEMORY_LIMIT) : Infinity;
 
   const input = new mb.Input({ source: new mb.BlobSource(req.file), formats: mb.ALL_FORMATS });
@@ -177,6 +186,7 @@ export async function exportVideo(req: ExportRequest): Promise<ExportResult> {
       bytes: buffer ? buffer.byteLength : written,
       mime,
       notes,
+      bitrateMode,
     };
   } catch (e) {
     if (e instanceof ExportError || e instanceof ExportCanceled) throw e;
@@ -202,6 +212,30 @@ function makeFormat(mb: Mediabunny, kind: OutputKind) {
       return new mb.OggOutputFormat();
     case "wav":
       return new mb.WavOutputFormat();
+  }
+}
+
+/**
+ * Constant bitrate lands closest to a size, so it's asked for first; not
+ * every encoder takes it (hardware ones often don't), and then it's variable.
+ */
+async function pickBitrateMode(
+  mb: Mediabunny,
+  edit: VideoEdit,
+  source: SourceInfo,
+  bitrate: number,
+): Promise<"constant" | "variable"> {
+  if (edit.output !== "video") return "variable";
+  const size = outputSize(edit, source);
+  try {
+    const ok = await mb.canEncodeVideo(edit.codec, {
+      width: size.width,
+      height: size.height,
+      quality: new mb.Quality({ bitrate: Math.round(bitrate), bitrateMode: "constant" }),
+    });
+    return ok ? "constant" : "variable";
+  } catch {
+    return "variable";
   }
 }
 

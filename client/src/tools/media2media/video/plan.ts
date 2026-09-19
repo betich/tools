@@ -5,7 +5,13 @@
    output target, which need a live conversion.
    ─────────────────────────────────────────────────────────────────────────── */
 
-import { Quality, type ConversionAudioOptions, type ConversionOptions, type ConversionVideoOptions } from "mediabunny";
+import {
+  Quality,
+  type AudioCodec,
+  type ConversionAudioOptions,
+  type ConversionOptions,
+  type ConversionVideoOptions,
+} from "mediabunny";
 import {
   AUDIO_OUTPUTS,
   clampCrop,
@@ -44,6 +50,17 @@ export type PlanOptions = {
    * the target-size mode computes one from the size it's aiming at.
    */
   videoBitrate?: number | null;
+  /**
+   * How the encoder spends `videoBitrate`. WebCodecs takes "constant" or
+   * "variable"; the pipeline asks the browser whether it can do constant
+   * (closer to a size) before choosing. Default variable.
+   */
+  bitrateMode?: "constant" | "variable";
+  /**
+   * Re-encode the audio at a known bitrate — the target-size mode needs to
+   * know what the sound will cost. Otherwise audio is copied where it can be.
+   */
+  audio?: { codec: string; bitrate: number } | null;
 };
 
 const QUALITY: Record<VideoEdit["quality"], "medium" | "high" | "very-high"> = {
@@ -52,9 +69,13 @@ const QUALITY: Record<VideoEdit["quality"], "medium" | "high" | "very-high"> = {
   high: "very-high",
 };
 
-export function videoQuality(edit: Pick<VideoEdit, "quality">, videoBitrate?: number | null): Quality {
+export function videoQuality(
+  edit: Pick<VideoEdit, "quality">,
+  videoBitrate?: number | null,
+  bitrateMode?: "constant" | "variable",
+): Quality {
   if (videoBitrate && Number.isFinite(videoBitrate) && videoBitrate > 0) {
-    return new Quality({ bitrate: Math.round(videoBitrate) });
+    return new Quality({ bitrate: Math.round(videoBitrate), bitrateMode });
   }
   return new Quality(QUALITY[edit.quality]);
 }
@@ -77,8 +98,13 @@ export function planConversion(edit: VideoEdit, source: SourceInfo, options: Pla
 
   const audioFor = (track: { sampleRate: number }): ConversionAudioOptions => {
     if (edit.output === "video" && edit.mute) return { discard: true };
+    const fixed = edit.output === "video" ? options.audio : null;
     const base: ConversionAudioOptions =
-      edit.output === "audio" ? { codec: AUDIO_OUTPUTS.find((a) => a.id === edit.audioOutput)!.codec } : {};
+      edit.output === "audio"
+        ? { codec: AUDIO_OUTPUTS.find((a) => a.id === edit.audioOutput)!.codec }
+        : fixed
+          ? { codec: fixed.codec as AudioCodec, quality: new Quality({ bitrate: Math.round(fixed.bitrate) }) }
+          : {};
     if (speed === 1) return base;
     return {
       ...base,
@@ -101,7 +127,7 @@ export function planConversion(edit: VideoEdit, source: SourceInfo, options: Pla
 
   const video: ConversionVideoOptions = {
     codec: edit.codec,
-    quality: videoQuality(edit, options.videoBitrate),
+    quality: videoQuality(edit, options.videoBitrate, options.bitrateMode),
   };
   if (edit.rotate) video.rotate = edit.rotate;
   if (edit.crop) video.crop = clampCrop(edit.crop, rotatedSize(source, edit.rotate));

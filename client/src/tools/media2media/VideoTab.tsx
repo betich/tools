@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { bytes } from "@/lib/format";
+import { budgetFor, correctedBitrate, outcome, type Outcome } from "./video/budget";
 import { EditSection, OutputSection } from "./video/Controls";
 import type { ExportProgress } from "./video/export";
 import { Preview } from "./video/Preview";
@@ -37,16 +38,25 @@ import {
   type ExportTarget,
 } from "./video/target";
 import { formatFps, formatRemaining } from "./video/timing";
+import { TargetOutcome, TargetSizeSection } from "./video/TargetSize";
 import { useCapabilities } from "./video/useCapabilities";
 import { useFrames } from "./video/useFrames";
 import { useVideoClock } from "./video/useVideoClock";
+
+/** A finished export that aimed at a size (#29). */
+type TargetDone = {
+  outcome: Outcome;
+  bitrateMode: "constant" | "variable" | null;
+  /** The corrected bitrate for the one retry; null when on target or already retried. */
+  retry: number | null;
+};
 
 type Loaded = { file: File; url: string; source: SourceInfo };
 
 type Job =
   | { phase: "idle" }
   | { phase: "running"; progress: ExportProgress | null; stop: () => void; toDisk: boolean }
-  | { phase: "done"; name: string; bytes: number; notes: string[]; toDisk: boolean }
+  | { phase: "done"; name: string; bytes: number; notes: string[]; toDisk: boolean; target: TargetDone | null }
   | { phase: "failed"; message: string };
 
 /**
@@ -169,7 +179,9 @@ function Editor({
     [history],
   );
 
-  const blocker = exportBlocker(edit, source, caps);
+  const [targetBytes, setTargetBytes] = useState<number | null>(null);
+  const budget = budgetFor(edit, source, caps?.containerAudio ?? null, targetBytes);
+  const blocker = exportBlocker(edit, source, caps) ?? (budget && !budget.ok ? budget.reason : null);
   const summary = editSummary(edit, source);
   const name = outputName(file.name, edit);
   const notes = [
@@ -180,7 +192,8 @@ function Editor({
       : null,
   ].filter((n): n is string => !!n);
 
-  const run = async () => {
+  /** `retryBitrate`: the one corrected pass after a target overshoot. */
+  const run = async (retryBitrate?: number) => {
     if (blocker || busy) return;
     playback.setPlaying(false);
     const mime = MIME[extensionFor(edit)] ?? "application/octet-stream";
@@ -193,6 +206,7 @@ function Editor({
     const controller = new AbortController();
     const toDisk = target.kind === "stream";
     setJob({ phase: "running", progress: null, stop: () => controller.abort(), toDisk });
+    const aim = budget?.ok ? { ...budget, videoBitrate: retryBitrate ?? budget.videoBitrate } : null;
     try {
       // Mediabunny and the pipeline load on the first export, not with the tab.
       const { exportVideo } = await import("./video/export");
@@ -201,11 +215,24 @@ function Editor({
         edit,
         source,
         target,
+        videoBitrate: aim?.videoBitrate,
+        audio: aim?.audio,
         signal: controller.signal,
         onProgress: (progress) => setJob((j) => (j.phase === "running" ? { ...j, progress } : j)),
       });
       if (result.blob) download(result.blob, name);
-      setJob({ phase: "done", name, bytes: result.bytes, notes: result.notes, toDisk });
+      const targetDone: TargetDone | null =
+        aim && targetBytes !== null
+          ? {
+              outcome: outcome(targetBytes, result.bytes),
+              bitrateMode: result.bitrateMode,
+              retry:
+                retryBitrate === undefined
+                  ? correctedBitrate(aim, outputDuration(edit), targetBytes, result.bytes)
+                  : null,
+            }
+          : null;
+      setJob({ phase: "done", name, bytes: result.bytes, notes: result.notes, toDisk, target: targetDone });
       onDone(toDisk ? `${name} saved` : `${name} downloaded`);
     } catch (e) {
       if (e instanceof ExportCanceled) setJob({ phase: "idle" });
@@ -237,6 +264,18 @@ function Editor({
     <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
       <aside className="flex flex-col gap-8">
         <OutputSection {...controls} />
+        {edit.output === "video" && source.hasVideo ? (
+          <TargetSizeSection
+            edit={edit}
+            source={source}
+            fileBytes={file.size}
+            value={targetBytes}
+            budget={budget}
+            onChange={setTargetBytes}
+            onHeight={(height) => history.set({ ...edit, height })}
+            disabled={busy}
+          />
+        ) : null}
         <EditSection {...controls} />
       </aside>
 
@@ -291,7 +330,8 @@ function Editor({
           job={job}
           blocker={blocker}
           saveToDisk={caps?.saveToDisk ?? canSaveToDisk()}
-          onExport={run}
+          onExport={() => void run()}
+          onRetry={(bitrate) => void run(bitrate)}
         />
 
         {/* frameHook: the tab's active hook (the chroma keyer, #30), once there is one. */}
@@ -363,6 +403,7 @@ function ExportRow({
   blocker,
   saveToDisk,
   onExport,
+  onRetry,
 }: {
   name: string;
   summary: string[];
@@ -372,6 +413,7 @@ function ExportRow({
   blocker: string | null;
   saveToDisk: boolean;
   onExport: () => void;
+  onRetry: (bitrate: number) => void;
 }) {
   const running = job.phase === "running";
   const progress = running ? job.progress : null;
@@ -434,6 +476,7 @@ function ExportRow({
           <p className="text-meta text-meta font-mono uppercase">
             {job.toDisk ? "saved" : "downloaded"} <Value accent>{bytes(job.bytes)}</Value>
           </p>
+          {job.target ? <TargetOutcome {...job.target} onRetry={onRetry} /> : null}
           {job.notes.map((n) => (
             <Prose key={n}>{n}</Prose>
           ))}
