@@ -1,7 +1,14 @@
 import { existsSync } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { PAGE_THUMB_BATCH, PAGE_THUMB_EDGE } from "@tools/shared";
+import {
+  PAGE_THUMB_BATCH,
+  PAGE_THUMB_DIR,
+  PAGE_THUMB_EDGE,
+  readPageCount,
+  storePageCount,
+  type PageCountState,
+} from "@tools/shared";
 import { db } from "./db";
 import { env } from "./env";
 import { run } from "./exec";
@@ -26,8 +33,6 @@ import { run } from "./exec";
 export const THUMBNAIL_EDGE = 320;
 /** The name the API serves (server/src/routes/pdf-uploads.ts) — keep them the same. */
 export const THUMBNAIL_FILE = "thumbnail.png";
-/** Where a batch of page thumbnails lands, as `<n>.png` — the API serves the same path. */
-export const PAGES_DIR = "pages";
 const MEMORY_BYTES = 512 * 1024 * 1024;
 const TIMEOUT_MS = 20_000;
 /** A batch is up to PAGE_THUMB_BATCH small renders in one run. */
@@ -62,17 +67,22 @@ export async function renderThumbnail(pdf: string, out: string, signal?: AbortSi
 
 /**
  * How many pages `pdf` has, by the same qpdf count Merge uses (handlers/merge.ts
- * `pdfPages`), so the page view's indices are the merge's. -1 when it needs a
- * password, 0 when qpdf cannot read it.
+ * `pdfPages`), so the page view's indices are the merge's. `locked` when it
+ * needs a password and `unreadable` when qpdf reads it and gives up — both
+ * final. A run that was cut short (the deadline, an abort, a kill) proves
+ * nothing about the file, so that is `uncounted`, to be asked again.
  */
-export async function countPages(pdf: string, signal?: AbortSignal): Promise<number> {
+export async function countPages(pdf: string, signal?: AbortSignal): Promise<PageCountState> {
   const opts = { memoryBytes: MEMORY_BYTES, timeoutMs: COUNT_TIMEOUT_MS, signal };
+  const cut = (r: { signal: string | null; timedOut: boolean; aborted: boolean }) => Boolean(r.signal || r.timedOut || r.aborted);
   // 0: a password is needed; 2: not encrypted; 3: encrypted, opens without one.
   const locked = await run(["qpdf", "--requires-password", pdf], opts);
-  if (locked.code === 0) return -1;
+  if (cut(locked)) return { state: "uncounted" };
+  if (locked.code === 0) return { state: "locked" };
   const r = await run(["qpdf", "--warning-exit-0", "--show-npages", pdf], { ...opts, stdout: true });
+  if (cut(r)) return { state: "uncounted" };
   const pages = Number(r.stdout.trim());
-  return r.code === 0 && !r.signal && Number.isInteger(pages) && pages >= 1 ? pages : 0;
+  return r.code === 0 && Number.isInteger(pages) && pages >= 1 ? { state: "counted", pages } : { state: "unreadable" };
 }
 
 /**
@@ -128,54 +138,47 @@ export async function renderPages(
   return all;
 }
 
-/** Takes the oldest queued first page (and count) and marks it running, atomically. */
-const claimFirst = db.transaction((): string | null => {
-  const row = db
-    .query<{ upload_id: string }, []>(
-      "SELECT upload_id FROM pdf_thumbnails WHERE state = 'queued' ORDER BY requested_at LIMIT 1",
-    )
-    .get();
-  if (!row) return null;
-  db.run("UPDATE pdf_thumbnails SET state = 'running', updated_at = ? WHERE upload_id = ?", [
-    Date.now(),
-    row.upload_id,
-  ]);
-  return row.upload_id;
-}).immediate;
+/** Takes the oldest queued row of `table` and marks it running, atomically, giving back its key columns. */
+function claimer<K extends string>(table: "pdf_thumbnails" | "pdf_page_thumbs", keys: readonly K[]) {
+  const pick = `SELECT ${keys.join(", ")} FROM ${table} WHERE state = 'queued' ORDER BY requested_at LIMIT 1`;
+  const mark = `UPDATE ${table} SET state = 'running', updated_at = ? WHERE ${keys.map((k) => `${k} = ?`).join(" AND ")}`;
+  return db.transaction((): Record<K, string | number> | null => {
+    const row = db.query<Record<K, string | number>, []>(pick).get();
+    if (!row) return null;
+    db.run(mark, [Date.now(), ...keys.map((k) => row[k])]);
+    return row;
+  }).immediate;
+}
 
-/** The same for a batch of page thumbnails. */
-const claimBatch = db.transaction((): { upload_id: string; batch: number } | null => {
-  const row = db
-    .query<{ upload_id: string; batch: number }, []>(
-      "SELECT upload_id, batch FROM pdf_page_thumbs WHERE state = 'queued' ORDER BY requested_at LIMIT 1",
-    )
-    .get();
-  if (!row) return null;
-  db.run("UPDATE pdf_page_thumbs SET state = 'running', updated_at = ? WHERE upload_id = ? AND batch = ?", [
-    Date.now(),
-    row.upload_id,
-    row.batch,
-  ]);
-  return row;
-}).immediate;
+/** The oldest queued first page (and count). */
+const claimFirst = claimer("pdf_thumbnails", ["upload_id"]);
+/** The oldest queued batch of page thumbnails. */
+const claimBatch = claimer("pdf_page_thumbs", ["upload_id", "batch"]);
 
-const knownPages = (uploadId: string) =>
-  db.query<{ pages: number | null }, [string]>("SELECT pages FROM pdf_thumbnails WHERE upload_id = ?").get(uploadId)
-    ?.pages ?? null;
+const knownCount = (uploadId: string): PageCountState =>
+  readPageCount(
+    db.query<{ pages: number | null }, [string]>("SELECT pages FROM pdf_thumbnails WHERE upload_id = ?").get(uploadId)?.pages,
+  );
 
-/** Counts the pages unless that is done, then draws page 1 unless it is already there. */
+/**
+ * Counts the pages unless that is done, then draws page 1 unless it is already
+ * there. A count cut short leaves the row failed with no count, which the API
+ * reads as worth asking again; page 1 is not drawn until there is a count.
+ */
 async function drawFirst(uploads: string, uploadId: string): Promise<void> {
   const dir = join(uploads, uploadId);
   const pdf = join(dir, "file");
   const png = join(dir, THUMBNAIL_FILE);
   let ok = false;
   try {
-    let pages = knownPages(uploadId);
-    if (pages === null) {
-      pages = await countPages(pdf);
-      db.run("UPDATE pdf_thumbnails SET pages = ? WHERE upload_id = ?", [pages, uploadId]);
+    let count = knownCount(uploadId);
+    if (count.state === "uncounted") {
+      count = await countPages(pdf);
+      db.run("UPDATE pdf_thumbnails SET pages = ? WHERE upload_id = ?", [storePageCount(count), uploadId]);
     }
-    ok = existsSync(png) || (pages !== -1 && (await renderThumbnail(pdf, png)));
+    ok =
+      count.state !== "uncounted" &&
+      (existsSync(png) || (count.state !== "locked" && (await renderThumbnail(pdf, png))));
   } catch (err) {
     // The upload was swept while it drew (rename into a deleted directory), or spawning failed.
     console.error(`[thumbnails] ${uploadId}:`, err);
@@ -192,12 +195,13 @@ async function drawBatch(uploads: string, uploadId: string, batch: number): Prom
   const dir = join(uploads, uploadId);
   let ok = false;
   try {
-    const pages = knownPages(uploadId) ?? 0;
+    const count = knownCount(uploadId);
+    const pages = count.state === "counted" ? count.pages : 0;
     const from = batch * PAGE_THUMB_BATCH + 1;
     if (from <= pages) {
       ok = await renderPages(
         join(dir, "file"),
-        join(dir, PAGES_DIR),
+        join(dir, PAGE_THUMB_DIR),
         from,
         Math.min(from + PAGE_THUMB_BATCH - 1, pages),
       );
@@ -221,21 +225,31 @@ async function drawBatch(uploads: string, uploadId: string, batch: number): Prom
 export async function drawNext(uploads: string = UPLOADS): Promise<boolean> {
   const first = claimFirst();
   if (first) {
-    await drawFirst(uploads, first);
+    await drawFirst(uploads, String(first.upload_id));
     return true;
   }
   const batch = claimBatch();
   if (batch) {
-    await drawBatch(uploads, batch.upload_id, batch.batch);
+    await drawBatch(uploads, String(batch.upload_id), Number(batch.batch));
     return true;
   }
   return false;
 }
 
+/**
+ * Settles what a worker that died left running. A row with no count never got
+ * as far as drawing, so it goes back in the queue. One with a count may have
+ * died drawing, so that page is not tried again, and neither is a batch.
+ */
+export function recoverThumbnails(): void {
+  const now = Date.now();
+  db.run("UPDATE pdf_thumbnails SET state = 'queued', updated_at = ? WHERE state = 'running' AND pages IS NULL", [now]);
+  db.run("UPDATE pdf_thumbnails SET state = 'failed', updated_at = ? WHERE state = 'running'", [now]);
+  db.run("UPDATE pdf_page_thumbs SET state = 'failed', updated_at = ? WHERE state = 'running'", [now]);
+}
+
 export function startThumbnails(): void {
-  // A render still marked running belonged to a worker that died, maybe drawing it; don't try that page again.
-  db.run("UPDATE pdf_thumbnails SET state = 'failed', updated_at = ? WHERE state = 'running'", [Date.now()]);
-  db.run("UPDATE pdf_page_thumbs SET state = 'failed', updated_at = ? WHERE state = 'running'", [Date.now()]);
+  recoverThumbnails();
   const loop = async () => {
     try {
       while (await drawNext());

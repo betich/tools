@@ -95,7 +95,7 @@ describe("GET /:id/pages", () => {
     expect(await get(`${id}/pages`)).toMatchObject({ status: 200, body: { pages: 3 } });
   });
 
-  test("locked, unreadable and unfinished are refusals the tile shows", async () => {
+  test("locked and unreadable are refusals the tile shows", async () => {
     const locked = upload();
     counted(locked, -1, "failed");
     expect(await get(`${locked}/pages`)).toMatchObject({
@@ -105,9 +105,18 @@ describe("GET /:id/pages", () => {
     const broken = upload();
     counted(broken, 0, "failed");
     expect((await get(`${broken}/pages`)).status).toBe(422);
+  });
+
+  test("a count that was cut short (a timeout, a worker restart) is asked again", async () => {
     const died = upload();
     counted(died, null, "failed");
-    expect((await get(`${died}/pages`)).status).toBe(422);
+    expect((await get(`${died}/pages`)).status).toBe(202);
+    expect(firstRow(died)).toEqual({ state: "queued", pages: null });
+    // And the first page, which was never tried without a count, with it.
+    const thumb = upload();
+    counted(thumb, null, "failed");
+    expect((await get(`${thumb}/thumbnail.png`)).status).toBe(202);
+    expect(firstRow(thumb)?.state).toBe("queued");
   });
 
   test("a first page drawn before counts existed is asked again, for the count", async () => {
@@ -199,6 +208,13 @@ describe("GET /:id/pages/:n.png", () => {
 });
 
 describe("GET /:id/thumbnail.png", () => {
+  test("a first page that failed to draw once there was a count stays a refusal", async () => {
+    const id = upload();
+    counted(id, 3, "failed");
+    expect((await get(`${id}/thumbnail.png`)).status).toBe(422);
+    expect(firstRow(id)?.state).toBe("failed");
+  });
+
   test("still queues page 1 and serves it once drawn", async () => {
     const id = upload();
     expect((await get(`${id}/thumbnail.png`)).status).toBe(202);

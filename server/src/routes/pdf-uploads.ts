@@ -5,9 +5,12 @@ import { pipeline } from "node:stream/promises";
 import { Elysia, t } from "elysia";
 import {
   PAGE_THUMB_BATCH,
+  PAGE_THUMB_DIR,
   pageThumbBatch,
+  readPageCount,
   UPLOAD_MAX_BYTES,
   UPLOAD_PART_BYTES,
+  type PageCountState,
   type PdfPageCount,
   type UploadedFile,
   type UploadKind,
@@ -50,8 +53,8 @@ const partPath = (uploadId: string, n: number) => join(dirOf(uploadId), `part-${
 const thumbnailPath = (uploadId: string) => join(dirOf(uploadId), "thumbnail.png");
 /** Thumbnails waiting for the worker, across everyone. Each takes well under a second; past this, the tile will do. */
 const MAX_QUEUED_THUMBNAILS = 32;
-/** A page view's thumbnails (#37), drawn by the same lane in batches: `uploads/<id>/pages/<n>.png` (worker PAGES_DIR). */
-const pagePath = (uploadId: string, n: number) => join(dirOf(uploadId), "pages", `${n}.png`);
+/** A page view's thumbnails (#37), drawn by the same lane in batches: `uploads/<id>/pages/<n>.png`. */
+const pagePath = (uploadId: string, n: number) => join(dirOf(uploadId), PAGE_THUMB_DIR, `${n}.png`);
 /**
  * Page batches waiting, across everyone and per caller. A batch is up to
  * PAGE_THUMB_BATCH small renders, a few seconds of the lane; the client asks
@@ -269,14 +272,19 @@ setInterval(() => void sweepUploads().catch((err) => console.error("[uploads] sw
 // pdf_page_thumbs draws its whole batch.
 
 type Reply = { status?: number | string; headers: Record<string, string | number> };
-type ThumbRow = { state: string; pages: number | null };
+/** A row of pdf_thumbnails: its state, and the page count it holds. */
+type FirstRow = { state: string; count: PageCountState };
 
 const WORKER_OFFLINE = "The PDF worker is offline — try again shortly.";
 const BUSY = "the server is busy drawing previews — try again shortly";
 const PNG_HEADERS = { "content-type": "image/png", "cache-control": "private, max-age=3600" };
 
-const thumbRow = (uploadId: string) =>
-  db.query<ThumbRow, [string]>("SELECT state, pages FROM pdf_thumbnails WHERE upload_id = ?").get(uploadId);
+function firstRow(uploadId: string): FirstRow | null {
+  const row = db
+    .query<{ state: string; pages: number | null }, [string]>("SELECT state, pages FROM pdf_thumbnails WHERE upload_id = ?")
+    .get(uploadId);
+  return row ? { state: row.state, count: readPageCount(row.pages) } : null;
+}
 
 function pending(set: Reply) {
   set.status = 202;
@@ -293,57 +301,95 @@ function busy(set: Reply) {
   return { ...refuse(set, 503, BUSY), retryAfter: 2 };
 }
 
+/** One of the lane's two queues: its table, how many may wait in it, and the disk a piece of its work may need. */
+type Lane = {
+  table: "pdf_thumbnails" | "pdf_page_thumbs";
+  max: number;
+  maxPerCaller: number;
+  room: number;
+};
+/** Page 1 and the count. Each is well under a second; past this, the tile will do. */
+const FIRST: Lane = { table: "pdf_thumbnails", max: MAX_QUEUED_THUMBNAILS, maxPerCaller: MAX_QUEUED_THUMBNAILS, room: 1024 * 1024 };
+const BATCHES: Lane = {
+  table: "pdf_page_thumbs",
+  max: MAX_QUEUED_PAGE_BATCHES,
+  maxPerCaller: MAX_QUEUED_PAGE_BATCHES_PER_CALLER,
+  room: PAGE_THUMB_BATCH * 256 * 1024,
+};
+
 /**
- * Asks the lane for page 1 and the count, unless it is already on it. A row
- * marked done whose work has gone missing (the PNG, or a count from before
- * #37) is asked again. Returns a refusal, or null when the caller should 202.
+ * Asks the lane for a piece of work, keyed by `key` (the row's primary key),
+ * unless it is already on it (`row` queued or running). The caller decides
+ * that a row in any other state is worth asking again. Returns a refusal, or
+ * null when the caller should 202.
  */
-async function queueFirst(set: Reply, uploadId: string, row: ThumbRow | null) {
+async function enqueue(set: Reply, lane: Lane, key: Record<string, string | number>, row: { state: string } | null, caller: string) {
   if (!workerStatus().up) return refuse(set, 503, WORKER_OFFLINE);
-  if (row && row.state !== "done") return null;
-  const queued = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM pdf_thumbnails WHERE state = 'queued'").get()?.n ?? 0;
-  if (queued >= MAX_QUEUED_THUMBNAILS) return busy(set);
-  if (!(await diskHasRoom(paths.jobs, 1024 * 1024))) return refuse(set, 507, DISK_FULL);
+  if (row?.state === "queued" || row?.state === "running") return null;
+  const count = (sql: string, ...args: string[]) => db.query<{ n: number }, string[]>(sql).get(...args)?.n ?? 0;
+  const queued = count(`SELECT COUNT(*) AS n FROM ${lane.table} WHERE state = 'queued'`);
+  const mine = count(
+    `SELECT COUNT(*) AS n FROM ${lane.table} q JOIN uploads u ON u.id = q.upload_id WHERE q.state = 'queued' AND u.caller = ?`,
+    caller,
+  );
+  if (queued >= lane.max || mine >= lane.maxPerCaller) return busy(set);
+  if (!(await diskHasRoom(paths.jobs, lane.room))) return refuse(set, 507, DISK_FULL);
+  const cols = Object.keys(key);
   const now = Date.now();
   db.run(
-    "INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at) VALUES (?, 'queued', ?, ?) ON CONFLICT (upload_id) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at",
-    [uploadId, now, now],
+    `INSERT INTO ${lane.table} (${cols.join(", ")}, state, requested_at, updated_at) VALUES (${cols.map(() => "?").join(", ")}, 'queued', ?, ?)
+     ON CONFLICT (${cols.join(", ")}) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at`,
+    [...Object.values(key), now, now],
   );
   return null;
 }
 
-/** The refusal for a count the lane could not make; null when there is a count or none yet. */
-function uncounted(set: Reply, row: ThumbRow | null) {
-  if (row?.pages === -1) return refuse(set, 422, "this PDF is password-protected");
-  if (row?.pages === 0 || (row?.pages === null && row.state === "failed")) return refuse(set, 422, "this PDF's pages could not be counted");
+/**
+ * Asks for page 1 and the count. A row marked done whose work has gone
+ * missing (the PNG, or a count from before #37) is asked again, and so is one
+ * whose count was cut short — a timeout or a worker restart says nothing
+ * about the file.
+ */
+const queueFirst = (set: Reply, uploadId: string, row: FirstRow | null, caller: string) =>
+  enqueue(set, FIRST, { upload_id: uploadId }, row, caller);
+
+/** The refusal for a count the lane found it can't make — the file is the problem; null otherwise. */
+function uncountable(set: Reply, count: PageCountState | undefined) {
+  if (count?.state === "locked") return refuse(set, 422, "this PDF is password-protected");
+  if (count?.state === "unreadable") return refuse(set, 422, "this PDF's pages could not be counted");
   return null;
 }
 
 export const pdfUploads = new Elysia({ prefix: "/api/pdf/uploads" })
   .get(
     "/:id/thumbnail.png",
-    async ({ params, set }) => {
+    async (ctx) => {
+      const { params, set } = ctx;
       const upload = completedUpload(params.id);
       if (!upload) return refuse(set, 404, NOT_FOUND);
       if (upload.kind !== "pdf") return refuse(set, 415, "only a PDF has a page to preview");
       const png = Bun.file(thumbnailPath(upload.id));
       if (await png.exists()) return new Response(png, { headers: PNG_HEADERS });
-      const row = thumbRow(upload.id);
-      if (row?.state === "failed") return refuse(set, 422, "this PDF's first page could not be drawn");
-      return (await queueFirst(set, upload.id, row)) ?? pending(set);
+      const row = firstRow(upload.id);
+      // Page 1 is only drawn once there is a count, so a failure with none was the count's, cut short.
+      if (row?.state === "failed" && row.count.state !== "uncounted") {
+        return uncountable(set, row.count) ?? refuse(set, 422, "this PDF's first page could not be drawn");
+      }
+      return (await queueFirst(set, upload.id, row, clientIp(ctx))) ?? pending(set);
     },
     { beforeHandle: rateLimit("pdf-thumbnail", 240) },
   )
   .get(
     "/:id/pages",
-    async ({ params, set }) => {
+    async (ctx) => {
       // 200 `{ pages }` — qpdf's count, the one Merge will use.
+      const { params, set } = ctx;
       const upload = completedUpload(params.id);
       if (!upload) return refuse(set, 404, NOT_FOUND);
       if (upload.kind !== "pdf") return refuse(set, 415, "only a PDF has pages to count");
-      const row = thumbRow(upload.id);
-      if (row?.pages && row.pages > 0) return { pages: row.pages } satisfies PdfPageCount;
-      return uncounted(set, row) ?? (await queueFirst(set, upload.id, row)) ?? pending(set);
+      const row = firstRow(upload.id);
+      if (row?.count.state === "counted") return { pages: row.count.pages } satisfies PdfPageCount;
+      return uncountable(set, row?.count) ?? (await queueFirst(set, upload.id, row, clientIp(ctx))) ?? pending(set);
     },
     { beforeHandle: rateLimit("pdf-thumbnail", 240) },
   )
@@ -358,10 +404,13 @@ export const pdfUploads = new Elysia({ prefix: "/api/pdf/uploads" })
       const n = Number(/^([1-9][0-9]{0,5})\.png$/.exec(params.file)?.[1] ?? NaN);
       if (!Number.isInteger(n)) return refuse(set, 404, "there is no such page");
 
-      const row = thumbRow(upload.id);
-      if (!row?.pages) return uncounted(set, row) ?? (await queueFirst(set, upload.id, row)) ?? pending(set);
-      if (row.pages < 0) return uncounted(set, row);
-      if (n > row.pages) return refuse(set, 404, `this PDF has ${row.pages} page${row.pages === 1 ? "" : "s"}`);
+      const caller = clientIp(ctx);
+      const row = firstRow(upload.id);
+      if (row?.count.state !== "counted") {
+        return uncountable(set, row?.count) ?? (await queueFirst(set, upload.id, row, caller)) ?? pending(set);
+      }
+      const { pages } = row.count;
+      if (n > pages) return refuse(set, 404, `this PDF has ${pages} page${pages === 1 ? "" : "s"}`);
 
       const png = Bun.file(pagePath(upload.id, n));
       if (await png.exists()) return new Response(png, { headers: PNG_HEADERS });
@@ -370,25 +419,8 @@ export const pdfUploads = new Elysia({ prefix: "/api/pdf/uploads" })
         .query<{ state: string }, [string, number]>("SELECT state FROM pdf_page_thumbs WHERE upload_id = ? AND batch = ?")
         .get(upload.id, batch);
       if (job?.state === "failed") return refuse(set, 422, `page ${n} could not be drawn`);
-      if (!workerStatus().up) return refuse(set, 503, WORKER_OFFLINE);
       // No row yet, or one marked done whose file has gone: ask for the batch.
-      if (!job || job.state === "done") {
-        const queued = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM pdf_page_thumbs WHERE state = 'queued'").get()?.n ?? 0;
-        const mine =
-          db
-            .query<{ n: number }, [string]>(
-              "SELECT COUNT(*) AS n FROM pdf_page_thumbs p JOIN uploads u ON u.id = p.upload_id WHERE p.state = 'queued' AND u.caller = ?",
-            )
-            .get(clientIp(ctx))?.n ?? 0;
-        if (queued >= MAX_QUEUED_PAGE_BATCHES || mine >= MAX_QUEUED_PAGE_BATCHES_PER_CALLER) return busy(set);
-        if (!(await diskHasRoom(paths.jobs, PAGE_THUMB_BATCH * 256 * 1024))) return refuse(set, 507, DISK_FULL);
-        const now = Date.now();
-        db.run(
-          "INSERT INTO pdf_page_thumbs (upload_id, batch, state, requested_at, updated_at) VALUES (?, ?, 'queued', ?, ?) ON CONFLICT (upload_id, batch) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at",
-          [upload.id, batch, now, now],
-        );
-      }
-      return pending(set);
+      return (await enqueue(set, BATCHES, { upload_id: upload.id, batch }, job ?? null, caller)) ?? pending(set);
     },
     { beforeHandle: rateLimit("pdf-page-thumb", 600) },
   )

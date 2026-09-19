@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PAGE_THUMB_EDGE } from "@tools/shared";
+import { PAGE_THUMB_DIR, PAGE_THUMB_EDGE } from "@tools/shared";
 
 /**
  * The thumbnail lane (#17, #37): page counts, batched page renders, and the
@@ -79,10 +79,14 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
   }, 60_000);
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  test("countPages: qpdf's count, -1 for a password, 0 for junk", async () => {
-    expect(await lane.countPages(join(fx, "thirty.pdf"))).toBe(30);
-    expect(await lane.countPages(join(fx, "locked.pdf"))).toBe(-1);
-    expect(await lane.countPages(join(fx, "junk.pdf"))).toBe(0);
+  test("countPages: qpdf's count, locked for a password, unreadable for junk", async () => {
+    expect(await lane.countPages(join(fx, "thirty.pdf"))).toEqual({ state: "counted", pages: 30 });
+    expect(await lane.countPages(join(fx, "locked.pdf"))).toEqual({ state: "locked" });
+    expect(await lane.countPages(join(fx, "junk.pdf"))).toEqual({ state: "unreadable" });
+  });
+
+  test("countPages: a count cut short is not a verdict on the file", async () => {
+    expect(await lane.countPages(join(fx, "thirty.pdf"), AbortSignal.abort())).toEqual({ state: "uncounted" });
   });
 
   test("renderPages draws a batch in one run, each page within the edge", async () => {
@@ -119,7 +123,7 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
 
     expect(await lane.drawNext(uploads)).toBe(true);
     expect(db.query("SELECT state FROM pdf_page_thumbs WHERE upload_id = ?").get(id)).toEqual({ state: "done" });
-    expect(readdirSync(join(dir, lane.PAGES_DIR)).sort((a, b) => parseInt(a) - parseInt(b))).toEqual(
+    expect(readdirSync(join(dir, PAGE_THUMB_DIR)).sort((a, b) => parseInt(a) - parseInt(b))).toEqual(
       ["25", "26", "27", "28", "29", "30"].map((n) => `${n}.png`),
     );
     expect(await lane.drawNext(uploads)).toBe(false);
@@ -147,5 +151,25 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
     expect(row(id)).toEqual({ state: "failed", pages: -1 });
     await lane.drawNext(uploads);
     expect(db.query("SELECT state FROM pdf_page_thumbs WHERE upload_id = ?").get(id)).toEqual({ state: "failed" });
+  });
+
+  test("a worker that died counting puts the count back in the queue; one that died drawing does not", () => {
+    const counting = "up_00000000000000a4";
+    const drawing = "up_00000000000000a5";
+    db.run("INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at) VALUES (?, 'running', 1, 1)", [counting]);
+    db.run(
+      "INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at, pages) VALUES (?, 'running', 1, 1, 30)",
+      [drawing],
+    );
+    db.run(
+      "INSERT INTO pdf_page_thumbs (upload_id, batch, state, requested_at, updated_at) VALUES (?, 0, 'running', 1, 1)",
+      [drawing],
+    );
+    lane.recoverThumbnails();
+    expect(row(counting)).toEqual({ state: "queued", pages: null });
+    expect(row(drawing)).toEqual({ state: "failed", pages: 30 });
+    expect(db.query("SELECT state FROM pdf_page_thumbs WHERE upload_id = ?").get(drawing)).toEqual({ state: "failed" });
+    db.run("DELETE FROM pdf_page_thumbs");
+    db.run("DELETE FROM pdf_thumbnails");
   });
 });

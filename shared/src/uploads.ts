@@ -25,3 +25,47 @@ export const PAGE_THUMB_EDGE = 200;
 export const pageThumbBatch = (page: number) => Math.floor((page - 1) / PAGE_THUMB_BATCH);
 /** GET /api/pdf/uploads/:id/pages → 200. The count qpdf gives, the same one Merge uses. */
 export type PdfPageCount = { pages: number };
+/** The directory, inside an upload's own, that a PDF's page thumbnails land in as `<n>.png` — the worker writes there and the API serves it. */
+export const PAGE_THUMB_DIR = "pages";
+
+/**
+ * What the thumbnail lane knows of a PDF's page count. `uncounted` is not
+ * final: nobody has asked yet, or the count was cut short (a timeout, a
+ * worker restart) and asking again may work. `locked` and `unreadable` are
+ * final — the file itself is the problem.
+ */
+export type PageCountState =
+  | { state: "uncounted" }
+  | { state: "counted"; pages: number }
+  | { state: "locked" }
+  | { state: "unreadable" };
+
+/*
+ * How it is kept in `pdf_thumbnails.pages` (worker and API, db.ts): NULL
+ * uncounted, n ≥ 1 counted, -1 locked, 0 unreadable. Only these two functions
+ * read or write those numbers.
+ */
+const LOCKED = -1;
+const UNREADABLE = 0;
+
+/** The `pdf_thumbnails.pages` value for a count. */
+export function storePageCount(c: PageCountState): number | null {
+  switch (c.state) {
+    case "counted":
+      return c.pages;
+    case "locked":
+      return LOCKED;
+    case "unreadable":
+      return UNREADABLE;
+    case "uncounted":
+      return null;
+  }
+}
+
+/** A `pdf_thumbnails.pages` value read back. Anything unexpected reads as not counted, so it is asked again. */
+export function readPageCount(stored: number | null | undefined): PageCountState {
+  if (stored === LOCKED) return { state: "locked" };
+  if (stored === UNREADABLE) return { state: "unreadable" };
+  if (typeof stored === "number" && Number.isInteger(stored) && stored >= 1) return { state: "counted", pages: stored };
+  return { state: "uncounted" };
+}
