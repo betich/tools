@@ -184,13 +184,20 @@ export function PageGrid({
               {dealable ? (
                 <TextButton
                   onClick={() => state.interleave(selection.ids)}
+                  aria-label="interleave"
                   data-tip="one page from each file in turn"
                   className="tooltip"
                 >
                   interleave
                 </TextButton>
               ) : null}
-              <TextButton onClick={state.removePicked} data-tip="delete" className="tooltip">
+              <TextButton
+                onClick={state.removePicked}
+                aria-label={`remove ${picked === 1 ? "page" : "pages"}`}
+                aria-keyshortcuts="Delete Backspace"
+                data-tip="delete"
+                className="tooltip"
+              >
                 remove {picked === 1 ? "page" : "pages"}
               </TextButton>
             </>
@@ -198,12 +205,21 @@ export function PageGrid({
             <TextButton onClick={state.resetAll}>reset all</TextButton>
           ) : null}
           <span className="flex items-center gap-4">
-            <TextButton onClick={state.undo} disabled={!state.canUndo} data-tip="⌘Z" className="tooltip">
+            <TextButton
+              onClick={state.undo}
+              disabled={!state.canUndo}
+              aria-label="undo"
+              aria-keyshortcuts="Control+Z Meta+Z"
+              data-tip="⌘Z"
+              className="tooltip"
+            >
               undo
             </TextButton>
             <TextButton
               onClick={state.redo}
               disabled={!state.canRedo}
+              aria-label="redo"
+              aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
               data-tip="⇧⌘Z"
               data-tip-pos="top-right"
               className="tooltip"
