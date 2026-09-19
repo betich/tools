@@ -15,11 +15,23 @@ import type { TaskContext } from "./jobs";
  * engine and say so in its notes.
  */
 
-/** Writes `parts` (PDFs, in order, pages kept in order) to `out` as one PDF. */
-export type MergeJoin = (ctx: TaskContext, parts: string[], out: string) => Promise<void>;
+/**
+ * One piece of a join: a PDF, whole, or only pages `from`–`to` of it (0-based,
+ * inclusive) when merging by page (#39). The same path may appear more than
+ * once, when a file's pages are interleaved with another's.
+ */
+export type MergePart = { path: string; pages?: [from: number, to: number] };
 
-async function qpdfJoin(ctx: TaskContext, parts: string[], out: string): Promise<void> {
-  await ctx.run("qpdf", ["--warning-exit-0", "--empty", "--pages", ...parts, "--", out], {
+/** Writes `parts` (PDFs or page ranges of them, in order, pages kept in order) to `out` as one PDF. */
+export type MergeJoin = (ctx: TaskContext, parts: MergePart[], out: string) => Promise<void>;
+
+/** qpdf's `--pages` arguments: each file, followed by its 1-based range when it isn't taken whole. */
+export function qpdfPagesArgs(parts: MergePart[]): string[] {
+  return parts.flatMap((p) => (p.pages ? [p.path, `${p.pages[0] + 1}-${p.pages[1] + 1}`] : [p.path]));
+}
+
+async function qpdfJoin(ctx: TaskContext, parts: MergePart[], out: string): Promise<void> {
+  await ctx.run("qpdf", ["--warning-exit-0", "--empty", "--pages", ...qpdfPagesArgs(parts), "--", out], {
     label: "qpdf",
     where: "while joining the files",
     hint: "Try merging fewer files at once.",
