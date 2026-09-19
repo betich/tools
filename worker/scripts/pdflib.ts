@@ -5,7 +5,9 @@
  *
  *   bun pdflib.ts compress <in.pdf> <out.pdf> <ops.json>
  *     ops: { objectStreams, stripMetadata, keepXmp }
- *   bun pdflib.ts join <out.pdf> <a.pdf> <b.pdf> …
+ *   bun pdflib.ts join <out.pdf> <part> <part> …
+ *     part: a PDF's path, or `from-to:path` for only pages from–to of it
+ *     (0-based, inclusive); a path may repeat and is read once
  *
  * pdf-lib parses the whole file into memory and writes every object back out
  * (used or not), copying streams as they are; what it adds is object streams
@@ -50,11 +52,19 @@ async function main(argv: string[]) {
     if (ops.stripMetadata) stripMetadata(doc, ops.keepXmp);
     await save(doc, output, ops.objectStreams);
   } else if (mode === "join") {
-    const [output, ...inputs] = rest as [string, ...string[]];
+    const [output, ...parts] = rest as [string, ...string[]];
     const out = await PDFDocument.create({ updateMetadata: false });
-    for (const input of inputs) {
-      const src = await open(input);
-      for (const page of await out.copyPages(src, src.getPageIndices())) out.addPage(page);
+    const opened = new Map<string, PDFDocument>();
+    for (const part of parts) {
+      const range = /^(\d+)-(\d+):(.+)$/s.exec(part);
+      const path = range ? range[3]! : part;
+      let src = opened.get(path);
+      if (!src) opened.set(path, (src = await open(path)));
+      const from = range ? Number(range[1]) : 0;
+      const to = range ? Number(range[2]) : src.getPageCount() - 1;
+      if (to >= src.getPageCount()) throw new Error(`${path} has no page ${to + 1}`);
+      const indices = Array.from({ length: to - from + 1 }, (_, k) => from + k);
+      for (const page of await out.copyPages(src, indices)) out.addPage(page);
     }
     await save(out, output, true);
   } else {

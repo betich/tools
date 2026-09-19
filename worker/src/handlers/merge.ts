@@ -7,8 +7,11 @@ import {
   PAPER_IDS,
   pageLayout,
   toPdfRect,
+  mergePagesProblem,
   type ImageDpi,
+  type MergeItem,
   type MergeItemOptions,
+  type MergePageRun,
   type MergeOutput,
   type MergeResult,
   type PageLayout,
@@ -25,7 +28,7 @@ import {
   type Orientation,
 } from "../images";
 import { predownsampleSize } from "../limits";
-import { mergeJoinFor } from "../mergeEngines";
+import { mergeJoinFor, type MergePart } from "../mergeEngines";
 
 /**
  * Merge (#17): PDFs and images, in the order given, into one PDF.
@@ -49,6 +52,14 @@ import { mergeJoinFor } from "../mergeEngines";
  *    It saves incrementally, so it copies no streams either.
  * 4. A last lossless qpdf pass packs objects into object streams.
  *
+ * Merging by page (#39): with `pages` the output is those runs of item pages,
+ * in that order, instead of every item whole. Each run (continuing runs
+ * joined) is one join part and one bookmark, titled with its pages when the
+ * file is split or cut short; a source's own bookmarks go under the run that
+ * holds their page and are dropped with it. Without `pages` — or with runs
+ * that amount to every item whole — the join and the finish spec are exactly
+ * the by-file ones, so the output is too.
+ *
  * Named destinations, AcroForm field trees beyond what qpdf carries, and
  * structure trees of the source PDFs are not merged.
  */
@@ -57,6 +68,7 @@ const SCRIPTS = join(import.meta.dir, "..", "scripts");
 const MAX_ITEMS = 200;
 const MAX_FRAMES = 500;
 const MAX_PAGES = 10_000;
+const TOO_MANY_PAGES = `A merge makes at most ${MAX_PAGES.toLocaleString("en")} pages.`;
 /** mozjpeg quality when "compress images" is on: visually clean, about a third of lossless PNG for photos. */
 const JPEG_QUALITY = 85;
 const HEAD_BYTES = 512 * 1024;
@@ -65,13 +77,26 @@ const VIPS_ENV = { VIPS_BLOCK_UNTRUSTED: "1" };
 const OOM_HINT = "Try a smaller copy of that file.";
 
 type Item = { input: TaskInput; name: string; layout: MergeItemOptions };
-type Options = { items: Item[]; output: MergeOutput };
+/** `pages`: the page view's runs (#39), or null to merge every item whole, in order. */
+type Options = { items: Item[]; output: MergeOutput; pages: MergePageRun[] | null };
 
 /** A flate image as merge-pages.js takes it: a zlib stream of PNG-filtered rows. */
 type FlateSpec = { type: "flate"; path: string; width: number; height: number; bpc: number; colors: number };
 type ImageSpec = ({ type: "dct"; path: string } | FlateSpec) & { smask?: FlateSpec };
 type PageSpec = { width: number; height: number; content: string; image: ImageSpec };
-type FileEntry = { title: string; label: string; start: number; count: number; source: string | null };
+/** One bookmark and label unit for merge-finish.js: a contiguous run of one item's pages in the output. */
+type FileEntry = {
+  title: string;
+  label: string;
+  start: number;
+  count: number;
+  source: string | null;
+  /** The run's first page in the item, 0-based. */
+  from: number;
+  whole: boolean;
+  /** The item's first run in the output. */
+  first: boolean;
+};
 
 // ── params ─────────────────────────────────────────────────────────────────
 
@@ -94,7 +119,7 @@ function layoutOf(v: unknown): MergeItemOptions {
 
 /** Reads the task's params against the job's uploads. The client's `kind` is ignored — the sniffed one decides. */
 function optionsOf(raw: unknown, inputs: TaskInput[]): Options {
-  const p = (raw && typeof raw === "object" ? raw : {}) as { items?: unknown; output?: unknown };
+  const p = (raw && typeof raw === "object" ? raw : {}) as { items?: unknown; output?: unknown; pages?: unknown };
   if (!Array.isArray(p.items) || !p.items.length) throw new TaskError("Add at least one file to merge.");
   if (p.items.length > MAX_ITEMS) throw new TaskError(`A merge takes at most ${MAX_ITEMS} files.`);
   const byId = new Map(inputs.map((i) => [i.id, i]));
@@ -113,8 +138,30 @@ function optionsOf(raw: unknown, inputs: TaskInput[]): Options {
     pageLabels: bool(o.pageLabels, d.pageLabels),
     compressImages: bool(o.compressImages, d.compressImages),
   };
-  return { items, output };
+  // Page counts aren't known yet; the handler checks the runs against them once it has read each file.
+  const pages = p.pages == null ? null : p.pages;
+  const problem = pages === null ? null : mergePagesProblem(pages, asMergeItems(items));
+  if (problem) throw new TaskError(problem);
+  return { items, output, pages: pages as MergePageRun[] | null };
 }
+
+/** The items as `mergePagesProblem` reads them, with the sniffed kind. */
+const asMergeItems = (items: Item[]): MergeItem[] =>
+  items.map((it) => ({ upload: it.input.id, name: it.name, kind: it.input.kind, layout: it.layout }));
+
+/** Joins runs that continue one another: each is then one bookmark and one join part. */
+function joinRuns(runs: readonly MergePageRun[]): MergePageRun[] {
+  const out: MergePageRun[] = [];
+  for (const [item, from, to] of runs) {
+    const last = out.at(-1);
+    if (last && last[0] === item && last[2] + 1 === from) last[2] = to;
+    else out.push([item, from, to]);
+  }
+  return out;
+}
+
+/** 1-based pages as a reader says them: "page 2", "pages 4–20". */
+const pagesSaid = (from: number, to: number) => (from === to ? `page ${from + 1}` : `pages ${from + 1}–${to + 1}`);
 
 /** A file name without its extension — the default title, as the client computes it. */
 const stem = (name: string) => name.replace(/\.[^./\\]+$/, "").trim() || name.trim() || "merged";
@@ -337,44 +384,86 @@ async function pdfPages(ctx: TaskContext, item: Item): Promise<number> {
 // ── the task ───────────────────────────────────────────────────────────────
 
 registerHandler("merge", async (ctx) => {
-  const { items, output } = optionsOf(ctx.task.params, ctx.inputs);
+  const { items, output, pages } = optionsOf(ctx.task.params, ctx.inputs);
   const engine = mergeJoinFor((ctx.task.params as { engine?: unknown } | null)?.engine);
   const title = output.title ?? stem(items[0]!.name);
   const fileName = mergeFileName(title);
   const notes: string[] = engine.note ? [engine.note] : [];
-  const parts: string[] = [];
-  const files: FileEntry[] = [];
-  let total = 0;
+  // Per item: the PDF its pages come from (the upload, or the image's page PDF), their count, and the source for outline and labels.
+  const built: { path: string; count: number; source: string | null }[] = [];
+  // By page, only the items the runs name are read; by file, every item, and the page cap is checked as they add up.
+  const wanted = pages ? new Set(pages.map((r) => r[0])) : null;
+  let read = 0;
 
   for (const [n, item] of items.entries()) {
+    if (wanted && !wanted.has(n)) continue;
     ctx.progress("preparing", n, items.length, item.name);
     let count: number;
     let source: string | null = null;
+    let path: string;
     if (item.input.kind === "pdf") {
       count = await pdfPages(ctx, item);
       source = item.input.path;
-      parts.push(item.input.path);
+      path = item.input.path;
     } else {
-      const built =
+      const made =
         (item.input.kind === "jpeg" ? await jpegPages(item) : null) ??
         (await rasterPages(ctx, item, output.compressImages, n, items.length));
-      notes.push(...built.notes);
+      notes.push(...made.notes);
       const spec = join(ctx.workDir, `item${n}.json`);
       const part = join(ctx.workDir, `item${n}.pdf`);
-      await writeFile(spec, JSON.stringify({ pages: built.pages }));
+      await writeFile(spec, JSON.stringify({ pages: made.pages }));
       await ctx.run("mutool", ["run", join(SCRIPTS, "merge-pages.js"), spec, part], {
         label: "MuPDF",
         where: `while placing "${item.name}"`,
         hint: OOM_HINT,
       });
-      count = built.pages.length;
-      parts.push(part);
+      count = made.pages.length;
+      path = part;
     }
-    files.push({ title: item.name, label: stem(item.name).slice(0, 40), start: total, count, source });
-    total += count;
-    if (total > MAX_PAGES) throw new TaskError(`A merge makes at most ${MAX_PAGES.toLocaleString("en")} pages.`);
+    built[n] = { path, count, source };
+    read += count;
+    if (!pages && read > MAX_PAGES) throw new TaskError(TOO_MANY_PAGES);
   }
   ctx.progress("preparing", items.length, items.length);
+
+  // The output as runs, each one join part and one bookmark. An image is one page in the page list and every frame in the output.
+  let runs: MergePageRun[];
+  if (pages) {
+    const problem = mergePagesProblem(pages, asMergeItems(items), (i) => built[i]?.count);
+    if (problem) throw new TaskError(problem);
+    runs = joinRuns(pages.map(([i, from, to]) => (items[i]!.input.kind === "pdf" ? [i, from, to] : [i, 0, built[i]!.count - 1])));
+  } else {
+    runs = items.map((_, i) => [i, 0, built[i]!.count - 1]);
+  }
+
+  const parts: MergePart[] = [];
+  const files: FileEntry[] = [];
+  const runsOf = new Map<number, number>();
+  for (const [i] of runs) runsOf.set(i, (runsOf.get(i) ?? 0) + 1);
+  const seen = new Set<number>();
+  let total = 0;
+  for (const [i, from, to] of runs) {
+    const item = items[i]!;
+    const { path, count: of, source } = built[i]!;
+    const count = to - from + 1;
+    const isWhole = from === 0 && to === of - 1;
+    parts.push(isWhole ? { path } : { path, pages: [from, to] });
+    files.push({
+      // A PDF split into pieces, or cut short, says which pages each bookmark holds; an image is always whole.
+      title: item.input.kind !== "pdf" || (isWhole && runsOf.get(i) === 1) ? item.name : `${item.name} (${pagesSaid(from, to)})`,
+      label: stem(item.name).slice(0, 40),
+      start: total,
+      count,
+      source,
+      from,
+      whole: isWhole,
+      first: !seen.has(i),
+    });
+    seen.add(i);
+    total += count;
+    if (total > MAX_PAGES) throw new TaskError(TOO_MANY_PAGES);
+  }
 
   ctx.progress("joining", 0, 1, `${total} pages`);
   const joined = join(ctx.workDir, "joined.pdf");
