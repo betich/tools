@@ -25,9 +25,9 @@ export function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-export function snapDelay(ms: number, step = DELAY_STEP, min = MIN_DELAY, max = MAX_DELAY): number {
-  if (!Number.isFinite(ms)) return min;
-  return clamp(Math.round(ms / step) * step, min, max);
+export function snapDelay(ms: number): number {
+  if (!Number.isFinite(ms)) return MIN_DELAY;
+  return clamp(Math.round(ms / DELAY_STEP) * DELAY_STEP, MIN_DELAY, MAX_DELAY);
 }
 
 /** Start time of every frame, plus the total as the last entry (length n + 1). */

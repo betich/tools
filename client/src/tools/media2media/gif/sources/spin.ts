@@ -482,27 +482,38 @@ async function inWorker(
   signal?: AbortSignal,
 ): Promise<void> {
   if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined") throw new WorkerUnavailable();
-  const worker = new Worker(new URL("./spin.worker.ts", import.meta.url), { type: "module" });
   const id = nextJob++;
-  // Copies, so the caller keeps its bitmaps and these can be transferred.
-  const front = await createImageBitmap(job.front);
-  const back = job.back ? await createImageBitmap(job.back) : null;
+  let worker: Worker | null = null;
+  let front: ImageBitmap | null = null;
+  let back: ImageBitmap | null = null;
+  let abort: (() => void) | null = null;
   try {
+    // Copies, so the caller keeps its bitmaps and these can be transferred.
+    front = await createImageBitmap(job.front);
+    back = job.back ? await createImageBitmap(job.back) : null;
+    const w = (worker = new Worker(new URL("./spin.worker.ts", import.meta.url), { type: "module" }));
+    const copies = { front, back };
     await new Promise<void>((resolve, reject) => {
-      const abort = () => reject(signal?.reason ?? new DOMException("Spin cancelled", "AbortError"));
+      abort = () => reject(signal?.reason ?? new DOMException("Spin cancelled", "AbortError"));
+      if (signal?.aborted) return abort();
       signal?.addEventListener("abort", abort, { once: true });
-      worker.onmessage = (e: MessageEvent<SpinResponse>) => {
+      w.onmessage = (e: MessageEvent<SpinResponse>) => {
         const msg = e.data;
         if (msg.id !== id) return;
         if (msg.kind === "frame") onFrame(msg.bitmap, msg.index);
         else if (msg.kind === "done") resolve();
         else reject(msg.error === "unavailable" ? new WorkerUnavailable() : new Error(msg.error));
       };
-      worker.onerror = () => reject(new WorkerUnavailable());
-      const request: SpinRequest = { id, job: { ...job, front, back } };
-      worker.postMessage(request, back ? [front, back] : [front]);
+      w.onerror = () => reject(new WorkerUnavailable());
+      const request: SpinRequest = { id, job: { ...job, front: copies.front, back: copies.back } };
+      w.postMessage(request, copies.back ? [copies.front, copies.back] : [copies.front]);
     });
   } finally {
-    worker.terminate();
+    if (abort) signal?.removeEventListener("abort", abort);
+    worker?.terminate();
+    // Once transferred these are detached and close() does nothing; if the
+    // job never reached the worker, this frees them.
+    front?.close();
+    back?.close();
   }
 }

@@ -11,6 +11,9 @@
    in JavaScript; the tests pin it, and the shader is written to match.
    ─────────────────────────────────────────────────────────────────────────── */
 
+import { normaliseHex } from "@/lib/color";
+import { fileStem } from "../../names";
+
 export type KeySettings = {
   enabled: boolean;
   /** `#RRGGBB`, the backdrop's colour — picked off the picture with the eyedropper. */
@@ -66,12 +69,9 @@ const CR_SCALE = 2 * (1 - KR);
 
 /** `#RRGGBB` or `#RGB` to 0–1 channels; null for anything else. */
 export function parseHex(hex: string): Rgb | null {
-  const v = hex.trim();
-  const long = /^#?([0-9a-f]{6})$/i.exec(v);
-  const short = /^#?([0-9a-f]{3})$/i.exec(v);
-  const digits = long ? long[1]! : short ? short[1]!.replace(/./g, (c) => c + c) : null;
-  if (!digits) return null;
-  const n = parseInt(digits, 16);
+  const v = normaliseHex(hex, { short: true, bare: true });
+  if (!v) return null;
+  const n = parseInt(v.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
@@ -162,26 +162,62 @@ export const NO_WEBGL = "This browser can't run WebGL, which the key needs to dr
 export const NEEDS_WEBM_VP9 = "Transparent video needs WebM with VP9 — pick them under output.";
 export const ALPHA_PLAYBACK_NOTE = "Transparent in Chrome/Firefox; Safari shows it opaque.";
 
+export const CHECKING_ALPHA = "Checking whether this browser can encode transparent video.";
+
 /** What a keyed export needs from the output: WebM, VP9. */
 export const KEYED_OUTPUT = { container: "webm", codec: "vp9" } as const;
 
 /**
+ * The edit with the key switched on or off. Switching it on moves the
+ * output to WebM/VP9 in the same step, since transparency survives nowhere
+ * else; switching it off leaves the output where it is.
+ */
+export function withKey<E extends { container: string; codec: string; key: KeySettings }>(edit: E, enabled: boolean): E {
+  return { ...edit, key: { ...edit.key, enabled }, ...(enabled ? KEYED_OUTPUT : {}) };
+}
+
+/**
  * Why a keyed video export can't go, or null. Checked before the general
  * blocker so the reason names the key, not the codec. Null when the key is
- * off, the output is audio, or the probe hasn't answered (the general
+ * off, the output is audio, or the codec probe hasn't answered (the general
  * blocker says it's checking).
+ *
+ * `alpha` is the alpha probe (`framesKeepAlpha`, run in the browser): null
+ * while it runs. Mediabunny encodes VP9 alpha as a second stream split from
+ * each frame's alpha plane, and silently drops it for a frame whose format
+ * has none — so a browser whose canvas frames lose their alpha would export
+ * an opaque file without a word. That is what the probe catches.
  */
 export function keyBlocker(
   edit: { output: "video" | "audio"; container: string; codec: string; key: KeySettings },
-  env: { vp9: { ok: boolean } | null; webgl: boolean; videoFrame: boolean },
+  env: { vp9: { ok: boolean } | null; webgl: boolean; alpha: boolean | null },
 ): string | null {
   if (!edit.key.enabled || edit.output !== "video") return null;
   if (!env.webgl) return NO_WEBGL;
   if (edit.container !== KEYED_OUTPUT.container || edit.codec !== KEYED_OUTPUT.codec) return NEEDS_WEBM_VP9;
   if (!env.vp9) return null;
-  // Mediabunny encodes the alpha as a second VP9 stream, from frames it can read back: VP9 plus VideoFrame.
-  if (!env.vp9.ok || !env.videoFrame) return NO_ALPHA;
+  if (!env.vp9.ok || env.alpha === false) return NO_ALPHA;
+  if (env.alpha === null) return CHECKING_ALPHA;
   return null;
+}
+
+/**
+ * The alpha probe's verdict on one `VideoFrame` made from a canvas that is
+ * half opaque, half clear: its pixel format must carry alpha (`RGBA`,
+ * `BGRA`, `I420A`…), and when the browser could read it back as RGBA the
+ * samples must hold both a clear and an opaque pixel. `rgba` is null when
+ * the read-back isn't supported; the format then decides alone.
+ */
+export function framesKeepAlpha(format: string | null, rgba: Uint8Array | null): boolean {
+  if (!format || !format.includes("A")) return false;
+  if (!rgba) return true;
+  let clear = false;
+  let opaque = false;
+  for (let i = 3; i < rgba.length; i += 4) {
+    if (rgba[i]! < 16) clear = true;
+    else if (rgba[i]! > 239) opaque = true;
+  }
+  return clear && opaque;
 }
 
 /** Why the PNG sequence can't be made, or null. It needs the shader and a decoder, no encoder. */
@@ -228,7 +264,5 @@ export function frameName(stem: string, index: number, total: number): string {
 
 /** The zip's name: the source's stem, Unicode kept. */
 export function sequenceZipName(sourceName: string): string {
-  const dot = sourceName.lastIndexOf(".");
-  const stem = (dot > 0 ? sourceName.slice(0, dot) : sourceName).trim() || "video";
-  return `${stem}-png.zip`;
+  return `${fileStem(sourceName, "video")}-png.zip`;
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CodecPool, formatMeta, formats, isImageFile, type Encoded } from "@/lib/codecs";
+import { formatMeta, formats, isImageFile, type Encoded } from "@/lib/codecs";
+import { useCodecPool } from "@/hooks/useCodecPool";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   defaultBatch,
@@ -47,20 +48,17 @@ export function useImageBatch() {
   const batch = useMemo(() => sanitiseBatch(stored), [stored]);
   const [jobs, setJobs] = useState<ImageJob[]>([]);
 
-  const poolRef = useRef<CodecPool | null>(null);
   const runs = useRef(new Map<string, { key: string; abort: AbortController }>());
 
   useEffect(
     () => () => {
       for (const r of runs.current.values()) r.abort.abort();
       runs.current.clear();
-      poolRef.current?.dispose();
-      poolRef.current = null;
     },
     [],
   );
-
-  const pool = useCallback(() => (poolRef.current ??= new CodecPool()), []);
+  // After the effect above, so the jobs are aborted before the pool goes.
+  const pool = useCodecPool();
 
   const patch = useCallback((id: string, next: Partial<ImageJob>) => {
     setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...next } : j)));

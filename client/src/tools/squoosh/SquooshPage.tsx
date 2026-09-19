@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { downloadZip } from "client-zip";
 import { FiDownload, FiX } from "react-icons/fi";
 import { Dropzone } from "@/components/Dropzone";
 import { PageHead, Shell } from "@/components/Shell";
 import { Empty, Field, IconButton, Section, Segmented, Slider, Stat, TextButton } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/cn";
 import { bytes, delta, ms, pad } from "@/lib/format";
@@ -237,11 +238,8 @@ function Compare({
   // The original as-is, until the browser refuses it (HEIC outside Safari); then a decoded copy.
   const [beforeBlob, setBeforeBlob] = useState<Blob>(job.file);
 
-  const beforeUrl = useMemo(() => URL.createObjectURL(beforeBlob), [beforeBlob]);
-  const afterUrl = useMemo(() => (job.outBlob ? URL.createObjectURL(job.outBlob) : ""), [job.outBlob]);
-
-  useEffect(() => () => URL.revokeObjectURL(beforeUrl), [beforeUrl]);
-  useEffect(() => () => void (afterUrl && URL.revokeObjectURL(afterUrl)), [afterUrl]);
+  const beforeUrl = useObjectUrl(beforeBlob);
+  const afterUrl = useObjectUrl(job.outBlob);
 
   const onImageError = () => {
     if (showing !== "before" || beforeBlob !== job.file) return;
@@ -269,7 +267,7 @@ function Compare({
       aria-label={`compare ${name}`}
     >
       <img
-        src={showing === "after" ? afterUrl : beforeUrl}
+        src={(showing === "after" ? afterUrl : beforeUrl) ?? undefined}
         alt={name}
         className="checkers max-h-full max-w-full rounded-md object-contain"
         style={{ boxShadow: "var(--shadow-lightbox)" }}

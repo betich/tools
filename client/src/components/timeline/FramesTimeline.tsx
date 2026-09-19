@@ -42,8 +42,6 @@ export type FramesTimelineProps<F extends TimelineFrame> = TimelineCommon & {
   onFramesChange: (frames: readonly F[], kind: ChangeKind) => void;
   /** Told whenever the selection changes, in play order. */
   onSelectionChange?: (ids: string[]) => void;
-  minDelay?: number;
-  delayStep?: number;
   /** Thumbnail aspect, width / height. */
   aspect?: number;
 };
@@ -86,8 +84,6 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
     onRedo,
     hotkeys = true,
     label = "frames",
-    minDelay,
-    delayStep,
     aspect = 16 / 9,
     className,
   } = props;
@@ -125,8 +121,6 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
     [onSelectionChange],
   );
 
-  const snap = useCallback((ms: number) => snapDelay(ms, delayStep, minDelay), [delayStep, minDelay]);
-
   /* ── pointer: one set of handlers on the track, tiles are dumb ─────── */
 
   const contentX = (clientX: number) =>
@@ -162,7 +156,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
     const { frames: fs, layout: l, selected: sel, pxPerMs: z } = live.current;
 
     if (drag.kind === "edge") {
-      const delay = snap(drag.startDelay + (e.clientX - drag.startX) / z);
+      const delay = snapDelay(drag.startDelay + (e.clientX - drag.startX) / z);
       const next = setDelays(fs, drag.ids, delay);
       if (next !== fs) onFramesChange(next, "preview");
       return;
@@ -295,7 +289,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
             count={chosen}
             value={shared}
             onCommit={(ms) => {
-              const next = setDelays(frames, selected, snap(ms));
+              const next = setDelays(frames, selected, snapDelay(ms));
               if (next !== frames) onFramesChange(next, "commit");
             }}
           />

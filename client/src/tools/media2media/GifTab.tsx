@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dropzone } from "@/components/Dropzone";
 import { Timeline, usePlayback, formatTime } from "@/components/timeline";
 import { TextButton } from "@/components/ui";
+import { useCodecPool } from "@/hooks/useCodecPool";
 import { useToast } from "@/hooks/useToast";
-import { CodecPool, IMAGE_ACCEPT } from "@/lib/codecs";
+import { IMAGE_ACCEPT } from "@/lib/codecs";
 import { cn } from "@/lib/cn";
 import { ExportPanel } from "./gif/ExportPanel";
 import { canvasSize, playDuration, playOrder, timelineTime } from "./gif/model";
@@ -93,7 +94,7 @@ export function GifTab() {
         <div className="flex flex-col gap-7">
           <Settings doc={doc} session={session} />
           <div className="border-hairline-faint border-t pt-7">
-            <ExportPanel doc={doc} store={session.store} />
+            <ExportPanel doc={doc} session={session} />
           </div>
         </div>
       </div>
@@ -143,28 +144,21 @@ type Loading = { done: number; total: number };
 /** Decodes picked files into frames on the codec pool and hands them to the session. One load at a time. */
 function useFrameLoader() {
   const toast = useToast();
-  const pool = useRef<CodecPool | null>(null);
   const running = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState<Loading | null>(null);
 
-  useEffect(
-    () => () => {
-      running.current?.abort();
-      pool.current?.dispose();
-      pool.current = null;
-    },
-    [],
-  );
+  useEffect(() => () => running.current?.abort(), []);
+  // After the effect above, so the load is aborted before the pool goes.
+  const pool = useCodecPool();
 
   const load = useCallback(
     async (files: File[], how: How) => {
       running.current?.abort();
       const ctrl = new AbortController();
       running.current = ctrl;
-      pool.current ??= new CodecPool();
       setLoading({ done: 0, total: files.length });
       try {
-        const result = await framesFromFiles(files, pool.current, {
+        const result = await framesFromFiles(files, pool(), {
           signal: ctrl.signal,
           onProgress: (done, total) => {
             if (!ctrl.signal.aborted) setLoading({ done, total });
@@ -189,7 +183,7 @@ function useFrameLoader() {
         }
       }
     },
-    [toast],
+    [toast, pool],
   );
 
   const cancel = useCallback(() => {

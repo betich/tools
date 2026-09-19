@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { downloadZip } from "client-zip";
 import { FiDownload, FiSliders, FiX } from "react-icons/fi";
 import { Dropzone } from "@/components/Dropzone";
@@ -15,6 +15,7 @@ import {
   TextButton,
   Toggle,
 } from "@/components/ui";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/cn";
 import { IMAGE_ACCEPT, formatMeta, formats, type OutputFormat } from "@/lib/codecs";
@@ -72,13 +73,14 @@ export function ImageTab() {
 
           <Section title="metadata">
             <Toggle checked={batch.keepExif} onChange={(keepExif) => set({ keepExif })} label="keep camera info" />
-            <div className={cn(!batch.keepExif && "pointer-events-none opacity-40")} aria-disabled={!batch.keepExif}>
+            {/* A disabled fieldset disables the switch inside it, keyboard included. */}
+            <fieldset disabled={!batch.keepExif} className="min-w-0 disabled:opacity-40 [&:disabled_*]:cursor-not-allowed">
               <Toggle
                 checked={batch.keepLocation}
                 onChange={(keepLocation) => set({ keepLocation })}
                 label="keep location"
               />
-            </div>
+            </fieldset>
             <p className="text-meta text-label font-sans">{metadataNote(batch)}</p>
           </Section>
 
@@ -210,9 +212,9 @@ function QualityField({
           max={100}
           value={value}
           onChange={onChange}
-          className={cn(!lossy && "pointer-events-none opacity-40")}
+          disabled={!lossy}
         />
-        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums">{value}</span>
+        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">{value}</span>
       </div>
     </Field>
   );
@@ -238,7 +240,7 @@ function EdgeField({
     >
       <div className="flex items-center gap-3">
         <Slider min={0} max={8192} step={64} value={value} onChange={onChange} />
-        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums">
+        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">
           {value || "orig"}
         </span>
       </div>
@@ -413,10 +415,4 @@ function FileRow({
       ) : null}
     </li>
   );
-}
-
-function useObjectUrl(blob: Blob | null): string | null {
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
-  useEffect(() => () => void (url && URL.revokeObjectURL(url)), [url]);
-  return url;
 }

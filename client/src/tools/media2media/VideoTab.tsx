@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dropzone } from "@/components/Dropzone";
-import { Timeline, usePlayback } from "@/components/timeline";
-import { formatTime } from "@/components/timeline/model";
-import { Button, TextButton } from "@/components/ui";
+import { formatTime, Timeline, usePlayback } from "@/components/timeline";
+import { Button, Prose, TextButton, Value } from "@/components/ui";
 import { useHistory } from "@/hooks/useHistory";
+import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { useToast } from "@/hooks/useToast";
-import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
 import { bytes } from "@/lib/format";
 import { budgetFor, correctedBitrate, outcome, type Outcome } from "./video/budget";
@@ -56,6 +55,7 @@ type TargetDone = {
 };
 
 type Loaded = { file: File; url: string; source: SourceInfo };
+type Opened = { file: File; source: SourceInfo; seq: number };
 
 type Job =
   | { phase: "idle" }
@@ -69,7 +69,8 @@ type Job =
  * uploaded; the server is never asked.
  */
 export function VideoTab() {
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const url = useObjectUrl(opened?.file);
   const [reading, setReading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const toast = useToast();
@@ -85,10 +86,7 @@ export function VideoTab() {
     setProblem(null);
     try {
       const source = await readSource(file);
-      setLoaded((prev) => {
-        if (prev) URL.revokeObjectURL(prev.url);
-        return { file, url: URL.createObjectURL(file), source };
-      });
+      setOpened((prev) => ({ file, source, seq: (prev?.seq ?? 0) + 1 }));
     } catch (e) {
       setProblem(
         e instanceof SourceError
@@ -100,9 +98,7 @@ export function VideoTab() {
     }
   }, []);
 
-  useEffect(() => () => void (loaded && URL.revokeObjectURL(loaded.url)), [loaded]);
-
-  if (!loaded) {
+  if (!opened || !url) {
     return (
       <div className="flex flex-col gap-4">
         <Dropzone
@@ -119,7 +115,15 @@ export function VideoTab() {
     );
   }
 
-  return <Editor key={loaded.url} loaded={loaded} onReplace={open} problem={problem} onDone={(msg) => toast(msg)} />;
+  return (
+    <Editor
+      key={opened.seq}
+      loaded={{ file: opened.file, url, source: opened.source }}
+      onReplace={open}
+      problem={problem}
+      onDone={(msg) => toast(msg)}
+    />
+  );
 }
 
 function Editor({
@@ -187,7 +191,7 @@ function Editor({
   const [targetBytes, setTargetBytes] = useState<number | null>(null);
   const budget = budgetFor(edit, source, caps?.containerAudio ?? null, targetBytes);
   const blocker =
-    keyExportBlocker(edit, caps) ??
+    keyExportBlocker(edit, caps, key.alpha) ??
     exportBlocker(edit, source, caps) ??
     (budget && !budget.ok ? budget.reason : null);
   const summary = editSummary(edit, source);
@@ -503,14 +507,6 @@ function ExportRow({
       {!running && !blocker && job.phase !== "done" ? <Prose>{saveNote(saveToDisk, MEMORY_LIMIT)}</Prose> : null}
     </section>
   );
-}
-
-function Value({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
-  return <span className={cn("tabular-nums tracking-normal", accent ? "text-indigo" : "text-ink")}>{children}</span>;
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }
 
 /**

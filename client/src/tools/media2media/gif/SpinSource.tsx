@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Dropzone } from "@/components/Dropzone";
 import { formatTime } from "@/components/timeline";
 import { Button, ColorInput, Section, Sections, Segmented, Slider, TextButton, Toggle } from "@/components/ui";
+import { useCodecPool } from "@/hooks/useCodecPool";
 import { useToast } from "@/hooks/useToast";
-import { CodecPool, IMAGE_ACCEPT, isImageFile } from "@/lib/codecs";
+import { IMAGE_ACCEPT, isImageFile } from "@/lib/codecs";
 import { cn } from "@/lib/cn";
+import { normaliseHex } from "@/lib/color";
 import { bytes } from "@/lib/format";
 import { gifSession, useGifSession } from "./session";
 import {
@@ -61,12 +63,10 @@ export function SpinSource({ onClose }: { onClose: () => void }) {
   const running = useRef<AbortController | null>(null);
   const { decode, decoding } = useDecoder();
 
-  const set = (patch: Partial<SpinSettings>) =>
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      memory.settings = next;
-      return next;
-    });
+  const set = (patch: Partial<SpinSettings>) => setSettings((prev) => ({ ...prev, ...patch }));
+  useEffect(() => {
+    memory.settings = s;
+  }, [s]);
   const setFront = (l: Loaded | null) => {
     if (memory.front && memory.front !== l && memory.front !== memory.back) memory.front.bitmap.close();
     memory.front = l;
@@ -424,7 +424,8 @@ function SpinSettingsPanel({
               value={colour}
               onChange={(v) => {
                 setColour(v);
-                if (/^#[0-9a-f]{6}$/i.test(v.trim())) setBackground(v.trim().toLowerCase());
+                const hex = normaliseHex(v);
+                if (hex) setBackground(hex);
               }}
             />
           ) : null}
@@ -544,23 +545,14 @@ function Progress({ done, total, onStop }: { done: number; total: number; onStop
 /** Opens one image on the shared codec pool (HEIC too), upright and with its alpha. */
 function useDecoder() {
   const toast = useToast();
-  const pool = useRef<CodecPool | null>(null);
+  const pool = useCodecPool(1);
   const [decoding, setDecoding] = useState(false);
-
-  useEffect(
-    () => () => {
-      pool.current?.dispose();
-      pool.current = null;
-    },
-    [],
-  );
 
   const decode = useCallback(
     async (file: File): Promise<Loaded | null> => {
-      pool.current ??= new CodecPool(1);
       setDecoding(true);
       try {
-        const { image } = await pool.current.decode(file);
+        const { image } = await pool().decode(file);
         return { bitmap: await createImageBitmap(image, { premultiplyAlpha: "none" }), name: file.name };
       } catch {
         toast(`${file.name} would not open`);
@@ -569,7 +561,7 @@ function useDecoder() {
         setDecoding(false);
       }
     },
-    [toast],
+    [toast, pool],
   );
 
   return { decode, decoding };

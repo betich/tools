@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatTime } from "@/components/timeline/model";
-import { Button, Field, Segmented, TextButton } from "@/components/ui";
+import { formatTime } from "@/components/timeline";
+import { Button, Field, Prose, Segmented, TextButton } from "@/components/ui";
 import { useToast } from "@/hooks/useToast";
 import { bytes } from "@/lib/format";
 import { gifSession, useGifSession } from "../gif/session";
@@ -80,7 +80,14 @@ export function SendToGif({ file, source, edit, frameHook, disabled, onStart }: 
             if (!ctrl.signal.aborted) setMaking({ done, total });
           },
         });
-        gifSession.addFrames(frames, how);
+        if (frameHook) {
+          // Keyed frames carry alpha: a transparent background keeps it, and
+          // APNG keeps the soft edges a GIF's 1-bit transparency would cut.
+          gifSession.addFrames(frames, how, { background: null });
+          gifSession.exportFormat = "apng";
+        } else {
+          gifSession.addFrames(frames, how);
+        }
         toast(`${frames.length} frames sent to the gif tab`);
         navigate("/media2media/gif");
       } catch (e) {
@@ -193,8 +200,4 @@ function Progress({ done, total, onStop }: { done: number; total: number; onStop
       </div>
     </div>
   );
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return <p className="text-meta text-body font-sans normal-case leading-snug">{children}</p>;
 }

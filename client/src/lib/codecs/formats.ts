@@ -49,7 +49,7 @@ export const formats: FormatMeta[] = [
     mime: "image/jxl",
     ext: "jxl",
     carriesMetadata: false,
-    note: "Opens in Safari only; Chrome and Firefox keep JPEG XL behind flags.",
+    note: "Opens in Safari only; Chrome/Firefox behind flags",
   },
 ];
 
