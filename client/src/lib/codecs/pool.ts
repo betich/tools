@@ -1,5 +1,5 @@
 import type { EncodeOptions } from "./formats";
-import type { WorkerRequest, WorkerResponse, WorkerSource } from "./protocol";
+import type { MetadataWritten, WorkerRequest, WorkerResponse, WorkerSource } from "./protocol";
 
 /** A file (any format the worker can open, HEIC included) or pixels a decode already produced. */
 export type CodecSource = Blob | ImageData;
@@ -21,6 +21,8 @@ export type Decoded = {
 
 export type Encoded = {
   blob: Blob;
+  /** The EXIF the output really carries, after sanitising. */
+  metadata: MetadataWritten;
   width: number;
   height: number;
   sourceWidth: number;
@@ -78,6 +80,7 @@ export class CodecPool {
       if (res.op !== "encode") throw new Error("Codec worker answered the wrong request");
       return {
         blob: new Blob([res.buffer], { type: res.mime }),
+        metadata: res.metadata,
         width: res.width,
         height: res.height,
         sourceWidth: res.sourceWidth,
