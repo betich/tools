@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { resolve, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
+import { applyCase, resolve, textCaseOf, type FallbackFont, type MergeDoc, type MergeRow } from "@tools/shared";
 import { assetUrl } from "@/lib/api";
 
 /** Families already requested this session, so a re-select is instant. */
@@ -99,7 +99,7 @@ export async function ensureDocFonts(doc: MergeDoc, rows: (MergeRow | null)[]): 
     const chars = new Set<string>();
     for (const row of sample) {
       const text = resolve(layer.text, row);
-      for (const ch of layer.uppercase ? text.toUpperCase() : text) chars.add(ch);
+      for (const ch of applyCase(text, textCaseOf(layer))) chars.add(ch);
     }
     const text = [...chars].join("") || " ";
     const style = layer.font.italic ? "italic " : "";

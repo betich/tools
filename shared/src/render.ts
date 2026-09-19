@@ -1,5 +1,5 @@
 import { resolve } from "./merge";
-import type { Fill, Fit, MergeDoc, MergeRow, TextLayer } from "./types";
+import type { Fill, Fit, MergeDoc, MergeRow, TextCase, TextLayer } from "./types";
 
 /**
  * The slice of Canvas2D this renderer touches. Typed structurally so the exact
@@ -134,7 +134,7 @@ function tokenize(text: string): Token[] {
 
 function drawTextLayer(ctx: Ctx2D, layer: TextLayer, row: MergeRow | null): void {
   let text = resolve(layer.text, row);
-  if (layer.uppercase) text = upper(text);
+  text = applyCase(text, textCaseOf(layer));
   if (!stripSpans(text).trim()) return;
 
   const tokens = tokenize(text);
@@ -336,11 +336,39 @@ function resolveFill(ctx: Ctx2D, fill: Fill, x: number, y: number, w: number, h:
   return g;
 }
 
-/** Uppercasing must not eat the span markers. */
-function upper(text: string): string {
-  return text.replace(/(\[\[[^\]]*\]\])|([^[]+)/g, (_, marker: string | undefined, body: string | undefined) =>
-    marker ?? (body ?? "").toUpperCase(),
-  );
+export function textCaseOf(layer: TextLayer): TextCase {
+  return layer.textCase ?? (layer.uppercase ? "upper" : "none");
+}
+
+/**
+ * Re-case the text between the span markers, never the markers themselves.
+ * Sentence case carries its state across spans, so a colour change mid-sentence
+ * does not start a new one; a sentence starts at the top, after a line break,
+ * or after `.`, `!` or `?` followed by whitespace — so `v3.5` stays one word.
+ */
+export function applyCase(text: string, textCase: TextCase): string {
+  if (textCase === "none") return text;
+  let start = true;
+  let stop = false;
+  return text.replace(/(\[\[[^\]]*\]\])|([^[]+|\[)/g, (_, marker: string | undefined, body: string | undefined) => {
+    if (marker) return marker;
+    const run = body ?? "";
+    if (textCase === "upper") return run.toUpperCase();
+    if (textCase === "lower") return run.toLowerCase();
+    let out = "";
+    for (const ch of run) {
+      if (/\p{L}/u.test(ch)) {
+        out += start ? ch.toUpperCase() : ch.toLowerCase();
+        start = stop = false;
+      } else {
+        out += ch;
+        if (ch === "\n") start = true;
+        else if (/\s/.test(ch)) start ||= stop;
+        stop = /[.!?]/.test(ch);
+      }
+    }
+    return out;
+  });
 }
 
 function clearShadow(ctx: Ctx2D): void {

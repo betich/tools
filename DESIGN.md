@@ -283,7 +283,7 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 **The editor skeleton.** Both tools resolve to settings / stage / inspector.
 
-**The merge editor is a room.** From 1024 up it takes exactly the viewport between the top bar and the rail (`Shell width="workspace"`, which lays the rail out as the room's last row instead of floating it), and the page never scrolls. A toolbar row carries `MAIL MERGE / <document name>` and the share state on the left, `SAVE · SHARE` and the solid `EXPORT` button on the right. Beneath it, three panes separated by faint hairlines: the merge on the left (projects, document, base image, layers, data), the poster alone in the middle at every pixel it can take, the selected layer on the right. **Each side pane scrolls on its own** (`overflow-y: auto`, `overscroll-behavior: contain`); the poster never moves. Output settings do not live in the room — they live in the export sheet, where the output is.
+**The merge editor is a room.** From 1024 up it takes exactly the viewport between the top bar and the rail (`Shell width="workspace"`, which lays the rail out as the room's last row instead of floating it), and the page never scrolls. A toolbar row carries `MAIL MERGE / <document name>` and the share state on the left, `SAVE · SHARE` and the solid `EXPORT` button on the right. Beneath it, three panes separated by faint hairlines: the merge on the left (projects, document, base image, layers, data), the poster alone in the middle at every pixel it can take, the selected layer on the right. Within a pane, sections are separated by a full-width faint hairline *between* them (`Sections`), 28px either side; a stacked section drops the rule under its own title so there is only ever one line between two groups. **Each side pane scrolls on its own** (`overflow-y: auto`, `overscroll-behavior: contain`); the poster never moves. Output settings do not live in the room — they live in the export sheet, where the output is.
 
 | from | columns | stage |
 | ---- | ------- | ----- |
@@ -370,6 +370,12 @@ Six moves in one bordered strip, arranged the way every canvas editor arranges t
 
 **A button that is already true reads as pressed.** When the layer is flush to that edge the cell takes the 7% fill and full ink, which makes the cluster a readout as well as a control. Every press is one commit, so every press is one undo.
 
+### Glyph strips (mail merge)
+
+Case, text align and vertical align use the align cluster's strip rather than a row of words: 28px cells, the chosen one at 7% fill and full ink, each named by its tooltip, with the end cells anchoring their tip to the strip's edge so a scrolling pane never clips it. Case is shown as what it produces — `AA`, `aa`, `Aa` in the mono at normal tracking — and `as typed` is the type glyph, because it is the absence of a transform. Text-align glyphs are three lines against their edge; vertical-align glyphs put two lines inside a faint box, which keeps them distinct from the align-to-page moves.
+
+Case is data, not chrome: `textCase` (`none · upper · lower · sentence`) is applied in the shared renderer between span markers, so preview and export agree. Sentence case starts at the top, after a line break, or after `.`/`!`/`?` plus whitespace, so `v3.5` stays one word.
+
 ### Export sheet (mail merge)
 
 A full-bleed surface, portalled above the chrome, that replaces "render everything and hope": every row as a thumbnail, the ones you want picked by clicking them, and the format decided beside the grid.
@@ -401,7 +407,7 @@ The share dialog's frame at 38rem, laid out in two columns: `TEMPLATE ASKS FOR` 
 
 ### Button
 
-The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog.
+The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. **Ghost** has the button's height and a 7% wash on hover but no edge, for an action that belongs in the row without competing with the other two. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog. The editor's toolbar climbs in weight left to right: ghost `SHARE`, outline `SAVE`, solid `EXPORT`, each with its 14px glyph.
 
 ### Share dialog (mail merge)
 

@@ -3,8 +3,8 @@ import { useParams } from "react-router-dom";
 import { emptyData, newDoc, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { Shell } from "@/components/Shell";
-import { FiDownload, FiLink, FiLock } from "react-icons/fi";
-import { Button, Field, Input, NumberInput, Section, Segmented, TextButton } from "@/components/ui";
+import { FiDownload, FiLink, FiLock, FiSave, FiShare2 } from "react-icons/fi";
+import { Button, Field, Input, NumberInput, Section, Sections, Segmented, TextButton } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
 import { useToast } from "@/hooks/useToast";
 import { api, ApiError, assetUrl, type ShareState } from "@/lib/api";
@@ -497,16 +497,20 @@ export function MailMergePage() {
           ) : null}
         </div>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-2">
           {busy ? (
-            <span className="text-indigo font-mono text-meta uppercase" aria-live="polite">
+            <span className="text-indigo mr-2 font-mono text-meta uppercase" aria-live="polite">
               {busy}…
             </span>
           ) : null}
-          <TextButton onClick={() => void save()} disabled={busy !== null}>
+          <Button variant="ghost" onClick={() => setSharing(true)} className="-ml-3 lg:ml-0">
+            <FiShare2 className="size-3.5" aria-hidden />
+            share
+          </Button>
+          <Button variant="outline" onClick={() => void save()} disabled={busy !== null}>
+            <FiSave className="size-3.5" aria-hidden />
             save
-          </TextButton>
-          <TextButton onClick={() => setSharing(true)}>share</TextButton>
+          </Button>
           <Button onClick={() => setExporting(true)}>
             <FiDownload className="size-3.5" aria-hidden />
             export
@@ -547,10 +551,10 @@ export function MailMergePage() {
         hidden={gate?.target.kind === "share"}
       >
         {/* left — the merge: projects, document, artwork, layers, data */}
-        <div
+        <Sections
           data-pane
           className={cn(
-            "flex flex-col gap-8 md:order-2 lg:order-1",
+            "md:order-2 lg:order-1",
             "lg:border-hairline-faint lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:px-6 lg:py-6 xl:px-7",
             pane === "setup" ? "flex" : "hidden md:flex",
           )}
@@ -687,7 +691,7 @@ export function MailMergePage() {
               void loadSheet(file);
             }}
           />
-        </div>
+        </Sections>
 
         {/*
          * The stage, and nothing else. On a phone this wrapper dissolves

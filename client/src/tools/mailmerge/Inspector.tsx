@@ -1,7 +1,22 @@
-import { Fragment } from "react";
-import type { Fill, TextLayer } from "@tools/shared";
-import { Chip, ColorInput, Empty, Field, NumberInput, Section, Segmented, Slider, TextButton, Toggle } from "@/components/ui";
-import { cn } from "@/lib/cn";
+import { Fragment, type ReactNode } from "react";
+import { FiType } from "react-icons/fi";
+import { textCaseOf, type Align, type Fill, type TextCase, type TextLayer, type VAlign } from "@tools/shared";
+import {
+  Chip,
+  ColorInput,
+  Empty,
+  Field,
+  IconSegmented,
+  NumberInput,
+  Section,
+  Sections,
+  Segmented,
+  segCell,
+  segStrip,
+  Slider,
+  TextButton,
+  Toggle,
+} from "@/components/ui";
 import { FontPicker } from "./FontPicker";
 
 const DEFAULT_GRADIENT: Fill = {
@@ -46,7 +61,7 @@ export function Inspector({
   const live = (patch: Partial<TextLayer>) => onPreview(patch);
 
   return (
-    <div className="flex flex-col gap-6">
+    <Sections>
       <Section title="content">
         <Field label="text" hint="wrap a column name in angle brackets to merge it">
           <textarea
@@ -68,13 +83,20 @@ export function Inspector({
           </div>
         ) : null}
 
-        <Toggle checked={layer.uppercase} onChange={(uppercase) => onChange({ uppercase })} label="uppercase" />
+        <Field label="case">
+          <IconSegmented
+            label="case"
+            value={textCaseOf(layer)}
+            onChange={(textCase) => onChange({ textCase, uppercase: textCase === "upper" })}
+            options={CASES}
+          />
+        </Field>
       </Section>
 
       <Section title="type">
         <FontPicker font={layer.font} onChange={(patch) => onChange({ font: { ...layer.font, ...patch } })} />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4">
           <Field label="size">
             <NumberInput
               value={layer.font.size}
@@ -104,28 +126,12 @@ export function Inspector({
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4">
           <Field label="align">
-            <Segmented
-              value={layer.align}
-              onChange={(align) => onChange({ align })}
-              options={[
-                { value: "left", label: "left" },
-                { value: "center", label: "mid" },
-                { value: "right", label: "right" },
-              ]}
-            />
+            <IconSegmented label="text align" value={layer.align} onChange={(align) => onChange({ align })} options={ALIGNS} />
           </Field>
           <Field label="vertical">
-            <Segmented
-              value={layer.vAlign}
-              onChange={(vAlign) => onChange({ vAlign })}
-              options={[
-                { value: "top", label: "top" },
-                { value: "middle", label: "mid" },
-                { value: "bottom", label: "base" },
-              ]}
-            />
+            <IconSegmented label="vertical align" value={layer.vAlign} onChange={(vAlign) => onChange({ vAlign })} options={VALIGNS} />
           </Field>
         </div>
 
@@ -277,7 +283,57 @@ export function Inspector({
           <Slider onCommitStart={onSnapshot} min={0} max={100} value={Math.round(layer.opacity * 100)} onChange={(v) => live({ opacity: v / 100 })} />
         </Field>
       </Section>
-    </div>
+    </Sections>
+  );
+}
+
+/* ── case and text alignment ───────────────────────────────────────────────
+   Case is shown as the thing it produces, set in the mono at normal tracking
+   so `aa` can be told from `AA`; `as typed` is the type glyph, because it is
+   the absence of a transform. Alignment glyphs are three lines of text against
+   the edge they sit on; the vertical ones sit the lines inside a faint box,
+   which is what separates them from the align-to-page moves below. */
+
+const caseGlyph = (text: string) => <span className="font-mono text-label leading-none tracking-normal normal-case">{text}</span>;
+
+const CASES: { value: TextCase; label: string; icon: ReactNode }[] = [
+  { value: "none", label: "as typed", icon: <FiType className="size-3.5" aria-hidden /> },
+  { value: "upper", label: "uppercase", icon: caseGlyph("AA") },
+  { value: "lower", label: "lowercase", icon: caseGlyph("aa") },
+  { value: "sentence", label: "sentence case", icon: caseGlyph("Aa") },
+];
+
+const ALIGNS: { value: Align; label: string; icon: ReactNode }[] = [
+  { value: "left", label: "align text left", icon: <TextAlignGlyph at="left" /> },
+  { value: "center", label: "centre text", icon: <TextAlignGlyph at="center" /> },
+  { value: "right", label: "align text right", icon: <TextAlignGlyph at="right" /> },
+];
+
+const VALIGNS: { value: VAlign; label: string; icon: ReactNode }[] = [
+  { value: "top", label: "top of the box", icon: <VAlignGlyph at="top" /> },
+  { value: "middle", label: "middle of the box", icon: <VAlignGlyph at="middle" /> },
+  { value: "bottom", label: "foot of the box", icon: <VAlignGlyph at="bottom" /> },
+];
+
+function TextAlignGlyph({ at }: { at: Align }) {
+  const x = (w: number) => (at === "left" ? 2 : at === "right" ? 14 - w : 8 - w / 2);
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+      {[12, 8, 10].map((w, i) => (
+        <rect key={i} x={x(w)} y={3.5 + i * 4} width={w} height={1.5} rx={0.5} fill="currentColor" />
+      ))}
+    </svg>
+  );
+}
+
+function VAlignGlyph({ at }: { at: VAlign }) {
+  const y = at === "top" ? 4 : at === "bottom" ? 8.5 : 6.25;
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden>
+      <rect x={1.5} y={1.5} width={13} height={13} rx={1.5} fill="none" stroke="currentColor" strokeOpacity={0.45} />
+      <rect x={4} y={y} width={8} height={1.5} rx={0.5} fill="currentColor" />
+      <rect x={4} y={y + 2.5} width={5.5} height={1.5} rx={0.5} fill="currentColor" />
+    </svg>
   );
 }
 
@@ -309,7 +365,7 @@ function AlignBar({
 }) {
   return (
     <Field label="align to page">
-      <div className="border-wash flex w-fit items-center gap-0.5 rounded-xs border bg-control p-0.5">
+      <div className={segStrip}>
         {MOVES.map((move, i) => {
           const target = move.value(canvas, layer);
           const flush = Math.abs(layer[move.axis] - target) < 0.5;
@@ -320,12 +376,10 @@ function AlignBar({
                 type="button"
                 aria-label={move.label}
                 data-tip={move.label}
+                data-tip-pos={i === 0 ? "top-left" : i === MOVES.length - 1 ? "top-right" : undefined}
                 aria-pressed={flush}
                 onClick={() => onChange({ [move.axis]: Math.round(target) })}
-                className={cn(
-                  "tooltip flex size-7 cursor-pointer items-center justify-center rounded-xs transition-colors duration-200",
-                  flush ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
-                )}
+                className={segCell(flush)}
               >
                 <AlignGlyph move={move.key} />
               </button>

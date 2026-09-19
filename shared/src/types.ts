@@ -65,8 +65,17 @@ export type TextLayer = {
   shadow: Shadow | null;
   /** Shrink the type until the block fits its box, down to `minSize`. */
   autoFit: { enabled: boolean; minSize: number };
+  /**
+   * How the merged text is cased before it is drawn. Absent on documents
+   * saved before it existed, which fall back to `uppercase` — read it through
+   * `textCaseOf`, never directly.
+   */
+  textCase?: TextCase;
+  /** Kept in step with `textCase` so an older client still draws upper right. */
   uppercase: boolean;
 };
+
+export type TextCase = "none" | "upper" | "lower" | "sentence";
 
 export type Layer = TextLayer;
 

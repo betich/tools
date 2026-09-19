@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNode } from "react";
+import { createContext, useContext, type ButtonHTMLAttributes, type ComponentProps, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -36,13 +36,15 @@ export function TextButton({
  * A real button, for the one action a surface exists to perform — export, copy
  * the link, download. `primary` is the only solid-ink shape in the chrome, so
  * it can be found without reading; it arrives at periwinkle like everything
- * else. `outline` is its quieter sibling for the second-best action.
+ * else. `outline` is its quieter sibling for the second-best action, and
+ * `ghost` is a button only by its height and its hover wash — for an action
+ * that belongs in the row but should not compete with the other two.
  */
 export function Button({
   className,
   variant = "primary",
   ...props
-}: ComponentProps<"button"> & { variant?: "primary" | "outline" }) {
+}: ComponentProps<"button"> & { variant?: "primary" | "outline" | "ghost" }) {
   return (
     <button
       type="button"
@@ -51,9 +53,10 @@ export function Button({
         "inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-xs px-4 font-mono text-meta whitespace-nowrap uppercase",
         "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
         "disabled:cursor-not-allowed disabled:opacity-35",
-        variant === "primary"
-          ? "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink"
-          : "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
+        variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
+        variant === "outline" &&
+          "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
+        variant === "ghost" && "text-label px-3 hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
         className,
       )}
     />
@@ -113,6 +116,30 @@ export function Card({ className, children }: { className?: string; children: Re
   );
 }
 
+const Stacked = createContext(false);
+
+/**
+ * A column of sections with a full-width rule *between* them, the way an
+ * inspector reads: the rule ends one section, the heading opens the next. Inside
+ * it a section drops the rule under its own title, so there is only ever one
+ * line between two groups of controls.
+ */
+export function Sections({ className, children, ...props }: ComponentProps<"div">) {
+  return (
+    <Stacked.Provider value>
+      <div
+        {...props}
+        className={cn(
+          "flex flex-col gap-7 [&>*+*]:border-t [&>*+*]:border-hairline-faint [&>*+*]:pt-7",
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </Stacked.Provider>
+  );
+}
+
 export function Section({
   title,
   aside,
@@ -124,13 +151,14 @@ export function Section({
   children: ReactNode;
   className?: string;
 }) {
+  const stacked = useContext(Stacked);
   return (
     <section className={cn("flex flex-col gap-4", className)}>
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex min-h-5 items-center justify-between gap-3">
         <h2 className="text-meta font-mono text-meta uppercase">{title}</h2>
         {aside}
       </header>
-      <div className="border-hairline-faint border-t" />
+      {stacked ? null : <div className="border-hairline-faint border-t" />}
       <div className="flex flex-col gap-4">{children}</div>
     </section>
   );
@@ -262,6 +290,55 @@ export function Segmented<T extends string>({
         </TextButton>
       ))}
     </div>
+  );
+}
+
+/**
+ * A segmented control whose options are glyphs, in the same bordered strip as
+ * the align-to-page cluster: 28px cells, the chosen one at 7% fill and full
+ * ink, each named by its tooltip. The end cells anchor their tip to the strip's
+ * edge so it is never clipped by a scrolling pane.
+ */
+export function IconSegmented<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; icon: ReactNode }[];
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className={cn(segStrip, className)}>
+      {options.map((o, i) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-label={o.label}
+          aria-pressed={o.value === value}
+          data-tip={o.label}
+          data-tip-pos={i === 0 ? "top-left" : i === options.length - 1 ? "top-right" : undefined}
+          onClick={() => onChange(o.value)}
+          className={segCell(o.value === value)}
+        >
+          {o.icon}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export const segStrip = "border-wash flex w-fit items-center gap-0.5 rounded-xs border bg-control p-0.5";
+
+export function segCell(on: boolean) {
+  return cn(
+    "tooltip flex size-7 cursor-pointer items-center justify-center rounded-xs transition-colors duration-200",
+    "focus-visible:outline-1 focus-visible:outline-indigo",
+    on ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
   );
 }
 
