@@ -6,3 +6,4 @@
 import "./analyse";
 import "./merge";
 import "./thumbnail";
+import "./compress";

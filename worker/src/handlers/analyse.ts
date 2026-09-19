@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { UNNAMED_SIGNER, type PdfAnalysis, type PdfFont, type PdfImage, type SizeCategory } from "@tools/shared";
-import { registerHandler, TaskError } from "../jobs";
+import { registerHandler, TaskError, type TaskContext } from "../jobs";
 import { ANALYSIS_MAX_BYTES_READ, ANALYSIS_MAX_OBJECTS, ANALYSIS_MAX_PAGES, ANALYSIS_TIMEOUT_MS } from "../limits";
 import { passwordFile, repairCount } from "../special";
 
@@ -28,19 +28,36 @@ const CATEGORIES: SizeCategory[] = ["images", "fonts", "content", "metadata", "o
 /** What the script writes: the contract's fields plus a couple of its own. */
 type ScriptOutput = PdfAnalysis & { error?: string; message?: string; locked?: boolean };
 
-registerHandler("analyse", async ({ job, inputs, workDir, progress, run }) => {
-  const input = inputs[0];
+registerHandler("analyse", async (ctx) => {
+  const input = ctx.inputs[0];
   if (!input) throw new Error("analyse needs one input");
-  const pwFile = job.password ? await passwordFile(workDir, job.password) : null;
-  const out = join(workDir, "analysis.json");
-  const progressFile = join(workDir, "progress.txt");
+  return { result: await analyseFile(ctx, input.path, input.size, { password: ctx.job.password }) };
+});
+
+let runs = 0;
+
+/**
+ * Analyses one PDF on disk. Also measures a compress run's output (#9), where
+ * `stage` replaces the script's own stage names so the browser sees one step.
+ * `password` is an encrypted input's (#15), set once the user has unlocked it.
+ */
+export async function analyseFile(
+  { workDir, progress, run }: Pick<TaskContext, "workDir" | "progress" | "run">,
+  path: string,
+  size: number,
+  opts: { stage?: string; password?: string | null } = {},
+): Promise<PdfAnalysis> {
+  const n = ++runs;
+  const pwFile = opts.password ? await passwordFile(workDir, opts.password) : null;
+  const out = join(workDir, `analysis-${n}.json`);
+  const progressFile = join(workDir, `analysis-${n}.progress`);
   const deadline = Date.now() + ANALYSIS_TIMEOUT_MS * SOFT_DEADLINE;
 
-  progress("opening", 0, 0);
+  progress(opts.stage ?? "opening", 0, 0);
   const poll = setInterval(async () => {
     const line = await readFile(progressFile, "utf8").catch(() => "");
     const [stage, done, total] = line.trim().split("\t");
-    if (stage && total) progress(stage, Number(done), Number(total));
+    if (stage && total) progress(opts.stage ?? stage, Number(done), Number(total));
   }, POLL_MS);
 
   try {
@@ -49,10 +66,10 @@ registerHandler("analyse", async ({ job, inputs, workDir, progress, run }) => {
       [
         "run",
         SCRIPT,
-        input.path,
+        path,
         out,
         progressFile,
-        String(input.size),
+        String(size),
         String(ANALYSIS_MAX_PAGES),
         String(ANALYSIS_MAX_BYTES_READ),
         String(ANALYSIS_MAX_OBJECTS),
@@ -73,11 +90,11 @@ registerHandler("analyse", async ({ job, inputs, workDir, progress, run }) => {
   }
   if (raw.error) throw new TaskError("This file could not be opened as a PDF.");
   if (raw.flags?.repaired) {
-    progress("checking the repair", 0, 0);
-    raw.flags.repaired = await repairCount(run, input.path, pwFile);
+    progress(opts.stage ?? "checking the repair", 0, 0);
+    raw.flags.repaired = await repairCount(run, path, pwFile);
   }
-  return { result: shape(raw, input.size) };
-});
+  return shape(raw, size);
+}
 
 /**
  * Only the contract's fields, so the stored result stays the shape the client

@@ -232,6 +232,37 @@ const lastLine = (text: string) =>
 
 // ── running ────────────────────────────────────────────────────────────────
 
+/**
+ * `TaskContext.run` for a task: the child gets the current memory headroom,
+ * the work dir as its cwd, and is killed when `signal` fires. Exported so
+ * tests can drive a handler's code without the queue.
+ */
+export function toolRunner(workDir: string, signal: AbortSignal): TaskContext["run"] {
+  return async (cmd, args, opts = {}) => {
+    const label = opts.label ?? basename(cmd);
+    const timeoutMs = opts.timeoutMs ?? env.childTimeoutMs;
+    const r = await exec([cmd, ...args], {
+      memoryBytes: opts.memoryBytes ?? childMemoryLimit(),
+      timeoutMs,
+      cwd: opts.cwd ?? workDir,
+      // glibc reserves 64 MB of address space per thread arena; under `--as` that is memory lost to nothing.
+      env: { MALLOC_ARENA_MAX: "2", ...opts.env },
+      signal,
+      stdout: opts.stdout,
+    });
+    if (r.aborted) throw new Discarded();
+    if (ranOutOfMemory(r)) throw new TaskError(outOfMemorySentence(opts.where, opts.hint));
+    if (r.timedOut) {
+      throw new TaskError(`${label} took longer than ${Math.round(timeoutMs / 60_000)} minutes and was stopped.`);
+    }
+    if (opts.check !== false && (r.code !== 0 || r.signal)) {
+      const why = lastLine(r.stderr);
+      throw new TaskError(`${label} could not process this file${why ? `: ${why}` : "."}`);
+    }
+    return r;
+  };
+}
+
 async function runTask(row: TaskRow): Promise<void> {
   const jobDir = join(RESULTS, row.job_id);
   const partDir = join(jobDir, `${row.id}.part`);
@@ -269,29 +300,7 @@ async function runTask(row: TaskRow): Promise<void> {
       workDir,
       signal: controller.signal,
       progress: progress.report,
-      async run(cmd, args, opts = {}) {
-        const label = opts.label ?? basename(cmd);
-        const timeoutMs = opts.timeoutMs ?? env.childTimeoutMs;
-        const r = await exec([cmd, ...args], {
-          memoryBytes: opts.memoryBytes ?? childMemoryLimit(),
-          timeoutMs,
-          cwd: opts.cwd ?? workDir,
-          // glibc reserves 64 MB of address space per thread arena; under `--as` that is memory lost to nothing.
-          env: { MALLOC_ARENA_MAX: "2", ...opts.env },
-          signal: controller.signal,
-          stdout: opts.stdout,
-        });
-        if (r.aborted) throw new Discarded();
-        if (ranOutOfMemory(r)) throw new TaskError(outOfMemorySentence(opts.where, opts.hint));
-        if (r.timedOut) {
-          throw new TaskError(`${label} took longer than ${Math.round(timeoutMs / 60_000)} minutes and was stopped.`);
-        }
-        if (opts.check !== false && (r.code !== 0 || r.signal)) {
-          const why = lastLine(r.stderr);
-          throw new TaskError(`${label} could not process this file${why ? `: ${why}` : "."}`);
-        }
-        return r;
-      },
+      run: toolRunner(workDir, controller.signal),
     };
 
     const out = await handler(ctx);
