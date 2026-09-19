@@ -114,7 +114,7 @@ export function SendToGif({ file, source, edit, frameHook, disabled, onStart }: 
     <section className="border-hairline-faint flex flex-col gap-5 border-t pt-6" aria-label="send to the gif tab">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-meta text-micro font-mono uppercase">to the gif tab</span>
+          <span className="text-meta text-micro font-mono uppercase">or as frames, to the gif tab</span>
           <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
             {[
               `${count} frames`,
@@ -129,15 +129,15 @@ export function SendToGif({ file, source, edit, frameHook, disabled, onStart }: 
         </div>
         {making ? null : hasFrames ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Button onClick={() => void send("replace")} disabled={blocked}>
+            <Button variant="outline" onClick={() => void send("replace")} disabled={blocked}>
               replace its frames
             </Button>
-            <Button variant="outline" onClick={() => void send("append")} disabled={blocked}>
+            <Button variant="ghost" onClick={() => void send("append")} disabled={blocked}>
               add after them
             </Button>
           </div>
         ) : (
-          <Button onClick={() => void send("replace")} disabled={blocked}>
+          <Button variant="outline" onClick={() => void send("replace")} disabled={blocked}>
             send {count} frames
           </Button>
         )}

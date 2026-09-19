@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dropzone } from "@/components/Dropzone";
 import { Timeline, usePlayback, formatTime } from "@/components/timeline";
-import { TextButton } from "@/components/ui";
+import { FiFolderPlus, FiPause, FiPlay, FiPlus, FiRefreshCw } from "react-icons/fi";
+import { Button, TextButton } from "@/components/ui";
 import { useCodecPool } from "@/hooks/useCodecPool";
 import { useToast } from "@/hooks/useToast";
 import { IMAGE_ACCEPT } from "@/lib/codecs";
 import { cn } from "@/lib/cn";
+import { filesFromDrop } from "@/lib/droppedFiles";
 import { ExportPanel } from "./gif/ExportPanel";
-import { canvasSize, playDuration, playOrder, timelineTime } from "./gif/model";
+import { canvasSize, playDuration, playOrder, timelineTime, type GifDoc } from "./gif/model";
 import { Preview } from "./gif/Preview";
 import { gifSession, useGifSession } from "./gif/session";
 import { Settings } from "./gif/Settings";
@@ -16,21 +18,47 @@ import { framesFromFiles } from "./gif/sources/files";
 
 type How = "replace" | "append";
 
+const STAGE_TILE = 88;
+
+/** Autoplay is a courtesy; under reduced motion the play button stays one press away instead. */
+const calm = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 /**
- * The GIF tab: frames in from a source, arranged on the shared timeline,
- * played live on a canvas at their real delays. Nothing is encoded until
- * export; the work survives switching tabs (it lives in `gifSession`).
+ * The GIF composer is a room. From a laptop up it fills the viewport: the
+ * animation plays on the stage, the timeline runs the full width under it,
+ * timing and canvas sit to the left and export to the right, and nothing
+ * but the side panes ever scrolls. Below that it is a column in the order
+ * the work happens — look, arrange, tune, export.
+ *
+ * Frames play on a loop the moment they arrive, from a folder, a spin or
+ * the video tab. Nothing is encoded until export; the work survives
+ * switching tabs (it lives in `gifSession`).
  */
 export function GifTab() {
   const session = gifSession;
   const { doc, canUndo } = useGifSession(session);
-  const { load, loading, cancel } = useFrameLoader();
   const [spinning, setSpinning] = useState(false);
+  const beforeSpin = useRef(doc.frames);
 
   const order = useMemo(() => playOrder(doc.frames.length, doc.pingPong), [doc.frames.length, doc.pingPong]);
   const duration = useMemo(() => playDuration(doc), [doc]);
   const playback = usePlayback({ duration });
   const size = canvasSize(doc);
+  const empty = doc.frames.length === 0;
+
+  // Asked for when frames land; honoured once the playback knows the new length.
+  const [wantPlay, setWantPlay] = useState(() => doc.frames.length > 0);
+  const { setPlaying, setTime } = playback;
+  useEffect(() => {
+    if (!wantPlay || duration <= 0) return;
+    setWantPlay(false);
+    if (calm()) return;
+    setTime(0);
+    setPlaying(true);
+  }, [wantPlay, duration, setPlaying, setTime]);
+  const autoplay = useCallback(() => setWantPlay(true), []);
+
+  const { load, loading, cancel } = useFrameLoader(autoplay);
 
   const onFramesChange = useCallback(
     (frames: typeof doc.frames, kind: "commit" | "preview") =>
@@ -38,102 +66,291 @@ export function GifTab() {
     [session],
   );
 
-  if (spinning) return <SpinSource onClose={() => setSpinning(false)} />;
+  const spin = () => {
+    beforeSpin.current = session.doc.frames;
+    setSpinning(true);
+  };
+  const closeSpin = () => {
+    setSpinning(false);
+    if (session.doc.frames !== beforeSpin.current && session.doc.frames.length > 0) autoplay();
+  };
 
-  if (doc.frames.length === 0) {
+  if (spinning) {
     return (
-      <div className="flex flex-col gap-6">
-        <Dropzone
-          folders
-          accept={IMAGE_ACCEPT}
-          onFiles={(files) => load(files, "replace")}
-          cta="choose images"
-          label="or drop images or a folder here"
-          hint="one frame per image, in filename order"
-        >
-          <FolderPicker onFiles={(files) => load(files, "replace")} className="mt-1">
-            choose a folder
-          </FolderPicker>
-        </Dropzone>
-        {loading ? <LoadProgress {...loading} onCancel={cancel} /> : null}
-        {!loading ? (
-          <TextButton className="self-start" onClick={() => setSpinning(true)}>
-            or spin one image
-          </TextButton>
-        ) : null}
-        {canUndo && !loading ? (
-          <TextButton className="self-start" onClick={session.undo}>
-            undo · bring the frames back
-          </TextButton>
-        ) : null}
+      <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:py-6 xl:px-7">
+        <SpinSource onClose={closeSpin} />
       </div>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-8">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-w-0 flex-col gap-3">
-          <Preview doc={doc} store={session.store} time={playback.time} />
-          <p className="text-meta font-mono text-micro uppercase">
-            <span className="tabular-nums">{doc.frames.length}</span> frames
-            {order.length !== doc.frames.length ? (
-              <>
-                {" · "}
-                <span className="tabular-nums">{order.length}</span> played
-              </>
-            ) : null}
-            {" · "}
-            <span className="tabular-nums">{formatTime(duration)}</span>
-            {" · "}
-            <span className="tabular-nums tracking-normal">
-              {size.width} × {size.height}
-            </span>
-          </p>
-        </div>
-        <div className="flex flex-col gap-7">
-          <Settings doc={doc} session={session} />
-          <div className="border-hairline-faint border-t pt-7">
-            <ExportPanel doc={doc} session={session} />
-          </div>
-        </div>
-      </div>
+  const pane =
+    "flex flex-col lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:border-hairline-faint lg:px-6 lg:pt-6 xl:px-7";
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
-          {loading ? <LoadProgress {...loading} onCancel={cancel} className="mr-auto w-full max-w-sm" /> : null}
-          <FilePicker onFiles={(files) => load(files, "append")} disabled={!!loading}>
-            add images
-          </FilePicker>
-          <FolderPicker onFiles={(files) => load(files, "append")} disabled={!!loading}>
-            add a folder
-          </FolderPicker>
-          <TextButton onClick={() => setSpinning(true)} disabled={!!loading}>
-            spin an image
-          </TextButton>
-          <TextButton onClick={() => session.clear()} disabled={!!loading}>
-            start over
-          </TextButton>
-        </div>
-        <Timeline
-          mode="frames"
-          frames={doc.frames}
-          onFramesChange={onFramesChange}
-          onGestureStart={session.snapshot}
-          onUndo={session.undo}
-          onRedo={session.redo}
-          time={timelineTime(doc.frames, order, playback.time)}
-          // The strip shows each frame once; a scrub lands on the forward pass.
-          onTimeChange={playback.setTime}
-          playing={playback.playing}
-          onPlayingChange={playback.setPlaying}
-          loop={playback.loop}
-          onLoopChange={playback.setLoop}
-          thumbnails={session.store.thumbnails}
-          aspect={size.height > 0 ? size.width / size.height : 1}
-        />
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-8",
+        "lg:grid lg:min-h-0 lg:flex-1 lg:grid-rows-[minmax(0,1fr)_auto] lg:gap-0",
+        "lg:grid-cols-[264px_minmax(0,1fr)_304px] xl:grid-cols-[288px_minmax(0,1fr)_336px]",
+      )}
+    >
+      {/* the stage */}
+      <section aria-label="preview" className="flex min-h-0 flex-col lg:col-start-2 lg:row-start-1">
+        {empty ? (
+          <div className="flex flex-1 flex-col gap-4 lg:p-6">
+            <Dropzone
+              folders
+              accept={IMAGE_ACCEPT}
+              onFiles={(files) => load(files, "replace")}
+              cta="choose images"
+              label="or drop images or a folder anywhere here"
+              hint="one frame per image, in filename order · it plays as soon as they land"
+              className="min-h-72 flex-1 gap-4"
+            >
+              <div className="mt-2 flex items-center gap-5">
+                <FolderPicker onFiles={(files) => load(files, "replace")}>choose a folder</FolderPicker>
+                <span className="text-meta text-micro font-mono" aria-hidden>
+                  ·
+                </span>
+                <TextButton onClick={spin}>spin one image</TextButton>
+              </div>
+            </Dropzone>
+            {loading ? <LoadProgress {...loading} onCancel={cancel} /> : null}
+            {canUndo && !loading ? (
+              <TextButton className="self-start" onClick={session.undo}>
+                undo · bring the frames back
+              </TextButton>
+            ) : null}
+          </div>
+        ) : (
+          <Stage
+            doc={doc}
+            time={playback.time}
+            playing={playback.playing}
+            onPlayingChange={playback.setPlaying}
+            played={order.length}
+            duration={duration}
+            size={size}
+          />
+        )}
+      </section>
+
+      {/* the timeline, the width of the room */}
+      <TimelineDock
+        empty={empty}
+        loading={loading}
+        onCancel={cancel}
+        onFiles={(files) => load(files, empty ? "replace" : "append")}
+        onSpin={spin}
+        onClear={() => session.clear()}
+        count={doc.frames.length}
+        duration={duration}
+      >
+        {empty ? null : (
+          <Timeline
+            mode="frames"
+            frames={doc.frames}
+            onFramesChange={onFramesChange}
+            onGestureStart={session.snapshot}
+            onUndo={session.undo}
+            onRedo={session.redo}
+            time={timelineTime(doc.frames, order, playback.time)}
+            // The strip shows each frame once; a scrub lands on the forward pass.
+            onTimeChange={playback.setTime}
+            playing={playback.playing}
+            onPlayingChange={playback.setPlaying}
+            loop={playback.loop}
+            onLoopChange={playback.setLoop}
+            thumbnails={session.store.thumbnails}
+            aspect={size.height > 0 ? size.width / size.height : 1}
+            thumbHeight={STAGE_TILE}
+            initialZoom={1}
+          />
+        )}
+      </TimelineDock>
+
+      {/* left: timing and canvas */}
+      <aside
+        aria-label="timing and canvas"
+        className={cn(pane, "lg:col-start-1 lg:row-start-1 lg:border-r lg:pb-6", empty && "opacity-40")}
+        inert={empty}
+      >
+        <Settings doc={doc} session={session} />
+      </aside>
+
+      {/* right: export */}
+      <aside aria-label="export" className={cn(pane, "lg:col-start-3 lg:row-start-1 lg:border-l")}>
+        <ExportPanel doc={doc} session={session} />
+      </aside>
+    </div>
+  );
+}
+
+/**
+ * The animation at its real timing, as large as the room allows, with a
+ * caption line that says what it is and a play control you can't miss.
+ */
+function Stage({
+  doc,
+  time,
+  playing,
+  onPlayingChange,
+  played,
+  duration,
+  size,
+}: {
+  doc: GifDoc;
+  time: number;
+  playing: boolean;
+  onPlayingChange: (playing: boolean) => void;
+  played: number;
+  duration: number;
+  size: { width: number; height: number };
+}) {
+  return (
+    <div className="flex min-h-[44vh] flex-1 flex-col lg:min-h-0">
+      <div className="flex min-h-0 flex-1 items-center justify-center py-2 lg:p-8">
+        <Preview doc={doc} store={gifSession.store} time={time} fill className="max-h-[56vh] lg:max-h-none" />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 pt-3 lg:px-8 lg:pb-4">
+        <p className="text-meta text-micro font-mono uppercase">
+          <span className="tabular-nums tracking-normal">{doc.frames.length}</span> frames
+          {played !== doc.frames.length ? (
+            <>
+              {" · "}
+              <span className="tabular-nums tracking-normal">{played}</span> played
+            </>
+          ) : null}
+          {" · "}
+          <span className="tabular-nums tracking-normal">{formatTime(duration)}</span>
+          {" · "}
+          <span className="tabular-nums tracking-normal">
+            {size.width} × {size.height}
+          </span>
+        </p>
+        <button
+          type="button"
+          onClick={() => onPlayingChange(!playing)}
+          aria-pressed={playing}
+          className={cn(
+            "text-micro flex cursor-pointer items-center gap-2 font-mono uppercase transition-colors duration-200",
+            "focus-visible:outline-indigo focus-visible:outline-1 focus-visible:outline-offset-4",
+            playing ? "text-ink hover:text-indigo" : "text-meta hover:text-indigo",
+          )}
+        >
+          {playing ? (
+            <>
+              <span className="bg-signal size-1.5 rounded-full" aria-hidden />
+              playing · on a loop
+              <FiPause className="size-3.5" aria-hidden />
+            </>
+          ) : (
+            <>
+              <FiPlay className="size-3.5" aria-hidden />
+              play
+            </>
+          )}
+        </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The timeline's dock: its name and length, the ways to bring in more frames,
+ * and the strip itself. Drop images or a folder anywhere on it and they join
+ * the end; an empty dock is a dashed lane waiting for them.
+ */
+function TimelineDock({
+  empty,
+  loading,
+  onCancel,
+  onFiles,
+  onSpin,
+  onClear,
+  count,
+  duration,
+  children,
+}: {
+  empty: boolean;
+  loading: Loading | null;
+  onCancel: () => void;
+  onFiles: (files: File[]) => void;
+  onSpin: () => void;
+  onClear: () => void;
+  count: number;
+  duration: number;
+  children: React.ReactNode;
+}) {
+  const [over, setOver] = useState(false);
+  const busy = !!loading;
+  return (
+    <section
+      aria-label="timeline"
+      className="border-hairline-faint relative flex flex-col gap-3 border-t pt-5 lg:col-span-3 lg:row-start-2 lg:px-6 lg:pb-4 lg:pt-3 xl:px-7"
+      onDragOver={(e) => {
+        if (![...e.dataTransfer.types].includes("Files")) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        if (![...e.dataTransfer.types].includes("Files")) return;
+        e.preventDefault();
+        setOver(false);
+        void filesFromDrop(e.dataTransfer).then((files) => files.length > 0 && onFiles(files));
+      }}
+    >
+      <header className="flex flex-wrap items-center gap-x-5 gap-y-3">
+        <h2 className="text-ink text-title font-mono font-bold uppercase">timeline</h2>
+        <span className="text-meta text-micro font-mono uppercase">
+          {empty ? (
+            "no frames yet"
+          ) : (
+            <>
+              <span className="tabular-nums tracking-normal">{count}</span> frames ·{" "}
+              <span className="tabular-nums tracking-normal">{formatTime(duration)}</span>
+            </>
+          )}
+        </span>
+        {loading ? <LoadProgress {...loading} onCancel={onCancel} className="w-full max-w-64" /> : null}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <FilePicker onFiles={onFiles} disabled={busy} look="outline">
+            <FiPlus className="size-3" aria-hidden /> images
+          </FilePicker>
+          <FolderPicker onFiles={onFiles} disabled={busy} look="ghost">
+            <FiFolderPlus className="size-3" aria-hidden /> folder
+          </FolderPicker>
+          <Button size="sm" variant="ghost" onClick={onSpin} disabled={busy}>
+            <FiRefreshCw className="size-3" aria-hidden /> spin
+          </Button>
+          {empty ? null : (
+            <TextButton onClick={onClear} disabled={busy} className="ml-3">
+              start over
+            </TextButton>
+          )}
+        </div>
+      </header>
+
+      {empty ? (
+        <div className="border-hairline text-label text-micro rounded-xs flex h-32 items-center justify-center border border-dashed px-4 text-center font-mono uppercase">
+          frames line up here — one per image, each as wide as it is long
+        </div>
+      ) : (
+        children
+      )}
+
+      {over ? (
+        <div
+          className="border-indigo text-indigo text-micro rounded-card pointer-events-none absolute inset-1 z-20 flex items-center justify-center border border-dashed bg-[rgba(90,87,240,0.14)] font-mono uppercase"
+          aria-hidden
+        >
+          {empty ? "let go to start the animation" : "let go to add them at the end"}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -141,8 +358,11 @@ export function GifTab() {
 
 type Loading = { done: number; total: number };
 
-/** Decodes picked files into frames on the codec pool and hands them to the session. One load at a time. */
-function useFrameLoader() {
+/**
+ * Decodes picked files into frames on the codec pool and hands them to the
+ * session. One load at a time; `onLoaded` fires when frames have landed.
+ */
+function useFrameLoader(onLoaded: () => void) {
   const toast = useToast();
   const running = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState<Loading | null>(null);
@@ -165,6 +385,7 @@ function useFrameLoader() {
           },
         });
         gifSession.addFrames(result.frames, how);
+        if (result.frames.length > 0) onLoaded();
         if (result.frames.length === 0) {
           toast(result.failed.length > 0 ? "none of those images would open" : "no images in that selection");
         } else if (result.failed.length > 0) {
@@ -183,7 +404,7 @@ function useFrameLoader() {
         }
       }
     },
-    [toast, pool],
+    [toast, pool, onLoaded],
   );
 
   const cancel = useCallback(() => {
@@ -200,8 +421,11 @@ function LoadProgress({ done, total, onCancel, className }: Loading & { onCancel
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-label font-mono text-micro uppercase">
-          decoding <span className="tabular-nums tracking-normal">{done} / {total}</span>
+        <span className="text-label text-micro font-mono uppercase">
+          decoding{" "}
+          <span className="tabular-nums tracking-normal">
+            {done} / {total}
+          </span>
         </span>
         <TextButton onClick={onCancel}>stop</TextButton>
       </div>
@@ -213,7 +437,10 @@ function LoadProgress({ done, total, onCancel, className }: Loading & { onCancel
         aria-valuenow={done}
         className="bg-wash relative h-0.5 w-full overflow-hidden rounded-full"
       >
-        <div className="bg-indigo absolute inset-y-0 left-0 transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />
+        <div
+          className="bg-indigo absolute inset-y-0 left-0 transition-[width] duration-200"
+          style={{ width: `${fraction * 100}%` }}
+        />
       </div>
     </div>
   );
@@ -230,9 +457,23 @@ function FolderPicker(props: PickerProps) {
   return <Picker {...props} folder />;
 }
 
-type PickerProps = { onFiles: (files: File[]) => void; disabled?: boolean; className?: string; children: React.ReactNode };
+type PickerProps = {
+  onFiles: (files: File[]) => void;
+  disabled?: boolean;
+  className?: string;
+  /** A text button by default; a small real button where the picker is a section's own action. */
+  look?: "text" | "outline" | "ghost";
+  children: React.ReactNode;
+};
 
-function Picker({ onFiles, disabled, className, children, folder = false }: PickerProps & { folder?: boolean }) {
+function Picker({
+  onFiles,
+  disabled,
+  className,
+  look = "text",
+  children,
+  folder = false,
+}: PickerProps & { folder?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     // Not in React's types; every current browser supports it.
@@ -254,9 +495,21 @@ function Picker({ onFiles, disabled, className, children, folder = false }: Pick
           if (files.length > 0) onFiles(files);
         }}
       />
-      <TextButton className={className} disabled={disabled} onClick={() => input.current?.click()}>
-        {children}
-      </TextButton>
+      {look === "text" ? (
+        <TextButton className={className} disabled={disabled} onClick={() => input.current?.click()}>
+          {children}
+        </TextButton>
+      ) : (
+        <Button
+          size="sm"
+          variant={look}
+          className={className}
+          disabled={disabled}
+          onClick={() => input.current?.click()}
+        >
+          {children}
+        </Button>
+      )}
     </>
   );
 }

@@ -44,11 +44,14 @@ export type FramesTimelineProps<F extends TimelineFrame> = TimelineCommon & {
   onSelectionChange?: (ids: string[]) => void;
   /** Thumbnail aspect, width / height. */
   aspect?: number;
+  /** Picture height of a tile, in px. A composer that is about its frames makes them bigger. */
+  thumbHeight?: number;
+  /** Starting zoom, in px per ms of delay. */
+  initialZoom?: number;
 };
 
 const THUMB_H = 48;
 const CAPTION_H = 18;
-const TILE_H = THUMB_H + CAPTION_H;
 const MIN_TILE = 28;
 const GAP = 2;
 const EDGE = 6;
@@ -85,10 +88,13 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
     hotkeys = true,
     label = "frames",
     aspect = 16 / 9,
+    thumbHeight = THUMB_H,
+    initialZoom = 0.5,
     className,
   } = props;
+  const tileH = thumbHeight + CAPTION_H;
 
-  const [pxPerMs, setPxPerMs] = useState(0.5);
+  const [pxPerMs, setPxPerMs] = useState(initialZoom);
   const [selected, setSelectedState] = useState<ReadonlySet<string>>(() => new Set());
   const anchor = useRef<number | null>(null);
   // The drag lives in a ref for the handlers (two pointer moves can arrive
@@ -254,6 +260,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
         provider={thumbnails}
         cache={cache}
         aspect={aspect}
+        thumbHeight={thumbHeight}
       />,
     );
   }
@@ -320,7 +327,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
       </Transport>
 
       <div ref={scroller} className="border-hairline-faint overflow-x-auto overscroll-x-contain border-y">
-        <div className="relative" style={{ width: layout.width + 32, height: RULER_H + TILE_H + 12 }}>
+        <div className="relative" style={{ width: layout.width + 32, height: RULER_H + tileH + 12 }}>
           <Ruler
             pxPerMs={pxPerMs}
             left={view.left}
@@ -337,7 +344,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
             aria-multiselectable
             aria-label={`${label} · drag to reorder, drag an edge to change its delay`}
             className="relative mt-1.5 cursor-default touch-none select-none"
-            style={{ height: TILE_H }}
+            style={{ height: tileH }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -385,6 +392,7 @@ const Tile = memo(function Tile({
   provider,
   cache,
   aspect,
+  thumbHeight,
 }: {
   frame: TimelineFrame;
   index: number;
@@ -397,6 +405,7 @@ const Tile = memo(function Tile({
   provider: ThumbnailProvider;
   cache: ThumbCache;
   aspect: number;
+  thumbHeight: number;
 }) {
   return (
     <div
@@ -409,15 +418,15 @@ const Tile = memo(function Tile({
         selected ? "border-indigo" : "border-hairline-faint hover:border-edge",
         moving && "opacity-40",
       )}
-      style={{ transform: `translateX(${x}px)`, width: w, height: TILE_H }}
+      style={{ transform: `translateX(${x}px)`, width: w, height: thumbHeight + CAPTION_H }}
     >
-      <div className="bg-surface relative w-full overflow-hidden" style={{ height: THUMB_H }}>
+      <div className="bg-surface relative w-full overflow-hidden" style={{ height: thumbHeight }}>
         <Thumb
           request={{ kind: "frame", id: frame.id, index }}
           cache={cache}
           provider={provider}
-          width={Math.round(THUMB_H * aspect)}
-          height={THUMB_H}
+          width={Math.round(thumbHeight * aspect)}
+          height={thumbHeight}
         />
       </div>
       <div
