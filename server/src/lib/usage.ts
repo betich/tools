@@ -31,6 +31,8 @@ const NOISY = new Set([
   "GET /api/health",
   "GET /api/pdf/uploads/:id",
   "GET /api/pdf/uploads/:id/thumbnail.png",
+  "GET /api/pdf/uploads/:id/pages",
+  "GET /api/pdf/uploads/:id/pages/:file",
   "PUT /api/pdf/uploads/:id/parts/:n",
   "GET /api/pdf/jobs/:id",
   "GET /api/pdf/jobs/:id/events",

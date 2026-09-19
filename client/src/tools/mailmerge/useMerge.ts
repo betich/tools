@@ -14,8 +14,7 @@ import {
   type OverrideField,
   type TextLayer,
 } from "@tools/shared";
-
-const HISTORY_LIMIT = 40;
+import { useHistory } from "@/hooks/useHistory";
 
 /**
  * Document state for the editor.
@@ -25,7 +24,8 @@ const HISTORY_LIMIT = 40;
  * remember to do.
  */
 export function useMerge(initial?: MergeDoc) {
-  const [doc, setDoc] = useState<MergeDoc>(() => initial ?? newDoc());
+  const history = useHistory<MergeDoc>(() => initial ?? newDoc());
+  const { value: doc, set: commit, preview, snapshot, undo, redo } = history;
   const [data, setRawData] = useState<MergeData>(emptyData);
   // Every row has a key, always — the per-row layout hangs off it.
   const setData = useCallback((next: SetStateAction<MergeData>) => {
@@ -36,39 +36,6 @@ export function useMerge(initial?: MergeDoc) {
   const [selectedId, setSelectedId] = useState<string | null>(() => doc.layers[0]?.id ?? null);
   const [rowIndex, setRowIndex] = useState(0);
   const [showValues, setShowValues] = useState(true);
-
-  const past = useRef<MergeDoc[]>([]);
-  const future = useRef<MergeDoc[]>([]);
-
-  const commit = useCallback((next: MergeDoc | ((prev: MergeDoc) => MergeDoc)) => {
-    setDoc((prev) => {
-      const resolved = typeof next === "function" ? next(prev) : next;
-      if (resolved === prev) return prev;
-      past.current = [...past.current, prev].slice(-HISTORY_LIMIT);
-      future.current = [];
-      return resolved;
-    });
-  }, []);
-
-  const undo = useCallback(() => {
-    setDoc((current) => {
-      const previous = past.current.at(-1);
-      if (!previous) return current;
-      past.current = past.current.slice(0, -1);
-      future.current = [current, ...future.current].slice(0, HISTORY_LIMIT);
-      return previous;
-    });
-  }, []);
-
-  const redo = useCallback(() => {
-    setDoc((current) => {
-      const next = future.current[0];
-      if (!next) return current;
-      future.current = future.current.slice(1);
-      past.current = [...past.current, current].slice(-HISTORY_LIMIT);
-      return next;
-    });
-  }, []);
 
   const clampedRow = Math.min(rowIndex, Math.max(0, data.rows.length - 1));
   const currentKey = data.rows.length > 0 ? (data.keys?.[clampedRow] ?? null) : null;
@@ -93,23 +60,16 @@ export function useMerge(initial?: MergeDoc) {
    * Live drag/slider updates must not push a history entry per frame; they
    * write through and the caller snapshots once on gesture start.
    */
-  const previewLayer = useCallback((id: string, patch: Partial<TextLayer>) => {
-    setDoc((prev) => patchLayer(prev, id, patch, editKeyRef.current));
-  }, []);
+  const previewLayer = useCallback(
+    (id: string, patch: Partial<TextLayer>) => preview((prev) => patchLayer(prev, id, patch, editKeyRef.current)),
+    [preview],
+  );
 
   /** Back to the main design: one field of one layer, one layer, or the whole row. */
   const revertRow = useCallback(
     (key: string, layerId?: string, field?: OverrideField) => commit((prev) => revert(prev, key, layerId, field)),
     [commit],
   );
-
-  const snapshot = useCallback(() => {
-    setDoc((prev) => {
-      past.current = [...past.current, prev].slice(-HISTORY_LIMIT);
-      future.current = [];
-      return prev;
-    });
-  }, []);
 
   const addLayer = useCallback(() => {
     const layer = newTextLayer({
@@ -183,7 +143,7 @@ export function useMerge(initial?: MergeDoc) {
     setRowMode,
     revertRow,
     setDoc: commit,
-    replaceDoc: setDoc,
+    replaceDoc: preview,
     data,
     setData,
     selected,
@@ -198,7 +158,7 @@ export function useMerge(initial?: MergeDoc) {
     reorderLayer,
     undo,
     redo,
-    canUndo: past.current.length > 0,
+    canUndo: history.canUndo,
     usedFields,
     rowIndex,
     setRowIndex,

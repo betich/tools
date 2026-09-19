@@ -266,7 +266,7 @@ describe.skipIf(!hasTools)("engines", () => {
         const out = join(dirs.workDir, "joined.pdf");
         const chosen = mergeJoinFor(engine);
         expect(chosen).toMatchObject({ engine, note: null });
-        await chosen.join(ctx, parts, out);
+        await chosen.join(ctx, parts.map((path) => ({ path })), out);
         expectValid(out);
         const expected = parts.reduce((n, p) => n + pageCount(p), 0);
         expect(pageCount(out)).toBe(expected);
@@ -279,6 +279,29 @@ describe.skipIf(!hasTools)("engines", () => {
         const catalog = show(out, "Root");
         if (engine === "mupdf" || engine === "qpdf") expect(catalog).toContain("/AcroForm");
         else expect(catalog).not.toContain("/AcroForm");
+      }, 60_000);
+
+      test(`${engine}: joins page ranges in the order given, a file repeating (#39)`, async () => {
+        const { mergeJoinFor } = await import("../src/mergeEngines");
+        const deck = join(fixtures, "deck.pdf");
+        const scan = join(fixtures, "scan.pdf");
+        const dirs = taskDirs();
+        const { ctx } = context(dirs, "merge", {}, []);
+        const out = join(dirs.workDir, "joined.pdf");
+        await mergeJoinFor(engine).join(
+          ctx,
+          [
+            { path: deck, pages: [1, 2] },
+            { path: scan, pages: [0, 0] },
+            { path: deck, pages: [0, 0] },
+          ],
+          out,
+        );
+        expectValid(out);
+        expect(pageCount(out)).toBe(4);
+        const [d, s] = [render(deck), render(scan)];
+        const after = render(out);
+        expect(meanDifference([d[1]!, d[2]!, s[0]!, d[0]!], after)).toBeLessThan(engine === "ghostscript" ? 6 : 0.5);
       }, 60_000);
     }
   });

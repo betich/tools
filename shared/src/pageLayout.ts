@@ -151,11 +151,178 @@ export type MergeItem = { upload: string; name: string; kind: UploadKind; layout
 export type MergeOutput = { title: string | null; bookmarks: boolean; pageLabels: boolean; compressImages: boolean };
 export const DEFAULT_MERGE_OUTPUT: MergeOutput = { title: null, bookmarks: true, pageLabels: true, compressImages: false };
 
-/** Body of a `merge` task (TaskCreate.params). */
-export type MergeParams = { items: MergeItem[]; output: MergeOutput; engine?: EngineId };  // DEFAULT_ENGINE when absent
+/**
+ * Body of a `merge` task (TaskCreate.params). `engine` is DEFAULT_ENGINE when
+ * absent. `pages` is the page view's output (#37); absent → every item whole,
+ * in item order, which is exactly the request from before the page view.
+ * The client omits it when `isDefaultOrder` holds.
+ */
+export type MergeParams = { items: MergeItem[]; output: MergeOutput; engine?: EngineId; pages?: MergePageRun[] };
 
 /** TaskInfo.result for kind "merge". */
 export type MergeResult = { bytes: number; pages: number; fileName: string; notes: string[] };
+
+/* ── merge by page (#37) ───────────────────────────────────────────────────── */
+
+/**
+ * One output page: page `page` (0-based) of `items[item]`. Items, not uploads,
+ * are the unit — the same PDF added twice is two files with their own
+ * bookmark. An image item has one page, 0, which stands for the whole image
+ * (every frame of a multi-frame TIFF): images are never split.
+ */
+export type MergePageRef = { item: number; page: number };
+
+/**
+ * A run of consecutive source pages, `[item, from, to]`: 0-based, inclusive,
+ * `from <= to`. The output is the runs in order, so the list is still the
+ * explicit page list, just compact.
+ *
+ * Why tuples of item indices: params are capped at 64 KiB by the server, and
+ * items (name + layout, up to 200 of them) can take a good part of that. A
+ * run costs ~16 bytes, so `MAX_MERGE_RUNS` of them stay under 16 KiB — where
+ * `{ fileId, pageIndex }` per page would top out near 1,600 pages. Interleaving
+ * two 20-page scans is 40 runs; a file kept whole is one.
+ */
+export type MergePageRun = [item: number, from: number, to: number];
+
+/** Most runs a merge takes. The worker refuses more; the client says so before sending. */
+export const MAX_MERGE_RUNS = 1_000;
+
+/** Page count per item index; `undefined` when unknown. Items that are not PDFs (images) are always 1, whatever this says. */
+export type ItemPageCount = (item: number) => number | undefined;
+
+export type PageRangeResult = { ok: true; pages: number[] } | { ok: false; error: string };
+
+const PAGE_TOKEN = /^(\d+)?-(\d+)?$|^(\d+)$/;
+
+/**
+ * Reads a typed page range like "1-3, 5, 8-" against a file of `count` pages,
+ * into 0-based page indices in the order typed. "8-" runs to the last page,
+ * "-3" from the first, "5-3" counts down. Commas, semicolons or spaces
+ * separate; en and em dashes read as hyphens. A page given twice is kept
+ * once, where it first appears. Anything out of range is refused with a
+ * sentence to show as-is, never clamped.
+ */
+export function parsePageRange(text: string, count: number): PageRangeResult {
+  if (count <= 0) return { ok: false, error: "This file has no pages." };
+  const tokens = text.replace(/\s*[-–—]\s*/g, "-").split(/[\s,;]+/).filter(Boolean);
+  if (!tokens.length) return { ok: false, error: "Type pages like 1-3, 5, 8-." };
+  const past = (n: number) => `This file has ${count} ${count === 1 ? "page" : "pages"}; there is no page ${n}.`;
+  const seen = new Set<number>();
+  const pages: number[] = [];
+  for (const token of tokens) {
+    const m = PAGE_TOKEN.exec(token);
+    if (!m || (m[1] === undefined && m[2] === undefined && m[3] === undefined)) {
+      return { ok: false, error: `“${token}” is not a page or a range.` };
+    }
+    const from = Number(m[3] ?? m[1] ?? 1);
+    const to = m[3] !== undefined ? from : Number(m[2] ?? count);
+    if (from < 1 || to < 1) return { ok: false, error: "Pages start at 1." };
+    if (from > count) return { ok: false, error: past(from) };
+    if (to > count) return { ok: false, error: past(to) };
+    const step = to >= from ? 1 : -1;
+    for (let p = from; ; p += step) {
+      if (!seen.has(p)) (seen.add(p), pages.push(p - 1));
+      if (p === to) break;
+    }
+  }
+  return { ok: true, pages };
+}
+
+/**
+ * The inverse of `parsePageRange`: 0-based pages, in order, as the text a
+ * person would type for them — "1-3, 5, 8-10". Consecutive pages fold in
+ * either direction. Ends are always written, so a whole file reads "1-10".
+ */
+export function formatPageRange(pages: readonly number[]): string {
+  const runs: [number, number][] = [];
+  for (const p of pages) {
+    const last = runs[runs.length - 1];
+    const step = last ? (last[0] === last[1] ? p - last[1] : Math.sign(last[1] - last[0])) : 0;
+    if (last && (step === 1 || step === -1) && p === last[1] + step) last[1] = p;
+    else runs.push([p, p]);
+  }
+  return runs
+    .map(([a, b]) => (a === b ? `${a + 1}` : `${a + 1}-${b + 1}`))
+    .join(", ");
+}
+
+/** Packs a page list into runs, joining a page onto the run before it when it is the next page of the same item. */
+export const toRuns = (refs: readonly MergePageRef[]): MergePageRun[] =>
+  joinRuns(refs.map(({ item, page }): MergePageRun => [item, page, page]));
+
+/** The page list the runs stand for, in output order. */
+export function expandRuns(runs: readonly MergePageRun[]): MergePageRef[] {
+  const refs: MergePageRef[] = [];
+  for (const [item, from, to] of runs) for (let page = from; page <= to; page++) refs.push({ item, page });
+  return refs;
+}
+
+/**
+ * Joins runs that continue one another (same item, `from` the page after the
+ * last run's `to`), so equal page lists compare equal as runs and each run is
+ * one bookmark and one join part. Leaves `runs` as it was.
+ */
+export function joinRuns(runs: readonly MergePageRun[]): MergePageRun[] {
+  const out: MergePageRun[] = [];
+  for (const [item, from, to] of runs) {
+    const last = out.at(-1);
+    if (last && last[0] === item && last[2] + 1 === from) last[2] = to;
+    else out.push([item, from, to]);
+  }
+  return out;
+}
+
+/** Every item whole, in item order — or null when a PDF's page count is not known yet. */
+export function defaultRuns(items: readonly MergeItem[], count: ItemPageCount): MergePageRun[] | null {
+  const runs: MergePageRun[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const n = items[i]!.kind === "pdf" ? count(i) : 1;
+    if (n === undefined) return null;
+    if (n > 0) runs.push([i, 0, n - 1]);
+  }
+  return runs;
+}
+
+/**
+ * True when the runs make exactly the default output (every item whole, in
+ * item order), so the client can leave `pages` out and the request is the
+ * file-level one. An unknown PDF page count is never default.
+ */
+export function isDefaultOrder(runs: readonly MergePageRun[], items: readonly MergeItem[], count: ItemPageCount): boolean {
+  const whole = defaultRuns(items, count);
+  if (!whole) return false;
+  const mine = joinRuns(runs);
+  return mine.length === whole.length && mine.every((r, i) => r.every((v, k) => v === whole[i]![k]));
+}
+
+const isIndex = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
+
+/**
+ * Why `pages` can't be merged, as a sentence to show as-is, or null. Checks
+ * shape, item indices, images being page 0 only, and — where `count` knows
+ * it — the last page of each PDF. The worker calls it once it has counted
+ * pages; the client can call it before sending.
+ */
+export function mergePagesProblem(pages: unknown, items: readonly MergeItem[], count: ItemPageCount = () => undefined): string | null {
+  if (!Array.isArray(pages)) return "The page list is not readable — pick the pages again.";
+  if (!pages.length) return "Keep at least one page to merge.";
+  if (pages.length > MAX_MERGE_RUNS) {
+    return `The page order is in too many pieces (${pages.length.toLocaleString("en")}; at most ${MAX_MERGE_RUNS.toLocaleString("en")}). Keep more pages in their original runs.`;
+  }
+  for (const run of pages) {
+    if (!Array.isArray(run) || run.length !== 3 || !run.every(isIndex)) return "The page list is not readable — pick the pages again.";
+    const [i, from, to] = run as MergePageRun;
+    if (from > to) return "The page list is not readable — pick the pages again.";
+    const item = items[i];
+    if (!item) return "The page list names a file that is not in this merge — pick the pages again.";
+    const n = item.kind === "pdf" ? count(i) : 1;
+    if (n !== undefined && to >= n) {
+      return `“${item.name}” has ${n} ${n === 1 ? "page" : "pages"}; there is no page ${to + 1}.`;
+    }
+  }
+  return null;
+}
 
 /* ── density from the file ─────────────────────────────────────────────────── */
 
