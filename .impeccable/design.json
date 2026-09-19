@@ -1,0 +1,414 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T05:10:04.389713+00:00",
+  "title": "Design System: betich's tools",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#04040D",
+        "tonalRamp": [
+          "#0A0A1F",
+          "#161646",
+          "#242475",
+          "#3232A4",
+          "#5050C9",
+          "#8282D9",
+          "#B1B1E7",
+          "#E4E4F7"
+        ]
+      },
+      "bloom": {
+        "role": "neutral",
+        "displayName": "Bloom",
+        "canonical": "#07071A",
+        "tonalRamp": [
+          "#090920",
+          "#131348",
+          "#202079",
+          "#2D2DA9",
+          "#4A4ACE",
+          "#7E7EDC",
+          "#AFAFE9",
+          "#E3E3F7"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#0B0B1A",
+        "tonalRamp": [
+          "#0C0C1D",
+          "#1B1B41",
+          "#2D2D6C",
+          "#404097",
+          "#5E5EBB",
+          "#8C8CCE",
+          "#B7B7E1",
+          "#E6E6F4"
+        ]
+      },
+      "panel-high": {
+        "role": "neutral",
+        "displayName": "Panel High",
+        "canonical": "#101026",
+        "tonalRamp": [
+          "#0C0C1D",
+          "#1B1B41",
+          "#2D2D6C",
+          "#3F3F97",
+          "#5E5EBB",
+          "#8C8CCF",
+          "#B7B7E1",
+          "#E6E6F4"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Lavender Ink",
+        "canonical": "#F6F5FF",
+        "tonalRamp": [
+          "#040029",
+          "#09005C",
+          "#0F0099",
+          "#1500D6",
+          "#301AFF",
+          "#6C5CFF",
+          "#A399FF",
+          "#DFDBFF"
+        ]
+      },
+      "periwinkle": {
+        "role": "primary",
+        "displayName": "Periwinkle (arrival)",
+        "canonical": "#C3C2FA",
+        "tonalRamp": [
+          "#040326",
+          "#080755",
+          "#0E0C8D",
+          "#1310C6",
+          "#2E2BEE",
+          "#6B68F3",
+          "#A2A1F7",
+          "#DFDEFC"
+        ]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "Signal Indigo (live)",
+        "canonical": "#5A57F0",
+        "tonalRamp": [
+          "#040325",
+          "#090854",
+          "#0F0D8C",
+          "#1512C5",
+          "#302CEC",
+          "#6C69F2",
+          "#A3A1F7",
+          "#DFDEFC"
+        ]
+      },
+      "prose": {
+        "role": "neutral",
+        "displayName": "Ink at 88.0%",
+        "canonical": "rgba(246,245,255,0.88)"
+      },
+      "prose-muted": {
+        "role": "neutral",
+        "displayName": "Ink at 80.0%",
+        "canonical": "rgba(246,245,255,0.8)"
+      },
+      "label": {
+        "role": "neutral",
+        "displayName": "Ink at 76.0%",
+        "canonical": "rgba(246,245,255,0.76)"
+      },
+      "meta": {
+        "role": "neutral",
+        "displayName": "Ink at 64.0%",
+        "canonical": "rgba(246,245,255,0.64)"
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Ink at 4.0%",
+        "canonical": "rgba(246,245,255,0.04)"
+      },
+      "surface-high": {
+        "role": "neutral",
+        "displayName": "Ink at 7.0%",
+        "canonical": "rgba(246,245,255,0.07)"
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Ink at 4.5%",
+        "canonical": "rgba(246,245,255,0.045)"
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Ink at 34.0%",
+        "canonical": "rgba(246,245,255,0.34)"
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Ink at 24.0%",
+        "canonical": "rgba(246,245,255,0.24)"
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Ink at 16.0%",
+        "canonical": "rgba(246,245,255,0.16)"
+      },
+      "hairline-faint": {
+        "role": "neutral",
+        "displayName": "Ink at 10.0%",
+        "canonical": "rgba(246,245,255,0.1)"
+      },
+      "hover-wash": {
+        "role": "neutral",
+        "displayName": "Ink at 7.0%",
+        "canonical": "rgba(246,245,255,0.07)"
+      }
+    },
+    "typographyMeta": {
+      "hero": {
+        "displayName": "Hero",
+        "purpose": "A tool's name on its door, and the admin readout's one number."
+      },
+      "display": {
+        "displayName": "Display",
+        "purpose": "Live things at panel scale."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "A secondary panel's name."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Page headings and the wordmark."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The only sentence-case text: prose and hints, in Inter."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "What a control holds."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Every micro-label, status line and counter."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 24px 60px -20px rgba(0,0,0,0.8)",
+        "purpose": "Floating surfaces only (popovers, dialogs). Nothing in the document flow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The resolve entrance and the doors' drawings."
+      },
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Settling state changes."
+      },
+      {
+        "name": "resolve",
+        "value": "700ms ease-out-expo: 14px rise, 8px blur, opacity 0 to 1",
+        "purpose": "The one authored entrance, staggered 90ms."
+      },
+      {
+        "name": "state",
+        "value": "200–300ms colour transitions",
+        "purpose": "Hover, focus, active."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "2xl",
+        "value": "1536px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action a surface exists for; the only solid-ink shape in the chrome.",
+      "html": "<button class=\"ds-btn-primary\">EXPORT</button>",
+      "css": ".ds-btn-primary { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; height: 36px; padding: 0 16px; border: 0; border-radius: 6px; background: #F6F5FF; color: #04040D; font-weight: 700; font-size: 11px; letter-spacing: 0.18em; cursor: pointer; transition: background-color .2s; } .ds-btn-primary:hover { background: #C3C2FA; } .ds-btn-primary:focus-visible { outline: 2px solid #C3C2FA; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The second-best action.",
+      "html": "<button class=\"ds-btn-outline\">SAVE</button>",
+      "css": ".ds-btn-outline { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; height: 36px; padding: 0 16px; border: 1px solid rgba(246,245,255,0.34); border-radius: 6px; background: transparent; color: #F6F5FF; font-size: 11px; letter-spacing: 0.18em; cursor: pointer; transition: color .2s, border-color .2s; } .ds-btn-outline:hover { color: #C3C2FA; border-color: #C3C2FA; } .ds-btn-outline:focus-visible { outline: 2px solid #C3C2FA; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "text-button",
+      "description": "Secondary moves; the active one is full ink with a 1px periwinkle underline.",
+      "html": "<span class=\"ds-tb-row\"><button class=\"ds-tb ds-tb-on\">MAIN DESIGN</button><button class=\"ds-tb\">ROW 07 ONLY</button></span>",
+      "css": ".ds-tb-row { display: inline-flex; gap: 16px; } .ds-tb { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; position: relative; background: none; border: 0; padding: 0; color: rgba(246,245,255,0.64); font-size: 11px; letter-spacing: 0.18em; cursor: pointer; transition: color .2s; } .ds-tb:hover { color: #C3C2FA; } .ds-tb:focus-visible { outline: 1px solid #C3C2FA; outline-offset: 4px; } .ds-tb-on { color: #F6F5FF; } .ds-tb-on::after { content: \"\"; position: absolute; left: 0; right: 0; bottom: -6px; height: 1px; background: #C3C2FA; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "control",
+      "description": "Uppercase meta label above, typed value at normal tracking inside.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">FILE NAME</span><input class=\"ds-input\" value=\"card-&lt;name&gt;\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 8px; width: 260px; } .ds-field-label { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; font-size: 11px; letter-spacing: 0.18em; color: rgba(246,245,255,0.64); } .ds-input { font-family: var(--font-mono, \"Roboto Mono\", monospace); font-size: 12px; letter-spacing: normal; color: #F6F5FF; background: rgba(246,245,255,0.045); border: 1px solid rgba(246,245,255,0.16); border-radius: 6px; padding: 8px 10px; transition: border-color .2s, background-color .2s; } .ds-input:hover { border-color: rgba(246,245,255,0.34); } .ds-input:focus { outline: none; border-color: #C3C2FA; background: rgba(246,245,255,0.07); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "The one component that fills, and only when touched.",
+      "html": "<span class=\"ds-chip\">&lt;NAME&gt;</span>",
+      "css": ".ds-chip { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; display: inline-flex; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(246,245,255,0.16); color: rgba(246,245,255,0.76); font-size: 11px; letter-spacing: 0.18em; transition: all .2s; } .ds-chip:hover { background: #C3C2FA; border-color: #C3C2FA; color: #04040D; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "nav",
+      "refersTo": "top-bar",
+      "description": "The top bar's API state: a 6px signal dot with a slow pulse, and a word.",
+      "html": "<span class=\"ds-status\"><i></i>API LIVE</span>",
+      "css": ".ds-status { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.18em; color: rgba(246,245,255,0.76); } .ds-status i { width: 6px; height: 6px; border-radius: 999px; background: #5A57F0; animation: ds-pulse 2.6s ease-in-out infinite; } @keyframes ds-pulse { 50% { opacity: .45; } } @media (prefers-reduced-motion: reduce) { .ds-status i { animation: none; } }"
+    },
+    {
+      "name": "Door",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A tool on the index: hero-scale name, ink-alpha surface, periwinkle on approach.",
+      "html": "<a class=\"ds-door\" href=\"#\"><span class=\"ds-door-name\">SQUOOSH</span><span class=\"ds-door-foot\"><span>IMAGE COMPRESSION</span><span>OPEN →</span></span></a>",
+      "css": ".ds-door { display: flex; flex-direction: column; justify-content: space-between; gap: 48px; width: 320px; padding: 24px; border-radius: 16px; border: 1px solid rgba(246,245,255,0.16); background: rgba(246,245,255,0.04); text-decoration: none; transition: border-color .3s, background-color .3s; } .ds-door-name { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; font-weight: 700; font-size: 48px; line-height: .92; letter-spacing: -0.035em; color: #F6F5FF; transition: color .3s; } .ds-door-foot { font-family: var(--font-mono, \"Roboto Mono\", monospace); text-transform: uppercase; display: flex; justify-content: space-between; padding-top: 14px; border-top: 1px solid rgba(246,245,255,0.10); font-size: 11px; letter-spacing: 0.18em; color: rgba(246,245,255,0.64); } .ds-door:hover, .ds-door:focus-visible { outline: none; border-color: rgba(195,194,250,0.45); background: rgba(246,245,255,0.07); } .ds-door:hover .ds-door-name, .ds-door:hover .ds-door-foot span:last-child { color: #C3C2FA; }"
+    },
+    {
+      "name": "Admin Month",
+      "kind": "custom",
+      "refersTo": "admin-readout",
+      "description": "Callers per day; today is the only periwinkle bar.",
+      "html": "<figure class=\"ds-month\"><span style=\"height:30%\"></span><span style=\"height:42%\"></span><span style=\"height:70%\"></span><span style=\"height:38%\"></span><span style=\"height:55%\"></span><span style=\"height:90%\"></span><span style=\"height:48%\"></span><span style=\"height:35%\"></span><span style=\"height:62%\"></span><span style=\"height:80%\"></span><span style=\"height:100%\"></span><span style=\"height:74%\"></span><span style=\"height:58%\"></span><span style=\"height:66%\" class=\"t\"></span></figure>",
+      "css": ".ds-month { display: flex; align-items: flex-end; gap: 4px; height: 120px; width: 320px; margin: 0; border-bottom: 1px solid rgba(246,245,255,0.24); } .ds-month span { flex: 1; border-radius: 2px 2px 0 0; background: rgba(246,245,255,0.25); transition: background-color .2s; } .ds-month span:hover { background: rgba(246,245,255,0.6); } .ds-month span.t { background: #C3C2FA; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Panel",
+    "overview": "**Creative North Star: \"The Instrument Panel\"**\n\nThis site used to be a paper notebook. It is now the console you read the notebook by.\n\nThe voice did not change — Roboto Mono still carries every piece of structure, Inter still appears only inside running prose, and Thai is still covered by Sarabun so it never falls back mid-sentence. What changed is the room the lights are on in. The ground is `#04040D` — near-black, with only a trace of indigo left in it — and ink is `#F6F5FF`, a lavender white held at four alpha steps rather than mixed into four separate greys. One bloom of light sits behind the top of the page, tight and low enough to have resolved by the fold, and everything else is flat. Nothing casts a shadow, because nothing here is made of paper.\n\nThe room is deliberately darker than the reference, and the ink is deliberately brighter in it. Contrast is the whole point of an instrument panel: a hairline has to read as a line rather than a smudge, and a micro-label at 11px has to survive being glanced at. Every step of the ramp clears 7:1.\n\nThe reference is [track.betich.me](https://track.betich.me), which is the same person's work in the same typeface solving a different problem: a compass, a map, a status line, a tab bar. Its conventions are adopted wholesale — the uppercase wide-tracked labels, the single status dot, the fixed rail across the floor of the screen, the `MADE WITH <3 BY BETICH.ME` line under it. A visitor arriving here from there should not have to learn a second system.",
+    "keyCharacteristics": [
+      "Structure is uppercase mono with wide tracking: `0.18em` at 11px, `0.1em` at 12px, `0.22em` on a page title. Sentence case begins at the first paragraph of prose and nowhere earlier.",
+      "Two accents with different jobs: periwinkle `#C3C2FA` is where an interactive element _arrives_, signal `#5A57F0` means _live_ — the status dot, the needle, the wash under a panel you are about to open.",
+      "Depth is alpha, not elevation. A raised surface is the ground plus 4% ink; a hairline is the ground plus 10–24%.",
+      "Navigation never scrolls away: a hairline bar at the top, a three-cell rail pinned to the floor.",
+      "Every number is `tabular-nums` and zero-padded — `01 / 36`, `2242×3171 · 46%`.",
+      "Both tools work with the server down, and the status dot says which mode you are in rather than leaving you to find out."
+    ],
+    "rules": [
+      {
+        "name": "The Two-Job Rule",
+        "body": "Periwinkle is where you _arrive_; indigo means something is _live_. An element that cannot be acted on never sits in periwinkle, and an element that is merely hovered never turns indigo.",
+        "section": "colors"
+      },
+      {
+        "name": "The Alpha-Depth Rule",
+        "body": "A surface in the document flow is the ground plus an alpha of ink. Solid panel colours belong only to things that float above the page. This is why the layout survives the bloom: everything in flow is transparent to it.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Status-Colour Rule",
+        "body": "No green success, no red error, no amber warning. A failed job states what went wrong in meta-grey; a compression that saved bytes is periwinkle because it is good news, not because it is a \"success state\". Direction is carried by the sign on the number.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tracking-Rises-As-Size-Falls Rule",
+        "body": "`0.22em` at 15px, `0.18em` at 11px, `0.1em` at 12px, normal for user-entered values, and negative only at hero size (`-0.035em`), where the mono's own spacing is already wide. Tracking is how this system adds formality; weight is reserved for hierarchy.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence-Case Boundary",
+        "body": "Chrome is uppercase. Prose is sentence case. There is no third register, and a hint under a field is prose.",
+        "section": "typography"
+      },
+      {
+        "name": "The Typed-Value Rule",
+        "body": "Anything the user typed or the machine produced — a filename, a hex value, a layer's text, a font family — renders with normal tracking so it can be read as data rather than as a label.",
+        "section": "typography"
+      },
+      {
+        "name": "The editor skeleton",
+        "body": "Both tools resolve to settings / stage / inspector.",
+        "section": "layout"
+      },
+      {
+        "name": "The merge editor is a room",
+        "body": "From 1024 up it takes exactly the viewport between the top bar and the rail (`Shell width=\"workspace\"`, which lays the rail out as the room's last row instead of floating it), and the page never scrolls. The address follows the open merge — `/mail-merge/s/<link>` when it has a link, `/mail-merge/p/<id>` when it does not — and opening a merge from the shelf is a history entry, while saving or sharing only corrects the address. A toolbar row carries `MAIL MERGE / <document name>` and the share state on the left, `SAVE · SHARE` and the solid `EXPORT` button on the right. Beneath it, three panes separated by faint hairlines: the merge on the left (projects, document, base image, layers, data), the poster alone in the middle at every pixel it can take, the selected layer on the right. Within a pane, sections are separated by a full-width faint hairline *between* them (`Sections`), 28px either side; a stacked section drops the rule under its own title so there is only ever one line between two groups. **Each side pane scrolls on its own** (`overflow-y: auto`, `overscroll-behavior: contain`); the poster never moves. Output settings do not live in the room — they live in the export sheet, where the output is.",
+        "section": "layout"
+      },
+      {
+        "name": "The phone is a different editor, not a narrower one",
+        "body": "The stage sticks under the top bar at `top-12` and a two-cell strip — `SET UP · LAYER`, in the rail's own language (export is the toolbar's button) — swaps what sits beneath it. You are always looking at the artwork while you change it, and switching cells scrolls you to the top of the new one. The stage's wrapper is `display: contents` below `md` so the canvas becomes a child of the page column: sticky inside a one-row grid has nowhere to travel.",
+        "section": "layout"
+      },
+      {
+        "name": "The Always-Reachable Rule",
+        "body": "Navigation is fixed at both ends of the viewport. On a 3000px editor page the next tool is one tap away from anywhere.",
+        "section": "layout"
+      },
+      {
+        "name": "The Work-Order Rule",
+        "body": "When columns stack, they stack in the order the work happens: set up, look, adjust.",
+        "section": "layout"
+      },
+      {
+        "name": "The One-Light Rule",
+        "body": "If you want something to feel raised, raise its ink alpha. Adding a second glow competes with the bloom and flattens the page.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** write chrome in uppercase with the tracking for its size, and prose in sentence case.",
+      "**Do** drop tracking to normal for anything the user typed.",
+      "**Do** build raised surfaces out of ink alpha so the bloom shows through them.",
+      "**Do** put a `tabular-nums` readout next to every slider.",
+      "**Do** keep text at the meta step (0.64 ink) or higher; use the lower steps for hairlines, bars and fills only.",
+      "**Do** say plainly when the server is unreachable, and keep both tools working without it. A panel that needs the API says so in its own body, in meta, and the editor carries on around it.",
+      "**Do** take the undo snapshot on gesture start, so a drag is one step."
+    ],
+    "donts": [
+      "**Don't** add a third hue, a status colour, or a coloured disabled state.",
+      "**Don't** put a shadow on anything that is in the document flow.",
+      "**Don't** add a second glow, gradient wash, or light source to compete with the bloom.",
+      "**Don't** put a label line above a heading. If it matters, it goes below the rule.",
+      "**Don't** number a sequence unless the number is data the reader needs.",
+      "**Don't** use italic to mean \"here\" — it disappears on this ground. Use ink and the underline.",
+      "**Don't** set prose in mono or chrome in Inter.",
+      "**Don't** let a fixed bar overlap content; reserve the space instead."
+    ]
+  }
+}

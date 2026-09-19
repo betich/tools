@@ -94,7 +94,7 @@ components:
     typography: "{typography.meta}"
     padding: "16px 0"
   rail-tab-active:
-    backgroundColor: "rgba(244,243,255,0.05)"
+    backgroundColor: "{colors.surface-high}"
     textColor: "{colors.ink}"
   text-button:
     backgroundColor: "transparent"
@@ -122,28 +122,28 @@ components:
     backgroundColor: "{colors.periwinkle}"
     textColor: "{colors.ground}"
   panel:
-    backgroundColor: "rgba(244,243,255,0.035)"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.label}"
     rounded: "{rounded.card}"
     padding: "20px"
   panel-hover:
-    backgroundColor: "rgba(244,243,255,0.06)"
+    backgroundColor: "{colors.surface-high}"
     textColor: "{colors.periwinkle}"
   control:
-    backgroundColor: "rgba(244,243,255,0.04)"
+    backgroundColor: "{colors.control}"
     textColor: "{colors.ink}"
     typography: "{typography.label}"
     rounded: "{rounded.xs}"
     padding: "8px 10px"
   control-focus:
-    backgroundColor: "rgba(244,243,255,0.06)"
+    backgroundColor: "{colors.surface-high}"
   dropzone:
     backgroundColor: "transparent"
     textColor: "{colors.label}"
     rounded: "{rounded.card}"
     padding: "40px 24px"
   dropzone-active:
-    backgroundColor: "rgba(72,69,218,0.12)"
+    backgroundColor: "rgba(90,87,240,0.12)"
     textColor: "{colors.periwinkle}"
   menu:
     backgroundColor: "{colors.panel-high}"
@@ -183,7 +183,7 @@ The reference is [track.betich.me](https://track.betich.me), which is the same p
 **Key Characteristics:**
 
 - Structure is uppercase mono with wide tracking: `0.18em` at 11px, `0.1em` at 12px, `0.22em` on a page title. Sentence case begins at the first paragraph of prose and nowhere earlier.
-- Two accents with different jobs: periwinkle `#B9B8EF` is where an interactive element _arrives_, indigo `#4845DA` means _live_ — the status dot, the needle, the wash under a panel you are about to open.
+- Two accents with different jobs: periwinkle `#C3C2FA` is where an interactive element _arrives_, signal `#5A57F0` means _live_ — the status dot, the needle, the wash under a panel you are about to open.
 - Depth is alpha, not elevation. A raised surface is the ground plus 4% ink; a hairline is the ground plus 10–24%.
 - Navigation never scrolls away: a hairline bar at the top, a three-cell rail pinned to the floor.
 - Every number is `tabular-nums` and zero-padded — `01 / 36`, `2242×3171 · 46%`.
@@ -257,7 +257,7 @@ Three fills, all of them ink over the ground, so everything in the document flow
 
 ### Hierarchy
 
-- **Hero** (700, `clamp(3rem, 6.4vw, 7.25rem)`, `-0.035em`, upper, line-height 0.92): a tool's name on its door on the index. Nowhere else.
+- **Hero** (700, `clamp(3rem, 6.4vw, 7.25rem)`, `-0.035em`, upper, line-height 0.92): a tool's name on its door on the index, and the one number the admin readout exists to show (floored at 5rem there, so a single digit still lands). Nowhere else.
 - **Display** (700, 24px, `0.02em`, upper): reserved for live things at panel scale.
 - **Headline** (700, 18px, `0.08em`, upper): a secondary tool panel's name.
 - **Title** (700, 15px, `0.22em`, upper): the page heading, and the wordmark at `0.32em`. Page titles are small and widely tracked; the site does not shout its own name.
@@ -424,6 +424,16 @@ Saved with the merge, newest first, at most 24 steps: a 1px rule running down th
 
 The share dialog's frame at 38rem, laid out in two columns: `TEMPLATE ASKS FOR` on the left (each token as a chip, dashed until matched), `SHEET COLUMN` on the right (a select, pre-filled with a guess only when the names are close, and the column's first value underneath so `name` can be told from `nickname`). Applying rewrites the template's tokens to the sheet's names, so the next reload of the same file matches without asking, and records a step that rolls back with the reload that caused it.
 
+### Admin readout
+
+`/admin` is a password gate (the share dialog's field and a solid `OPEN`) in front of one page that answers one question: is anyone using this today? It is read in the order the question is asked, and nothing on it is a card.
+
+- **The answer.** Today's callers as a hero-scale numeral in full ink, `CALLERS TODAY` under it at display size in meta, then one sentence of prose comparing today with the seven days before (`About usual — the week before averaged 16 a day.`) and giving the month's request total. The comparison is words, not a coloured delta, because there is no status colour.
+- **The month.** Thirty bars, one per day, 224px tall (288px from `sm`), on a hairline baseline. Past days are ink at 25%, going to 60% under the pointer; **today is the only periwinkle bar**; the busiest day carries its own number above it, so the chart needs no axis. The tooltip names the day's callers and requests, anchored toward the chart's centre so it is never clipped at an edge.
+- **Where they went.** API routes ranked by use and named for what people did (`Exported a batch`, `Opened a shared project`), in Inter, with the count in bold mono. Under each, a 3px track at 7% ink with its share filled at 55%. The raw route is a hover away.
+- **Housekeeping.** Projects, links, uploads, free disk and uptime share one meta line under a faint hairline at the foot. It matters only when it is wrong.
+- **Chrome.** `ADMIN` in meta at top-left, with `PAGE VIEWS` (Google Analytics, in a new tab), `REFRESH` and `SIGN OUT` as text buttons opposite. The page title is deliberately the quietest thing on it.
+
 ### Button
 
 The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. **Ghost** has the button's height and a 7% wash on hover but no edge, for an action that belongs in the row without competing with the other two. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog. The editor's toolbar climbs in weight left to right: ghost `SHARE`, outline `SAVE`, solid `EXPORT`, each with its 14px glyph.
@@ -454,7 +464,7 @@ Selection is indigo at 50% with full ink on top. The caret is periwinkle. Scroll
 - **Do** drop tracking to normal for anything the user typed.
 - **Do** build raised surfaces out of ink alpha so the bloom shows through them.
 - **Do** put a `tabular-nums` readout next to every slider.
-- **Do** keep text at 0.55 ink alpha or higher; use the lower steps for hairlines only.
+- **Do** keep text at the meta step (0.64 ink) or higher; use the lower steps for hairlines, bars and fills only.
 - **Do** say plainly when the server is unreachable, and keep both tools working without it. A panel that needs the API says so in its own body, in meta, and the editor carries on around it.
 - **Do** take the undo snapshot on gesture start, so a drag is one step.
 
