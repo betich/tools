@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pageLayout, PAPER_SIZES, usableDpi, type PageLayout } from "@tools/shared";
-import { url } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { bytes, pad } from "@/lib/format";
+import { pdfThumbnail } from "./thumbnail";
 import type { MergeEntry } from "./useMergeFiles";
 
 /** Breathing room around the page inside the stage, in CSS pixels. */
@@ -120,21 +120,35 @@ function PageCanvas({ bitmap, layout }: { bitmap: ImageBitmap; layout: PageLayou
   );
 }
 
-/** The server's first-page render, when it has one; a plain tile otherwise. A 404 is expected, never an error. */
+/**
+ * The server's first-page render, when it has one; a plain tile otherwise.
+ * While the worker draws it (202) the tile says so and `pdfThumbnail` polls;
+ * anything else it answers ends in the tile, never an error.
+ */
 function PdfThumb({ entry }: { entry: MergeEntry }) {
   const id = entry.upload.phase === "done" ? entry.upload.result.id : null;
-  const [failed, setFailed] = useState<string | null>(null);
+  const [thumb, setThumb] = useState<{ id: string; href: string | null } | null>(null);
   const label = `pdf · ${bytes(entry.file.size)}`;
 
+  useEffect(() => {
+    if (!id) return;
+    const ctrl = new AbortController();
+    void pdfThumbnail(id, ctrl.signal).then((href) => {
+      if (!ctrl.signal.aborted) setThumb({ id, href });
+    });
+    return () => ctrl.abort();
+  }, [id]);
+
   if (!id) return <Tile lines={[label, entry.upload.phase === "failed" ? "not uploaded" : "preview after upload"]} />;
-  if (failed === id) return <Tile lines={[label, "pages kept as they are"]} />;
+  if (thumb?.id !== id) return <Tile lines={[label, "drawing the first page…"]} />;
+  if (!thumb.href) return <Tile lines={[label, "pages kept as they are"]} />;
 
   return (
     <img
       key={id}
-      src={url(`/api/pdf/uploads/${id}/thumbnail.png`)}
+      src={thumb.href}
       alt={`first page of ${entry.file.name}`}
-      onError={() => setFailed(id)}
+      onError={() => setThumb({ id, href: null })}
       className="max-h-[calc(100%-48px)] max-w-[calc(100%-48px)] bg-white object-contain"
     />
   );

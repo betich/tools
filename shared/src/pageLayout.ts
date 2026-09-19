@@ -146,8 +146,15 @@ export function toPdfRect(layout: Pick<PageLayout, "height">, rect: Rect): Rect 
  */
 export type MergeItem = { upload: string; name: string; kind: UploadKind; layout: MergeItemOptions };
 
-/** Body of a `merge` task (TaskCreate.params). #17 adds the output options (title, bookmarks, image compression). */
-export type MergeParams = { items: MergeItem[] };
+/** Output options for a merge (#17). `title: null` → first file's name without extension. */
+export type MergeOutput = { title: string | null; bookmarks: boolean; pageLabels: boolean; compressImages: boolean };
+export const DEFAULT_MERGE_OUTPUT: MergeOutput = { title: null, bookmarks: true, pageLabels: true, compressImages: false };
+
+/** Body of a `merge` task (TaskCreate.params). `engine` arrives with #18 (DEFAULT_ENGINE until then). */
+export type MergeParams = { items: MergeItem[]; output: MergeOutput };
+
+/** TaskInfo.result for kind "merge". */
+export type MergeResult = { bytes: number; pages: number; fileName: string; notes: string[] };
 
 /* ── density from the file ─────────────────────────────────────────────────── */
 
