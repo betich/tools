@@ -160,7 +160,7 @@ export function PageGrid({
     <div className="flex flex-col gap-4">
       {/* What is picked and what can be done with it; the hint while nothing is. */}
       <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="text-meta font-mono text-meta uppercase tabular-nums" aria-live="polite">
+        <p className="text-meta font-mono text-micro uppercase tabular-nums" aria-live="polite">
           {picked ? (
             <span className="text-ink">
               {pad(picked)} of {pad(total)} picked
@@ -293,7 +293,7 @@ export function PageGrid({
       {/* What the pointer carries when several pages move: a count, not one page's picture. Off screen until then. */}
       <span
         ref={ghost}
-        className="border-indigo bg-panel-high text-ink pointer-events-none fixed -top-24 left-0 rounded-xs border px-2 py-1 font-mono text-meta uppercase tabular-nums"
+        className="border-indigo bg-panel-high text-ink pointer-events-none fixed -top-24 left-0 rounded-xs border px-2 py-1 font-mono text-micro uppercase tabular-nums"
         aria-hidden
       />
     </div>
@@ -408,7 +408,7 @@ const PageTile = memo(function PageTile({
 
       <span
         className={cn(
-          "border-hairline-faint flex items-baseline justify-between gap-1 border-t px-1.5 py-1 font-mono text-meta tabular-nums transition-colors duration-200",
+          "border-hairline-faint flex items-baseline justify-between gap-1 border-t px-1.5 py-1 font-mono text-micro tabular-nums transition-colors duration-200",
           picked ? "text-ink" : "text-meta",
         )}
       >
@@ -446,7 +446,7 @@ function PdfFace({ entry, page }: { entry: MergeEntry; page: number }) {
       {href ? (
         <img src={href} alt="" onError={() => setHref(null)} className="max-h-full max-w-full bg-white object-contain" draggable={false} />
       ) : (
-        <span className="text-meta font-mono text-label tabular-nums">{pad(page + 1)}</span>
+        <span className="text-meta font-mono text-small tabular-nums">{pad(page + 1)}</span>
       )}
     </span>
   );
@@ -483,7 +483,7 @@ function FileTile({ slot, onRetry }: { slot: Extract<Slot, { kind: "file" }>; on
   return (
     <span
       className={cn(
-        "border-hairline-faint flex aspect-[3/4] flex-col items-center justify-center gap-1 rounded-xs border px-2 text-center font-mono text-meta text-meta uppercase",
+        "border-hairline-faint flex aspect-[3/4] flex-col items-center justify-center gap-1 rounded-xs border px-2 text-center font-mono text-meta text-micro uppercase",
         TILE,
       )}
     >

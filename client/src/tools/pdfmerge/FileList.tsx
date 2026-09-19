@@ -77,19 +77,19 @@ export function FileList({
                 here && "pr-24",
               )}
             >
-              <span className={cn("shrink-0 font-mono text-meta tabular-nums", here ? "text-indigo" : "text-meta")}>{pad(i + 1)}</span>
+              <span className={cn("shrink-0 font-mono text-micro tabular-nums", here ? "text-indigo" : "text-meta")}>{pad(i + 1)}</span>
               <Thumb entry={entry} />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span
                   className={cn(
-                    "min-w-0 truncate font-mono text-label tracking-normal transition-colors duration-200",
+                    "min-w-0 truncate font-mono text-small tracking-normal transition-colors duration-200",
                     here ? "text-ink" : "text-label group-hover:text-indigo",
                   )}
                   title={entry.file.name}
                 >
                   {entry.file.name}
                 </span>
-                <span className="text-meta truncate font-mono text-meta uppercase tabular-nums">
+                <span className="text-meta truncate font-mono text-micro uppercase tabular-nums">
                   {entry.kind} · {bytes(entry.file.size)} · {status(entry)}
                 </span>
               </span>

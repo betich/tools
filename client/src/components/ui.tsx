@@ -21,7 +21,7 @@ export function TextButton({
       type="button"
       {...props}
       className={cn(
-        "relative cursor-pointer font-mono text-meta uppercase transition-colors duration-200",
+        "relative cursor-pointer font-mono text-micro uppercase transition-colors duration-200",
         "disabled:cursor-not-allowed disabled:opacity-35",
         active ? "text-ink" : "text-meta hover:text-indigo",
         className,
@@ -45,8 +45,8 @@ type ButtonLook = {
 /** The button's classes, for the one place a link must look like one — a download served by another origin. */
 export function buttonClass({ variant = "primary", size = "md" }: ButtonLook = {}, className?: string) {
   return cn(
-    "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-meta whitespace-nowrap uppercase",
-    size === "sm" ? "h-7 gap-1.5 px-2.5" : size === "lg" ? "h-14 w-full gap-3 px-6 text-[0.75rem] tracking-[0.16em]" : "h-9 gap-2 px-4",
+    "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-micro whitespace-nowrap uppercase",
+    size === "sm" ? "h-7 gap-1.5 px-2.5" : size === "lg" ? "h-14 w-full gap-3 px-6 text-small tracking-[0.16em]" : "h-9 gap-2 px-4",
     "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
     "disabled:cursor-not-allowed disabled:opacity-35",
     variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
@@ -107,7 +107,7 @@ export function Chip({
       {...props}
       className={cn(
         "border-wash text-label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1",
-        "font-mono text-meta uppercase transition-colors duration-200",
+        "font-mono text-micro uppercase transition-colors duration-200",
         "hover:border-indigo hover:bg-indigo hover:text-paper",
         as === "button" && "cursor-pointer",
         className,
@@ -162,7 +162,7 @@ export function Section({
   return (
     <section className={cn("flex flex-col gap-4", className)}>
       <header className="flex min-h-5 items-center justify-between gap-3">
-        <h2 className="text-meta font-mono text-meta uppercase">{title}</h2>
+        <h2 className="text-meta font-mono text-micro uppercase">{title}</h2>
         {aside}
       </header>
       {stacked ? null : <div className="border-hairline-faint border-t" />}
@@ -191,19 +191,19 @@ export function Field({
   return (
     <label className={cn("flex flex-col gap-2", className)}>
       <span className="flex min-h-4 items-center justify-between gap-2">
-        <span className={cn("font-mono text-meta uppercase transition-colors duration-200", changed ? "text-indigo" : "text-meta")}>
+        <span className={cn("font-mono text-micro uppercase transition-colors duration-200", changed ? "text-indigo" : "text-meta")}>
           {label}
         </span>
         {action}
       </span>
       {children}
-      {hint ? <span className="text-meta font-mono text-meta normal-case tracking-normal opacity-80">{hint}</span> : null}
+      {hint ? <span className="text-meta font-mono text-micro normal-case tracking-normal opacity-80">{hint}</span> : null}
     </label>
   );
 }
 
 const control =
-  "border-wash text-ink w-full rounded-xs border bg-control px-2.5 py-2 font-mono text-label " +
+  "border-wash text-ink w-full rounded-xs border bg-control px-2.5 py-2 font-mono text-small " +
   "tracking-normal transition-colors duration-200 placeholder:text-meta hover:border-edge " +
   "focus:border-indigo focus:bg-surface-high focus:outline-none " +
   "disabled:cursor-not-allowed disabled:opacity-40";
@@ -237,7 +237,7 @@ export function ColorInput({ value, onChange, className }: { value: string; onCh
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
-        className="text-ink min-w-0 flex-1 bg-transparent font-mono text-label tracking-[0.06em] uppercase outline-none"
+        className="text-ink min-w-0 flex-1 bg-transparent font-mono text-small tracking-[0.06em] uppercase outline-none"
         aria-label="colour value"
       />
     </span>
@@ -360,7 +360,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="group flex cursor-pointer items-center gap-2.5 font-mono text-meta uppercase"
+      className="group flex cursor-pointer items-center gap-2.5 font-mono text-meta text-micro uppercase"
     >
       <span
         className={cn(
@@ -380,13 +380,13 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="text-meta font-mono text-meta uppercase">{children}</p>;
+  return <p className="text-meta font-mono text-micro uppercase">{children}</p>;
 }
 
 export function Stat({ label, value, accent }: { label: string; value: ReactNode; accent?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-meta font-mono text-meta uppercase">{label}</span>
+      <span className="text-meta font-mono text-micro uppercase">{label}</span>
       <span className={cn("font-mono text-body tabular-nums", accent ? "text-indigo" : "text-ink")}>{value}</span>
     </div>
   );

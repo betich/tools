@@ -105,10 +105,10 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="border-wash text-ink hover:border-edge focus:border-indigo flex w-full items-center justify-between gap-2 rounded-xs border bg-control px-2.5 py-2 text-left font-mono text-label tracking-normal transition-colors duration-200"
+            className="border-wash text-ink hover:border-edge focus:border-indigo flex w-full items-center justify-between gap-2 rounded-xs border bg-control px-2.5 py-2 text-left font-mono text-small tracking-normal transition-colors duration-200"
           >
             <span className="truncate">{font.family}</span>
-            <span className="text-meta text-meta uppercase">{font.source.kind}</span>
+            <span className="text-meta text-micro uppercase">{font.source.kind}</span>
           </button>
 
           {open ? (
@@ -143,7 +143,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
                   />
                 ))}
                 {results.length === 0 && query ? (
-                  <li className="text-meta px-2 py-1.5 font-mono text-meta uppercase">no match</li>
+                  <li className="text-meta px-2 py-1.5 font-mono text-micro uppercase">no match</li>
                 ) : null}
               </ul>
             </div>
@@ -151,7 +151,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
         </div>
       </Field>
 
-      <label className="text-meta hover:text-indigo inline-flex w-fit cursor-pointer items-center gap-2 font-mono text-meta uppercase transition-colors duration-200">
+      <label className="text-meta hover:text-indigo inline-flex w-fit cursor-pointer items-center gap-2 font-mono text-micro uppercase transition-colors duration-200">
         <FiUpload className="size-3" aria-hidden />
         upload a font
         <input
@@ -180,7 +180,7 @@ export function FontPicker({ font, onChange }: { font: FontSpec; onChange: (patc
                     : font.source,
               });
             }}
-            className="border-wash text-ink hover:border-edge focus:border-indigo w-full cursor-pointer rounded-xs border bg-control px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
+            className="border-wash text-ink hover:border-edge focus:border-indigo w-full cursor-pointer rounded-xs border bg-control px-2.5 py-2 font-mono text-small tracking-normal transition-colors duration-200 focus:outline-none"
           >
             {/* The layer's own weight stays listed even if the family lacks it, so the select never lies. */}
             {weightsOf([
@@ -215,12 +215,12 @@ function Row({ label, meta, active, onClick }: { label: string; meta: string; ac
         type="button"
         onClick={onClick}
         className={cn(
-          "hover:bg-hover-wash hover:text-indigo focus-visible:bg-hover-wash flex w-full items-baseline justify-between gap-3 rounded-xs px-2.5 py-2 text-left font-mono text-label tracking-normal transition-colors duration-150",
+          "hover:bg-hover-wash hover:text-indigo focus-visible:bg-hover-wash flex w-full items-baseline justify-between gap-3 rounded-xs px-2.5 py-2 text-left font-mono text-small tracking-normal transition-colors duration-150",
           active ? "text-indigo" : "text-prose",
         )}
       >
         <span className="truncate">{label}</span>
-        <span className="text-meta shrink-0 text-meta uppercase">{meta}</span>
+        <span className="text-meta shrink-0 text-micro uppercase">{meta}</span>
       </button>
     </li>
   );

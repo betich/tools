@@ -141,7 +141,7 @@ export function SpinSource({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-baseline justify-between gap-4">
-        <p className="text-meta text-meta font-mono uppercase">spin one image</p>
+        <p className="text-meta text-micro font-mono uppercase">spin one image</p>
         <TextButton onClick={onClose} disabled={!!making}>
           {hasFrames ? "back to the frames" : "use a folder instead"}
         </TextButton>
@@ -160,7 +160,7 @@ export function SpinSource({ onClose }: { onClose: () => void }) {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="flex min-w-0 flex-col gap-3">
             <SpinPreview front={front.bitmap} back={back?.bitmap ?? null} settings={s} background={background} />
-            <p className="text-meta text-meta font-mono uppercase">
+            <p className="text-meta text-micro font-mono uppercase">
               <span className="tabular-nums">{count}</span> frames
               {" · "}
               <span className="tabular-nums">{formatTime(count * s.delay)}</span> a turn
@@ -260,7 +260,7 @@ function SpinSettingsPanel({
           </Picker>
         }
       >
-        <p className="text-label text-ink truncate font-mono tracking-normal" title={front.name}>
+        <p className="text-small text-ink truncate font-mono tracking-normal" title={front.name}>
           {front.name}
         </p>
       </Section>
@@ -369,7 +369,7 @@ function SpinSettingsPanel({
             {s.back === "image" ? (
               back ? (
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-label text-ink truncate font-mono tracking-normal" title={back.name}>
+                  <span className="text-small text-ink truncate font-mono tracking-normal" title={back.name}>
                     {back.name}
                   </span>
                   <span className="flex shrink-0 gap-4">
@@ -454,7 +454,7 @@ const formatDegrees = (d: number) => `${Math.round(d * 100) / 100}°`;
 function Group({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
-      <span className="text-meta text-meta font-mono uppercase">{label}</span>
+      <span className="text-meta text-micro font-mono uppercase">{label}</span>
       {children}
       {hint ? <Hint>{hint}</Hint> : null}
     </div>
@@ -462,7 +462,7 @@ function Group({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 function Hint({ children }: { children: ReactNode }) {
-  return <span className="text-meta text-meta font-mono normal-case tracking-normal opacity-80">{children}</span>;
+  return <span className="text-meta text-micro font-mono normal-case tracking-normal opacity-80">{children}</span>;
 }
 
 /** A slider with its value beside it, in tabular figures. */
@@ -470,7 +470,7 @@ function Readout({ value, children }: { value: string; children: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <div className="min-w-0 flex-1">{children}</div>
-      <span className="text-label text-ink w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
+      <span className="text-small text-ink w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
         {value}
       </span>
     </div>
@@ -515,7 +515,7 @@ function Progress({ done, total, onStop }: { done: number; total: number; onStop
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-label text-meta font-mono uppercase">
+        <span className="text-label text-micro font-mono uppercase">
           drawing{" "}
           <span className="tabular-nums tracking-normal">
             {done} / {total}
@@ -672,7 +672,7 @@ function SpinPreview({
         {!playing ? (
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Slider value={still % angles.length} min={0} max={angles.length - 1} onChange={setStill} />
-            <span className="text-label text-ink w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
+            <span className="text-small text-ink w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
               {formatDegrees((((angles[still % angles.length] ?? 0) % 360) + 360) % 360)}
             </span>
           </div>

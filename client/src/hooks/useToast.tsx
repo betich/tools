@@ -23,7 +23,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.8)" }}
-            className="animate-toast-in border-wash bg-panel-high text-ink rounded-card border px-4 py-2.5 font-mono text-meta uppercase"
+            className="animate-toast-in border-wash bg-panel-high text-ink rounded-card border px-4 py-2.5 font-mono text-micro uppercase"
           >
             {t.message}
           </div>

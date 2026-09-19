@@ -193,7 +193,7 @@ export function EditSection({
                 ))}
               </Select>
               {edit.height !== null ? (
-                <span className="text-meta text-meta font-mono tabular-nums tracking-normal">
+                <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
                   {size.width}×{size.height}
                 </span>
               ) : null}
@@ -233,7 +233,7 @@ export function EditSection({
               onCommitStart={onGestureStart}
               onChange={(i) => onPreview({ ...edit, speed: SPEEDS[i] ?? 1 })}
             />
-            <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">
+            <span className="text-indigo text-small w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">
               {edit.speed}×
             </span>
           </div>
@@ -263,7 +263,7 @@ function Choice<T extends string>({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-meta text-meta font-mono uppercase">{label}</span>
+      <span className="text-meta text-micro font-mono uppercase">{label}</span>
       <div role="group" aria-label={label} className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {options.map((o) => (
           <TextButton

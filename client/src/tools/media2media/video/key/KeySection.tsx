@@ -178,7 +178,7 @@ export function KeySection({
       {key.enabled || busy ? (
         <div className="border-hairline-faint flex flex-col gap-2 border-t pt-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-meta text-meta font-mono uppercase">png sequence</span>
+            <span className="text-meta text-micro font-mono uppercase">png sequence</span>
             {busy ? (
               <TextButton onClick={job.stop}>stop</TextButton>
             ) : (
@@ -188,7 +188,7 @@ export function KeySection({
             )}
           </div>
           {job.phase === "running" ? (
-            <p className="text-meta text-meta font-mono uppercase" aria-live="polite">
+            <p className="text-meta text-micro font-mono uppercase" aria-live="polite">
               frames{" "}
               <span className="text-ink tabular-nums tracking-normal">
                 {job.frames}
@@ -230,7 +230,7 @@ function KeySlider({
     <Field label={label}>
       <div className="flex items-center gap-3">
         <Slider min={0} max={100} step={1} value={value} onCommitStart={onGestureStart} onChange={onChange} />
-        <span className="text-indigo text-label w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">{value}</span>
+        <span className="text-indigo text-small w-12 shrink-0 text-right font-mono tabular-nums tracking-normal">{value}</span>
       </div>
     </Field>
   );

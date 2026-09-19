@@ -34,7 +34,7 @@ export function FontTable({
     <div className={cn("-mx-4 overflow-x-auto px-4", className)}>
       <table className="w-full min-w-[32rem] border-collapse text-left">
         <thead>
-          <tr className="border-wash text-meta border-b font-mono uppercase">
+          <tr className="border-wash text-meta text-micro border-b font-mono uppercase">
             <th scope="col" className="py-2 pr-4 font-normal">
               name
             </th>

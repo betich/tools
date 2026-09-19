@@ -65,10 +65,10 @@ export function LayersPanel({
                     here && "pr-28",
                   )}
                 >
-                  <span className={cn("shrink-0 font-mono text-meta tabular-nums", here ? "text-indigo" : "text-meta")}>{pad(n)}</span>
+                  <span className={cn("shrink-0 font-mono text-micro tabular-nums", here ? "text-indigo" : "text-meta")}>{pad(n)}</span>
                   <span
                     className={cn(
-                      "min-w-0 truncate font-mono text-label tracking-normal transition-colors duration-200",
+                      "min-w-0 truncate font-mono text-small tracking-normal transition-colors duration-200",
                       here ? "text-ink" : "text-label group-hover:text-indigo",
                       !layer.visible && "opacity-50",
                     )}

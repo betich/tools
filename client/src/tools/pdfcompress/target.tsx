@@ -95,7 +95,7 @@ export function TargetField({
             }}
             className="w-24 px-2 py-1 text-right"
           />
-          <span className="text-meta text-label font-mono uppercase">mb</span>
+          <span className="text-meta text-small font-mono uppercase">mb</span>
         </span>
       </Field>
       {unreadable ? (
@@ -139,7 +139,7 @@ export function SearchSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <span className="text-meta text-meta font-mono uppercase">target size</span>
+      <span className="text-meta text-micro font-mono uppercase">target size</span>
       <p className="text-meta text-body font-sans normal-case leading-snug">
         {active
           ? "How long the search may take, and how far it may lower quality and resolution to fit."
@@ -201,7 +201,7 @@ export function SearchSection({
 /** A slider's value beside it; one width for all three so the tracks line up. */
 function Readout({ children }: { children: ReactNode }) {
   return (
-    <span className="text-indigo text-label w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
+    <span className="text-indigo text-small w-20 shrink-0 text-right font-mono tabular-nums tracking-normal">
       {children}
     </span>
   );
@@ -230,7 +230,7 @@ export function targetOutcome(result: RunResult): { line: string; reached: boole
 export function TargetOutcome({ outcome }: { outcome: NonNullable<ReturnType<typeof targetOutcome>> }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className={cn("text-meta font-mono uppercase", outcome.reached ? "text-indigo" : "text-meta")}>
+      <span className={cn("text-micro font-mono uppercase", outcome.reached ? "text-indigo" : "text-meta")}>
         {outcome.line}
       </span>
       {outcome.gap ? <p className="text-ink text-body font-sans normal-case">{outcome.gap}</p> : null}

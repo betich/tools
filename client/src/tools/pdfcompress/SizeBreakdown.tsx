@@ -89,9 +89,9 @@ export function SizeBreakdown({
     <div className={cn("flex flex-col gap-4", className)}>
       {was ? (
         <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-          <span className="text-meta text-meta font-mono uppercase">before</span>
+          <span className="text-meta text-micro font-mono uppercase">before</span>
           {bar(was)}
-          <span className="text-meta text-meta font-mono uppercase">after</span>
+          <span className="text-meta text-micro font-mono uppercase">after</span>
           {bar(after)}
         </div>
       ) : (
@@ -121,7 +121,7 @@ export function SizeBreakdown({
               />
               <span
                 className={cn(
-                  "text-meta flex-1 font-mono uppercase transition-colors duration-200",
+                  "text-micro flex-1 font-mono uppercase transition-colors duration-200",
                   hover === k.key ? "text-indigo" : "text-label",
                 )}
               >
@@ -129,21 +129,21 @@ export function SizeBreakdown({
               </span>
               {was ? (
                 <>
-                  <span className="text-meta text-label hidden font-mono tabular-nums tracking-normal sm:inline">
+                  <span className="text-meta text-small hidden font-mono tabular-nums tracking-normal sm:inline">
                     {bytes(old)} →
                   </span>
-                  <span className="text-ink text-label font-mono tabular-nums tracking-normal">{bytes(value)}</span>
+                  <span className="text-ink text-small font-mono tabular-nums tracking-normal">{bytes(value)}</span>
                   <span
                     // Not `cn`: tailwind-merge takes `text-meta` (a size here) for a colour and drops it.
-                    className={`text-meta w-14 text-right font-mono tabular-nums tracking-normal ${value < old ? "text-indigo" : "text-label"}`}
+                    className={`text-micro w-14 text-right font-mono tabular-nums tracking-normal ${value < old ? "text-indigo" : "text-label"}`}
                   >
                     {change(old, value)}
                   </span>
                 </>
               ) : (
                 <>
-                  <span className="text-ink text-label font-mono tabular-nums tracking-normal">{bytes(value)}</span>
-                  <span className="text-meta text-label w-12 text-right font-mono tabular-nums tracking-normal">
+                  <span className="text-ink text-small font-mono tabular-nums tracking-normal">{bytes(value)}</span>
+                  <span className="text-meta text-small w-12 text-right font-mono tabular-nums tracking-normal">
                     {share(value, after.whole)}
                   </span>
                 </>

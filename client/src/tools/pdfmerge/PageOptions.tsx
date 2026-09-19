@@ -86,12 +86,12 @@ export function PageOptions({
           </Field>
 
           <div className="flex flex-col gap-2">
-            <span className="text-meta font-mono text-meta uppercase">fit</span>
+            <span className="text-meta font-mono text-micro uppercase">fit</span>
             <Segmented value={o.fit} onChange={(fit) => onChange({ fit })} options={FITS} />
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-meta font-mono text-meta uppercase">orientation</span>
+            <span className="text-meta font-mono text-micro uppercase">orientation</span>
             <Segmented value={o.orientation} onChange={(orientation) => onChange({ orientation })} options={ORIENTATIONS} />
           </div>
 

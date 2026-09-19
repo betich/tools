@@ -23,7 +23,7 @@ export function CodecCapabilities({ codec, className }: { codec: CodecId; classN
   const parts = codecCapabilities(codec);
   const filter = parts.pop();
   return (
-    <p className={cn("text-meta text-meta font-mono", className)}>
+    <p className={cn("text-meta text-micro font-mono", className)}>
       <span className="uppercase">{parts.join(" · ")} · </span>
       <span className="tracking-normal">{filter}</span>
     </p>

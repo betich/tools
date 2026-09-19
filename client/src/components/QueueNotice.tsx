@@ -29,11 +29,11 @@ export function QueueNotice({ task, className }: { task: TaskInfo; className?: s
   return (
     <div className={cn("flex flex-col gap-2", className)} aria-live="polite">
       <div className="flex items-baseline justify-between gap-3">
-        <span className={cn("text-meta font-mono uppercase", state === "done" ? "text-indigo" : "text-meta")}>
+        <span className={cn("text-micro font-mono uppercase", state === "done" ? "text-indigo" : "text-meta")}>
           {label}
         </span>
         {state !== "queued" && total > 0 ? (
-          <span className="text-meta text-meta font-mono uppercase tabular-nums">
+          <span className="text-meta text-micro font-mono uppercase tabular-nums">
             {pad(done, width)} / {pad(total, width)}
           </span>
         ) : null}

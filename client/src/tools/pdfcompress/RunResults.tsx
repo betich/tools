@@ -41,7 +41,7 @@ export function RunResults({
     <>
       <Section title={runs.length > 1 ? `run ${pad(number(shown))}` : "result"}>
         {labels[shown.id] ? (
-          <span className="text-label text-meta font-mono uppercase">{labels[shown.id]}</span>
+          <span className="text-label text-micro font-mono uppercase">{labels[shown.id]}</span>
         ) : null}
         {shown.state === "done" ? (
           <Outcome jobId={jobId} task={shown} input={input} />
@@ -58,7 +58,7 @@ export function RunResults({
               const current = task.id === shown.id;
               return (
                 <li key={task.id} className="border-wash flex items-center gap-4 border-b py-2.5 last:border-b-0">
-                  <span className="text-meta text-meta w-6 shrink-0 font-mono tabular-nums">{pad(number(task))}</span>
+                  <span className="text-meta text-micro w-6 shrink-0 font-mono tabular-nums">{pad(number(task))}</span>
                   <button
                     type="button"
                     onClick={() => onShow(task.id)}
@@ -66,7 +66,7 @@ export function RunResults({
                     className="group min-w-0 flex-1 cursor-pointer text-left"
                   >
                     <span
-                      className={`text-label block truncate font-mono uppercase transition-colors duration-200 group-hover:text-indigo ${current ? "text-ink" : "text-label"}`}
+                      className={`text-small block truncate font-mono uppercase transition-colors duration-200 group-hover:text-indigo ${current ? "text-ink" : "text-label"}`}
                     >
                       {title(task)}
                     </span>
@@ -80,7 +80,7 @@ export function RunResults({
                         </span>
                       </>
                     ) : (
-                      <span className="text-meta text-meta uppercase">
+                      <span className="text-meta text-micro uppercase">
                         {task.state === "done" ? "unreadable" : task.state === "failed" ? "stopped" : task.state}
                       </span>
                     )}
@@ -156,14 +156,14 @@ function Outcome({ jobId, task, input }: { jobId: string; task: TaskInfo; input:
 
       {result.skipped.length ? (
         <div className="flex flex-col gap-2">
-          <span className="text-meta text-meta font-mono uppercase">skipped</span>
+          <span className="text-meta text-micro font-mono uppercase">skipped</span>
           <ul className="flex flex-col">
             {result.skipped.map((s) => (
               <li
                 key={s.pass}
                 className="border-hairline-faint flex flex-col gap-0.5 border-b py-2 last:border-b-0 sm:flex-row sm:items-baseline sm:gap-4"
               >
-                <span className="text-label text-meta w-48 shrink-0 font-mono uppercase">
+                <span className="text-label text-micro w-48 shrink-0 font-mono uppercase">
                   {passInfo(s.pass)?.label ?? s.pass}
                 </span>
                 <span className="text-meta text-body font-sans normal-case">{s.reason}</span>

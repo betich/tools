@@ -19,14 +19,14 @@ export function TopBar() {
     <header className="border-wash bg-paper/75 sticky top-0 z-40 flex items-center justify-between gap-4 border-b px-5 py-3.5 backdrop-blur-xl sm:px-8">
       <NavLink
         to="/"
-        className="text-ink hover:text-indigo font-mono text-label font-bold uppercase transition-colors duration-200"
+        className="text-ink hover:text-indigo font-mono text-small font-bold uppercase transition-colors duration-200"
         style={{ letterSpacing: "0.32em" }}
       >
         tools
       </NavLink>
 
       <span
-        className="tooltip text-meta flex items-center gap-2 font-mono text-meta uppercase"
+        className="tooltip text-meta flex items-center gap-2 font-mono text-micro uppercase"
         data-tip-pos="top-right"
         data-tip={
           status === "online"
@@ -96,7 +96,7 @@ export function TabRail({ inFlow = false }: { inFlow?: boolean }) {
 /** The signature: in the rail from a tablet up, at the foot of the page below that. */
 export function Colophon({ className }: { className?: string }) {
   return (
-    <p className={cn("text-meta px-4 py-2 text-center font-mono text-meta uppercase", className)}>
+    <p className={cn("text-meta px-4 py-2 text-center font-mono text-micro uppercase", className)}>
       made with{" "}
       <span className="text-signal" aria-label="love">
         &lt;3
@@ -154,7 +154,7 @@ function PhoneRail({ pathname }: { pathname: string }) {
     };
   }, [open]);
 
-  const cell = "flex h-[46px] items-center gap-2 font-mono text-meta uppercase transition-colors duration-200";
+  const cell = "flex h-[46px] items-center gap-2 font-mono text-meta text-micro uppercase transition-colors duration-200";
 
   return (
     <div ref={box} className="relative grid grid-cols-2 pb-[env(safe-area-inset-bottom)] md:hidden">
@@ -176,8 +176,8 @@ function PhoneRail({ pathname }: { pathname: string }) {
                 )
               }
             >
-              <span className="font-mono text-label uppercase">{tool.name}</span>
-              <span className="text-meta truncate font-mono text-meta uppercase">{tool.tagline}</span>
+              <span className="font-mono text-label text-small uppercase">{tool.name}</span>
+              <span className="text-meta truncate font-mono text-micro uppercase">{tool.tagline}</span>
             </NavLink>
           ))}
         </nav>
@@ -211,7 +211,7 @@ function RailTab({ to, end, children }: { to: string; end?: boolean; children: R
       end={end}
       className={({ isActive }) =>
         cn(
-          "relative py-4 text-center font-mono text-meta uppercase transition-colors duration-200",
+          "relative py-4 text-center font-mono text-micro uppercase transition-colors duration-200",
           isActive ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
         )
       }

@@ -509,7 +509,7 @@ function MergeBar({
       {options}
       {problem ? <p className="text-prose font-sans text-body normal-case">{problem}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-meta font-mono text-meta uppercase tabular-nums" aria-live="polite">
+        <p className="text-meta font-mono text-micro uppercase tabular-nums" aria-live="polite">
           {status}
         </p>
         <Button variant={quiet ? "outline" : "primary"} disabled={disabled} onClick={onMerge}>
@@ -554,7 +554,7 @@ function MergeOptions({
           onClick={() => setOpen((o) => !o)}
           className="group flex min-h-5 cursor-pointer items-center justify-between gap-3 text-left"
         >
-          <span className="text-meta text-meta group-hover:text-indigo font-mono uppercase transition-colors duration-200">
+          <span className="text-meta text-micro group-hover:text-indigo font-mono uppercase transition-colors duration-200">
             engine · {ENGINES[engine].label}
           </span>
           <FiChevronDown
@@ -573,17 +573,17 @@ function Reopened({ info, onStartOver, children }: { info: JobInfo; onStartOver:
   return (
     <div className="border-wash rounded-card flex flex-col gap-6 border px-6 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-meta font-mono text-meta uppercase">your last merge · {pad(info.inputs.length)} files</h2>
+        <h2 className="text-meta font-mono text-micro uppercase">your last merge · {pad(info.inputs.length)} files</h2>
         <TextButton onClick={onStartOver}>start a new merge</TextButton>
       </div>
       <ol className="flex flex-col gap-1">
         {info.inputs.map((input, i) => (
           <li key={`${input.id}-${i}`} className="flex items-baseline gap-3 font-mono tabular-nums">
-            <span className="text-meta text-meta">{pad(i + 1)}</span>
-            <span className="text-label text-ink min-w-0 flex-1 truncate tracking-normal" title={input.name}>
+            <span className="text-meta text-micro">{pad(i + 1)}</span>
+            <span className="text-small text-ink min-w-0 flex-1 truncate tracking-normal" title={input.name}>
               {input.name}
             </span>
-            <span className="text-meta text-meta tracking-normal">{bytes(input.size)}</span>
+            <span className="text-meta text-micro tracking-normal">{bytes(input.size)}</span>
           </li>
         ))}
       </ol>

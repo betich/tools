@@ -265,6 +265,8 @@ Three fills, all of them ink over the ground, so everything in the document flow
 - **Label** (400, 12px, `0.1em`, upper): what a control holds. Values the user typed drop tracking to normal, because a filename or a hex code is not a label.
 - **Meta** (400, 11px, `0.18em`, upper): every micro-label, status line, counter and hint. The workhorse.
 
+**In code** the label and meta steps are the classes `text-small` and `text-micro`, because `label` and `meta` are also ink colours (`text-label`, `text-meta`). A name that is both a colour and a size makes Tailwind emit only the colour, and for a while that is exactly what shipped: every micro-label rendered at the body's 12px with no tracking. `cn()` knows the ramp, so a later colour class never strips a size. Prose set in Inter takes a step's size but never its tracking.
+
 ### Named Rules
 
 **The Tracking-Rises-As-Size-Falls Rule.** `0.22em` at 15px, `0.18em` at 11px, `0.1em` at 12px, normal for user-entered values, and negative only at hero size (`-0.035em`), where the mono's own spacing is already wide. Tracking is how this system adds formality; weight is reserved for hierarchy.

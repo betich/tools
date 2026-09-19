@@ -278,7 +278,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
         loop={loop}
         onLoopChange={onLoopChange}
       >
-        <span className="text-meta text-meta font-mono uppercase tabular-nums">
+        <span className="text-meta text-micro font-mono uppercase tabular-nums">
           frame <span className="text-ink tracking-normal">{frames.length ? pad(current + 1, digits) : "--"}</span> /{" "}
           <span className="tracking-normal">{pad(frames.length, digits)}</span>
         </span>
@@ -295,7 +295,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
           />
         ) : null}
         <label className="flex items-center gap-2.5">
-          <span className="text-meta text-meta font-mono uppercase">zoom</span>
+          <span className="text-meta text-micro font-mono uppercase">zoom</span>
           <Slider
             className="w-24"
             value={pxPerMs}
@@ -304,7 +304,7 @@ export function FramesTimeline<F extends TimelineFrame>(props: FramesTimelinePro
             step={ZOOM.step}
             onChange={setPxPerMs}
           />
-          <span className="text-label text-meta w-14 font-mono tabular-nums tracking-normal">
+          <span className="text-label text-micro w-14 font-mono tabular-nums tracking-normal">
             {Math.round(pxPerMs * 1000)} px/s
           </span>
         </label>
@@ -454,7 +454,7 @@ function DelayField({
   };
   return (
     <label className="flex items-center gap-2.5">
-      <span className="text-meta text-meta font-mono uppercase">
+      <span className="text-meta text-micro font-mono uppercase">
         {count > 1 ? <span className="tabular-nums tracking-normal">{count} · </span> : null}delay
       </span>
       <NumberInput
@@ -471,7 +471,7 @@ function DelayField({
         step={10}
         aria-label="delay in milliseconds"
       />
-      <span className="text-meta text-meta font-mono uppercase">ms</span>
+      <span className="text-meta text-micro font-mono uppercase">ms</span>
     </label>
   );
 }

@@ -391,10 +391,10 @@ function FileBar({
   return (
     <div className="border-hairline-faint flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b pb-3">
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-ink text-label truncate font-mono tracking-normal" title={file.name}>
+        <span className="text-ink text-small truncate font-mono tracking-normal" title={file.name}>
           {file.name}
         </span>
-        <span className="text-meta text-meta font-mono tabular-nums tracking-normal">{facts.join(" · ")}</span>
+        <span className="text-meta text-micro font-mono tabular-nums tracking-normal">{facts.join(" · ")}</span>
       </div>
       <TextButton onClick={() => input.current?.click()} disabled={disabled}>
         replace
@@ -443,10 +443,10 @@ function ExportRow({
     <section className="border-hairline-faint flex flex-col gap-4 border-t pt-6" aria-label="export">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-ink text-label truncate font-mono tracking-normal" title={name}>
+          <span className="text-ink text-small truncate font-mono tracking-normal" title={name}>
             {name}
           </span>
-          <span className="text-meta text-meta font-mono tabular-nums tracking-normal">
+          <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
             {[formatTime(length), size ? `${size.width}×${size.height}` : null, ...summary].filter(Boolean).join(" · ")}
           </span>
         </div>
@@ -474,7 +474,7 @@ function ExportRow({
               style={{ width: `${fraction * 100}%` }}
             />
           </div>
-          <div className="text-meta text-meta flex flex-wrap gap-x-5 gap-y-1 font-mono uppercase" aria-live="polite">
+          <div className="text-meta text-micro flex flex-wrap gap-x-5 gap-y-1 font-mono uppercase" aria-live="polite">
             <span>
               done <Value>{Math.round(fraction * 100)}%</Value>
             </span>
@@ -493,7 +493,7 @@ function ExportRow({
 
       {job.phase === "done" ? (
         <div className="flex flex-col gap-1">
-          <p className="text-meta text-meta font-mono uppercase">
+          <p className="text-meta text-micro font-mono uppercase">
             {job.toDisk ? "saved" : "downloaded"} <Value accent>{bytes(job.bytes)}</Value>
           </p>
           {job.target ? <TargetOutcome {...job.target} onRetry={onRetry} /> : null}

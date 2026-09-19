@@ -90,10 +90,10 @@ export function CropPanel({
     <div className="flex flex-col gap-6 px-1 pb-6 pt-4">
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-ink text-label font-mono uppercase">
+          <span className="text-ink text-small font-mono uppercase">
             image {image.id} · page {pageRanges(image.pages)}
           </span>
-          <span className="text-meta text-label font-mono tabular-nums tracking-normal">
+          <span className="text-meta text-small font-mono tabular-nums tracking-normal">
             {image.width}×{image.height} · {image.dpi == null ? "not drawn" : `${Math.round(image.dpi)} dpi`} ·{" "}
             {colourName(image)} · {bytes(image.bytes)}
           </span>
@@ -106,7 +106,7 @@ export function CropPanel({
       <div className="grid gap-8 md:grid-cols-[220px_minmax(0,1fr)]">
         <div className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-meta text-meta font-mono uppercase">this image</span>
+            <span className="text-meta text-micro font-mono uppercase">this image</span>
             {override ? <TextButton onClick={() => onOverride(null)}>follow the run</TextButton> : null}
           </div>
 
@@ -266,7 +266,7 @@ function Compare({
           The before/after is drawn once the worker is done with this file's current task.
         </p>
       ) : !shown ? (
-        <p className="text-meta text-meta font-mono uppercase">drawing the before/after…</p>
+        <p className="text-meta text-micro font-mono uppercase">drawing the before/after…</p>
       ) : (
         <p className="text-meta text-body font-sans normal-case">
           Sizes are for the whole image. The patch is shown at the same zoom on both sides.
@@ -295,8 +295,8 @@ function Figure({
   return (
     <figure className="flex min-w-0 flex-col gap-2">
       <figcaption className="flex items-baseline justify-between gap-2">
-        <span className="text-meta text-meta font-mono uppercase">{label}</span>
-        <span className="text-ink text-label font-mono tabular-nums tracking-normal">{value}</span>
+        <span className="text-meta text-micro font-mono uppercase">{label}</span>
+        <span className="text-ink text-small font-mono tabular-nums tracking-normal">{value}</span>
       </figcaption>
       <div className="border-wash bg-surface rounded-xs overflow-hidden border" style={{ aspectRatio: aspect }}>
         {src ? (
@@ -311,7 +311,7 @@ function Figure({
           />
         ) : null}
       </div>
-      {source ? <span className="text-meta text-meta font-mono uppercase">{source}</span> : null}
+      {source ? <span className="text-meta text-micro font-mono uppercase">{source}</span> : null}
     </figure>
   );
 }
@@ -346,7 +346,7 @@ function Overview({ image, box, onBox }: { image: PdfImage; box: Box | null; onB
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-meta text-meta font-mono uppercase">patch</span>
+        <span className="text-meta text-micro font-mono uppercase">patch</span>
         {box ? <TextButton onClick={() => onBox(null)}>centre</TextButton> : null}
       </div>
       <div
@@ -371,7 +371,7 @@ function Overview({ image, box, onBox }: { image: PdfImage; box: Box | null; onB
           style={{ left: l * scale, top: t * scale, width: (r - l) * scale, height: (b - t) * scale }}
         />
       </div>
-      <span className="text-meta text-label font-mono tabular-nums tracking-normal">
+      <span className="text-meta text-small font-mono tabular-nums tracking-normal">
         {l},{t} → {r},{b}
       </span>
     </div>

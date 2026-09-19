@@ -57,7 +57,7 @@ export function SquooshPage() {
               options={formats.map((f) => ({ value: f.value, label: f.label }))}
               className="flex-wrap"
             />
-            {meta.note ? <p className="text-meta font-sans text-label">{meta.note}</p> : null}
+            {meta.note ? <p className="text-meta font-sans text-small">{meta.note}</p> : null}
           </Section>
 
           <Section title="settings">
@@ -71,7 +71,7 @@ export function SquooshPage() {
                     onChange={(quality) => setOptions({ ...options, quality })}
                     className={cn(!meta.lossy && "pointer-events-none opacity-40")}
                   />
-                  <span className="text-indigo w-8 shrink-0 text-right font-mono text-label tabular-nums">{options.quality}</span>
+                  <span className="text-indigo w-8 shrink-0 text-right font-mono text-small tabular-nums">{options.quality}</span>
                 </div>
               </Field>
 
@@ -84,14 +84,14 @@ export function SquooshPage() {
                     onChange={(effort) => setOptions({ ...options, effort })}
                     className={cn(!meta.effortful && "pointer-events-none opacity-40")}
                   />
-                  <span className="text-indigo w-8 shrink-0 text-right font-mono text-label tabular-nums">{options.effort}</span>
+                  <span className="text-indigo w-8 shrink-0 text-right font-mono text-small tabular-nums">{options.effort}</span>
                 </div>
               </Field>
 
               <Field label="longest edge" hint={options.maxEdge === 0 ? "keeping original size" : `capped at ${options.maxEdge}px`}>
                 <div className="flex items-center gap-3">
                   <Slider min={0} max={4096} step={64} value={options.maxEdge} onChange={(maxEdge) => setOptions({ ...options, maxEdge })} />
-                  <span className="text-indigo w-12 shrink-0 text-right font-mono text-label tabular-nums">
+                  <span className="text-indigo w-12 shrink-0 text-right font-mono text-small tabular-nums">
                     {options.maxEdge || "orig"}
                   </span>
                 </div>
@@ -125,7 +125,7 @@ export function SquooshPage() {
           <Section
             title="queue"
             aside={
-              <span className="text-meta font-mono text-meta uppercase">
+              <span className="text-meta font-mono text-micro uppercase">
                 {busy ? "working" : `${pad(totals.done)} / ${pad(totals.total)}`}
               </span>
             }
@@ -175,7 +175,7 @@ function JobRow({
 
   return (
     <li className="border-wash flex items-center gap-4 border-b py-3 last:border-b-0">
-      <span className="text-meta w-6 shrink-0 font-mono text-meta tabular-nums tracking-[0.14em]">{pad(index + 1)}</span>
+      <span className="text-meta w-6 shrink-0 font-mono text-micro tabular-nums tracking-[0.14em]">{pad(index + 1)}</span>
 
       <button
         type="button"
@@ -183,10 +183,10 @@ function JobRow({
         disabled={!done}
         className="group min-w-0 flex-1 cursor-pointer text-left disabled:cursor-default"
       >
-        <span className="text-ink group-hover:text-indigo block truncate font-mono text-label tracking-normal transition-colors duration-200">
+        <span className="text-ink group-hover:text-indigo block truncate font-mono text-small tracking-normal transition-colors duration-200">
           {name}
         </span>
-        <span className="text-meta font-mono text-meta uppercase">
+        <span className="text-meta font-mono text-micro uppercase">
           {job.status === "error"
             ? job.error
             : done
@@ -203,7 +203,7 @@ function JobRow({
 
       <span
         className={cn(
-          "w-14 shrink-0 text-right font-mono text-label tabular-nums",
+          "w-14 shrink-0 text-right font-mono text-small tabular-nums",
           done && job.outSize < job.file.size ? "text-indigo" : "text-meta",
         )}
       >
@@ -283,7 +283,7 @@ function Compare({
             { value: "after", label: `after ${bytes(job.outSize)}` },
           ]}
         />
-        <span className="text-meta font-mono text-meta uppercase">hold space</span>
+        <span className="text-meta font-mono text-micro uppercase">hold space</span>
         <TextButton onClick={onClose}>esc</TextButton>
       </div>
     </div>

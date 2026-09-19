@@ -36,7 +36,7 @@ export function Media2MediaPage() {
             replace
             className={({ isActive }) =>
               cn(
-                "text-meta relative font-mono uppercase transition-colors duration-200",
+                "text-micro relative font-mono uppercase transition-colors duration-200",
                 "focus-visible:outline-indigo focus-visible:outline-1",
                 isActive ? "text-ink" : "text-meta hover:text-indigo",
               )

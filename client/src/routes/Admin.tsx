@@ -92,10 +92,10 @@ export function Admin() {
   return (
     <Shell width="page">
       <header className="mb-12 flex items-center justify-between gap-6">
-        <h1 className="text-meta font-mono text-meta uppercase">admin</h1>
+        <h1 className="text-meta font-mono text-micro uppercase">admin</h1>
         <nav className="flex items-center gap-5">
           <a
-            className="text-meta hover:text-indigo font-mono text-meta uppercase transition-colors duration-200"
+            className="text-meta hover:text-indigo font-mono text-micro uppercase transition-colors duration-200"
             href="https://analytics.google.com/"
             target="_blank"
             rel="noreferrer"
@@ -126,7 +126,7 @@ export function Admin() {
       </section>
 
       {/* Housekeeping, in one line — it matters only when it is wrong. */}
-      <footer className="border-hairline-faint text-meta mt-20 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 font-mono text-meta uppercase">
+      <footer className="border-hairline-faint text-meta mt-20 flex flex-wrap gap-x-6 gap-y-2 border-t pt-4 font-mono text-micro uppercase">
         <span>{count(stats.projects, "project")} saved</span>
         <span>
           {count(stats.shares, "link")} shared{stats.lockedShares ? ` · ${stats.lockedShares} locked` : ""}
@@ -177,7 +177,7 @@ function Month({ series }: { series: AdminStats["series"] }) {
               data-tip-pos={i < series.length / 2 ? "top-left" : "top-right"}
             >
               {i === peak && !last ? (
-                <span className="text-label absolute inset-x-0 text-center font-mono text-meta tracking-normal tabular-nums" style={{ bottom: `calc(${(d.visitors / max) * 100}% + 6px)` }}>
+                <span className="text-label absolute inset-x-0 text-center font-mono text-micro tracking-normal tabular-nums" style={{ bottom: `calc(${(d.visitors / max) * 100}% + 6px)` }}>
                   {d.visitors}
                 </span>
               ) : null}
@@ -192,7 +192,7 @@ function Month({ series }: { series: AdminStats["series"] }) {
           );
         })}
       </div>
-      <figcaption className="border-hairline text-meta flex justify-between border-t pt-3 font-mono text-meta uppercase">
+      <figcaption className="border-hairline text-meta flex justify-between border-t pt-3 font-mono text-micro uppercase">
         <span>{short(series[0]?.day)}</span>
         <span>callers per day</span>
         <span className="text-indigo">today</span>
@@ -210,7 +210,7 @@ function Ranked({ routes }: { routes: AdminStats["routes"] }) {
         <li key={r.route} className="flex flex-col gap-2" title={r.route}>
           <span className="flex items-baseline justify-between gap-4">
             <span className="text-ink min-w-0 truncate font-sans text-body">{ROUTES[r.route.replace(/\/$/, "")] ?? r.route}</span>
-            <span className="text-ink shrink-0 font-mono text-label font-bold tracking-normal tabular-nums">{r.hits.toLocaleString()}</span>
+            <span className="text-ink shrink-0 font-mono text-small font-bold tracking-normal tabular-nums">{r.hits.toLocaleString()}</span>
           </span>
           <span className="bg-ink/[0.07] block h-[3px] rounded-full" aria-hidden>
             <span className="bg-ink/55 block h-full rounded-full" style={{ width: `${Math.max(1, (r.hits / max) * 100)}%` }} />

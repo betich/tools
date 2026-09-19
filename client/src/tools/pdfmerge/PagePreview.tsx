@@ -56,7 +56,7 @@ export function PagePreview({
         )}
       </div>
 
-      <p className="text-meta flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-meta uppercase tabular-nums">
+      <p className="text-meta flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-micro uppercase tabular-nums">
         <span>{entry ? `page ${pad(index + 1)} / ${pad(count)}` : "preview"}</span>
         <span>{entry ? caption(entry, layout, kept ?? null) : null}</span>
       </p>
@@ -169,7 +169,7 @@ function Tile({ lines, prose }: { lines: string[]; prose?: string }) {
   return (
     <div className="flex max-w-[46ch] flex-col items-center gap-2 px-6 text-center">
       {lines.map((l, i) => (
-        <p key={i} className={cn("font-mono text-meta uppercase tabular-nums", i === 0 ? "text-label" : "text-meta")}>
+        <p key={i} className={cn("font-mono text-micro uppercase tabular-nums", i === 0 ? "text-label" : "text-meta")}>
           {l}
         </p>
       ))}

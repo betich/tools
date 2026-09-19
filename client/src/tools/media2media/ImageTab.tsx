@@ -87,7 +87,7 @@ function Panel({
     <section aria-label={label} className="border-wash rounded-card bg-surface flex min-w-0 flex-col border">
       <header className="border-hairline-faint flex min-h-14 items-center gap-3 border-b px-5">
         <h2 className="text-ink text-title font-mono font-bold uppercase">{title}</h2>
-        <span className="text-meta text-meta font-mono uppercase tabular-nums">{count}</span>
+        <span className="text-meta text-micro font-mono uppercase tabular-nums">{count}</span>
         <span className="ml-auto flex items-center">{aside}</span>
       </header>
       <div className="flex flex-1 flex-col gap-5 p-5">{children}</div>
@@ -148,7 +148,7 @@ function InputPanel({
               {sourceKinds(rows).map(([kind, n]) => (
                 <li
                   key={kind}
-                  className="border-wash text-label text-meta flex items-baseline gap-2 rounded-full border px-2.5 py-1 font-mono uppercase"
+                  className="border-wash text-label text-micro flex items-baseline gap-2 rounded-full border px-2.5 py-1 font-mono uppercase"
                 >
                   {kind}
                   <span className="text-ink tabular-nums tracking-normal">{pad(n)}</span>
@@ -177,7 +177,7 @@ function Thumb({ blob, kind }: { blob: Blob | null; kind?: string }) {
   return (
     <span className="checkers bg-surface rounded-xs relative flex size-10 shrink-0 items-center justify-center overflow-hidden">
       {kind && (!url || broken) ? (
-        <span className="text-label font-mono text-meta uppercase tracking-normal">{kind}</span>
+        <span className="text-label text-micro font-mono uppercase tracking-normal">{kind}</span>
       ) : null}
       {url && !broken ? (
         <img
@@ -197,15 +197,15 @@ function InputRow({ row, onRemove }: { row: ImageRow; onRemove: () => void }) {
   const kind = sourceKind(row.file);
   return (
     <li className="border-hairline-faint flex h-16 items-center gap-3 border-b last:border-b-0">
-      <span className="text-meta text-meta w-5 shrink-0 font-mono tabular-nums tracking-[0.1em]">
+      <span className="text-meta text-micro w-5 shrink-0 font-mono tabular-nums tracking-[0.1em]">
         {pad(row.index + 1)}
       </span>
       <Thumb blob={row.file} kind={kind} />
       <span className="min-w-0 flex-1">
-        <span className="text-ink text-label block truncate font-mono tracking-normal" title={row.file.name}>
+        <span className="text-ink text-small block truncate font-mono tracking-normal" title={row.file.name}>
           {row.file.name}
         </span>
-        <span className="text-meta text-meta block truncate font-mono uppercase tabular-nums">
+        <span className="text-meta text-micro block truncate font-mono uppercase tabular-nums">
           {kind} · {bytes(row.file.size)}
         </span>
       </span>
@@ -236,16 +236,16 @@ function Machine({
     <section aria-label="convert" className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
       {/* Not a <Field>: that is a <label>, and a label full of buttons fires the first one when its text is clicked. */}
       <div className="flex flex-col gap-3">
-        <h2 className="text-meta text-meta font-mono uppercase">convert to</h2>
+        <h2 className="text-meta text-micro font-mono uppercase">convert to</h2>
         <FormatGrid value={batch.format} onChange={(format) => set({ format })} />
-        {meta.note ? <p className="text-label text-meta font-sans">{meta.note}</p> : null}
+        {meta.note ? <p className="text-label text-micro font-sans">{meta.note}</p> : null}
       </div>
 
       <QualityField value={batch.quality} format={batch.format} onChange={(quality) => set({ quality })} />
       <EdgeField value={batch.maxEdge} onChange={(maxEdge) => set({ maxEdge })} />
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-meta text-meta font-mono uppercase">metadata</h2>
+        <h2 className="text-meta text-micro font-mono uppercase">metadata</h2>
         <Toggle checked={batch.keepExif} onChange={(keepExif) => set({ keepExif })} label="keep camera info" />
         {/* A disabled fieldset disables the switch inside it, keyboard included. */}
         <fieldset disabled={!batch.keepExif} className="min-w-0 disabled:opacity-40 [&:disabled_*]:cursor-not-allowed">
@@ -255,7 +255,7 @@ function Machine({
             label="keep location"
           />
         </fieldset>
-        <p className="text-label text-meta font-sans">{metadataNote(batch)}</p>
+        <p className="text-label text-micro font-sans">{metadataNote(batch)}</p>
       </div>
 
       <ConvertButton format={meta.label} totals={totals} onConvert={onConvert} onStop={onStop} />
@@ -276,16 +276,13 @@ function FormatGrid({ value, onChange }: { value: OutputFormat; onChange: (f: Ou
             role="radio"
             aria-checked={on}
             onClick={() => onChange(f.value)}
-            className={
-              "text-meta " +
-              cn(
-                "rounded-xs flex h-11 cursor-pointer items-center justify-center border px-1 font-mono uppercase",
-                "focus-visible:outline-indigo transition-colors duration-200 focus-visible:outline-1 focus-visible:outline-offset-2",
-                on
-                  ? "border-indigo bg-surface-high text-ink font-bold"
-                  : "border-wash text-label hover:border-edge hover:text-indigo",
-              )
-            }
+            className={cn(
+              "text-micro rounded-xs flex h-11 cursor-pointer items-center justify-center border px-1 font-mono uppercase",
+              "focus-visible:outline-indigo transition-colors duration-200 focus-visible:outline-1 focus-visible:outline-offset-2",
+              on
+                ? "border-indigo bg-surface-high text-ink font-bold"
+                : "border-wash text-label hover:border-edge hover:text-indigo",
+            )}
           >
             {f.label}
           </button>
@@ -378,7 +375,7 @@ function ConvertButton({
       >
         {button}
       </div>
-      <p id="convert-progress" className="text-meta text-meta text-center font-mono uppercase" aria-live="polite">
+      <p id="convert-progress" className="text-meta text-micro text-center font-mono uppercase" aria-live="polite">
         {busy
           ? `converting · ${pad(totals.running)} in the works`
           : totals.failed > 0
@@ -432,15 +429,16 @@ function OutputPanel({
             {totals.fresh > 0 ? (
               <div className="flex items-end justify-between gap-4">
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-meta text-meta font-mono uppercase">{saved >= 0 ? "saved" : "grew"}</span>
-                  <span className="text-label text-label font-mono tabular-nums tracking-normal">
+                  <span className="text-meta text-micro font-mono uppercase">{saved >= 0 ? "saved" : "grew"}</span>
+                  <span className="text-label text-small font-mono tabular-nums tracking-normal">
                     {bytes(totals.before)} → <span className="text-ink">{bytes(totals.after)}</span>
                   </span>
                 </div>
                 <span
-                  className={
-                    "text-display " + cn("font-mono font-bold tabular-nums", saved > 0 ? "text-indigo" : "text-ink")
-                  }
+                  className={cn(
+                    "text-display font-mono font-bold tabular-nums",
+                    saved > 0 ? "text-indigo" : "text-ink",
+                  )}
                 >
                   {delta(totals.before, totals.after)}
                 </span>
@@ -533,16 +531,14 @@ function OutputRow({
           )}
           <span className="min-w-0 flex-1">
             <span
-              className={
-                "text-label " + cn("block truncate font-mono tracking-normal", made ? "text-ink" : "text-label")
-              }
+              className={cn("text-small block truncate font-mono tracking-normal", made ? "text-ink" : "text-label")}
               title={row.name}
             >
               {row.name}
             </span>
             <span
               className={cn(
-                "text-meta text-meta block truncate font-mono",
+                "text-meta text-micro block truncate font-mono",
                 row.status === "error" ? "normal-case tracking-normal" : "uppercase",
               )}
             >
@@ -555,13 +551,11 @@ function OutputRow({
         {made ? (
           <span className="flex shrink-0 flex-col items-end">
             <span
-              className={
-                "text-label " + cn("font-mono tabular-nums", size < row.file.size ? "text-indigo" : "text-ink")
-              }
+              className={cn("text-small font-mono tabular-nums tracking-normal", size < row.file.size ? "text-indigo" : "text-ink")}
             >
               {delta(row.file.size, size)}
             </span>
-            <span className="text-meta text-meta font-mono tabular-nums">{bytes(size)}</span>
+            <span className="text-meta text-micro font-mono tabular-nums tracking-normal">{bytes(size)}</span>
           </span>
         ) : null}
 
@@ -592,13 +586,10 @@ function OutputRow({
           <div className="flex flex-col gap-2">
             <span className="flex min-h-4 items-center justify-between gap-2">
               <span
-                className={
-                  "text-meta " +
-                  cn(
-                    "font-mono uppercase transition-colors duration-200",
-                    own.includes("format") ? "text-indigo" : "text-meta",
-                  )
-                }
+                className={cn(
+                  "text-micro font-mono uppercase transition-colors duration-200",
+                  own.includes("format") ? "text-indigo" : "text-meta",
+                )}
               >
                 format
               </span>
@@ -629,7 +620,7 @@ function OutputRow({
               follow the batch
             </TextButton>
           ) : (
-            <p className="text-label text-meta font-sans">
+            <p className="text-label text-micro font-sans">
               Following the batch. Change anything here and it applies to this file only.
             </p>
           )}
@@ -674,7 +665,7 @@ function QualityField({
     >
       <div className="flex items-center gap-3">
         <Slider min={1} max={100} value={value} onChange={onChange} disabled={!lossy} />
-        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">
+        <span className="text-indigo text-small w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">
           {value}
         </span>
       </div>
@@ -702,7 +693,7 @@ function EdgeField({
     >
       <div className="flex items-center gap-3">
         <Slider min={0} max={8192} step={64} value={value} onChange={onChange} />
-        <span className="text-indigo text-label w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">
+        <span className="text-indigo text-small w-10 shrink-0 text-right font-mono tabular-nums tracking-normal">
           {value || "orig"}
         </span>
       </div>

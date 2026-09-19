@@ -63,10 +63,10 @@ export function MergeRun({
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
             <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-ink text-label min-w-0 truncate font-mono tracking-normal" title={result.fileName}>
+              <span className="text-ink text-small min-w-0 truncate font-mono tracking-normal" title={result.fileName}>
                 {result.fileName}
               </span>
-              <span className="text-label text-meta font-mono tabular-nums tracking-normal">
+              <span className="text-label text-micro font-mono tabular-nums tracking-normal">
                 {result.pages} {result.pages === 1 ? "page" : "pages"} · {bytes(result.bytes)}
               </span>
             </div>
@@ -79,7 +79,7 @@ export function MergeRun({
               <a
                 href={pdfJobs.resultUrl(job.id, task.id)}
                 download={result.fileName}
-                className="bg-ink text-paper text-meta hover:bg-indigo focus-visible:outline-indigo inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xs px-4 font-mono font-bold uppercase transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="bg-ink text-paper text-micro hover:bg-indigo focus-visible:outline-indigo inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xs px-4 font-mono font-bold uppercase transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 download
               </a>

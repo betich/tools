@@ -162,11 +162,11 @@ export function ExportSheet({
       <header className="border-wash flex shrink-0 items-center justify-between gap-6 border-b px-5 py-4 sm:px-8">
         <div className="flex items-baseline gap-5">
           <h2 className="text-ink font-mono text-title font-bold uppercase">export</h2>
-          <span className="text-meta font-mono text-meta tabular-nums uppercase">
+          <span className="text-meta font-mono text-micro tabular-nums uppercase">
             {pad(selected.size)} of {pad(rows.length)} selected
           </span>
           {rendered < rows.length ? (
-            <span className="text-indigo font-mono text-meta tabular-nums uppercase">
+            <span className="text-indigo font-mono text-micro tabular-nums uppercase">
               rendering {pad(rendered)} / {pad(rows.length)}
             </span>
           ) : null}
@@ -233,10 +233,10 @@ export function ExportSheet({
                   </span>
 
                   <span className="border-wash flex items-center gap-2 border-t px-2.5 py-2">
-                    <span className="text-meta font-mono text-meta tabular-nums">{pad(i + 1)}</span>
+                    <span className="text-meta font-mono text-micro tabular-nums">{pad(i + 1)}</span>
                     <span
                       className={cn(
-                        "truncate font-mono text-meta tracking-normal normal-case",
+                        "truncate font-mono text-micro tracking-normal normal-case",
                         selected.has(i) ? "text-ink" : "text-meta",
                       )}
                     >
@@ -289,7 +289,7 @@ export function ExportSheet({
           </div>
 
           <div className="mt-auto flex flex-col gap-3">
-            <p className="text-meta font-mono text-meta uppercase">
+            <p className="text-meta font-mono text-micro uppercase">
               {selected.size === 0
                 ? "nothing selected"
                 : selected.size === 1

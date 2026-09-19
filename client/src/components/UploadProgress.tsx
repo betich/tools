@@ -32,19 +32,19 @@ export function UploadProgress({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className={cn("font-mono text-meta uppercase", state.phase === "done" ? "text-indigo" : "text-meta")}>{label}</span>
+        <span className={cn("font-mono text-micro uppercase", state.phase === "done" ? "text-indigo" : "text-meta")}>{label}</span>
         {progress ? (
-          <span className="text-meta font-mono text-meta uppercase tabular-nums">
+          <span className="text-meta font-mono text-micro uppercase tabular-nums">
             part {pad(state.phase === "done" ? progress.parts : progress.partsDone, Math.max(2, width))} / {pad(progress.parts, Math.max(2, width))}
           </span>
         ) : null}
       </div>
 
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-ink min-w-0 truncate font-mono text-label tracking-normal" title={file.name}>
+        <span className="text-ink min-w-0 truncate font-mono text-small tracking-normal" title={file.name}>
           {file.name}
         </span>
-        <span className="text-label shrink-0 font-mono text-label tracking-normal tabular-nums">
+        <span className="text-label shrink-0 font-mono text-small tracking-normal tabular-nums">
           {bytes(sent)} / {bytes(total)}
         </span>
       </div>

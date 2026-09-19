@@ -549,15 +549,15 @@ export function MailMergePage() {
       <header className="border-hairline-faint mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b pb-4 lg:mb-0 lg:shrink-0 lg:px-6 lg:py-2.5 xl:px-7">
         <div className="flex min-w-0 items-baseline gap-3">
           <h1 className="text-ink shrink-0 font-mono text-title font-bold uppercase">mail merge</h1>
-          <span className="text-meta font-mono text-label" aria-hidden>
+          <span className="text-meta font-mono text-small" aria-hidden>
             /
           </span>
-          <span className="text-label min-w-0 truncate font-mono text-label tracking-normal">{doc.name || "untitled"}</span>
+          <span className="text-label min-w-0 truncate font-mono text-small tracking-normal">{doc.name || "untitled"}</span>
           {shareSlug ? (
             <button
               type="button"
               onClick={() => setSharing(true)}
-              className="text-meta hover:text-indigo flex shrink-0 cursor-pointer items-center gap-1.5 self-center font-mono text-meta uppercase transition-colors duration-200"
+              className="text-meta hover:text-indigo flex shrink-0 cursor-pointer items-center gap-1.5 self-center font-mono text-micro uppercase transition-colors duration-200"
             >
               {shareProtected ? <FiLock className="size-3" aria-hidden /> : <FiLink className="size-3" aria-hidden />}
               {shareProtected ? "locked" : "shared"}
@@ -567,7 +567,7 @@ export function MailMergePage() {
 
         <div className="flex items-center gap-2">
           {busy ? (
-            <span className="text-indigo mr-2 font-mono text-meta uppercase" aria-live="polite">
+            <span className="text-indigo mr-2 font-mono text-micro uppercase" aria-live="polite">
               {busy}…
             </span>
           ) : null}
@@ -904,7 +904,7 @@ function PaneTabs({ value, onChange }: { value: Pane; onChange: (pane: Pane) => 
             onClick={() => onChange(pane.value)}
             aria-pressed={active}
             className={cn(
-              "text-meta relative cursor-pointer py-3.5 text-center font-mono uppercase transition-colors duration-200",
+              "text-micro relative cursor-pointer py-3.5 text-center font-mono uppercase transition-colors duration-200",
               active ? "text-ink bg-surface-high" : "text-meta",
             )}
           >

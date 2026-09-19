@@ -79,7 +79,7 @@ export function DuplicateDialog({
         <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
           <h2 id={titleId} className="flex min-w-0 items-baseline gap-3">
             <span className="text-ink font-mono text-title font-bold uppercase">duplicate</span>
-            <span className="text-label truncate font-mono text-label tracking-normal">{project.name || "untitled"}</span>
+            <span className="text-label truncate font-mono text-small tracking-normal">{project.name || "untitled"}</span>
           </h2>
           <button
             type="button"
@@ -125,7 +125,7 @@ export function DuplicateDialog({
           ) : null}
 
           {error ? (
-            <p className="text-ink font-mono text-meta uppercase" role="alert">
+            <p className="text-ink font-mono text-micro uppercase" role="alert">
               {error}
             </p>
           ) : null}

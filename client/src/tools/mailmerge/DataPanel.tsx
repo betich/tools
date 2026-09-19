@@ -156,11 +156,11 @@ export function DataPanel({
           {/* where the rows came from */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-1">
-              <p className="text-ink flex min-w-0 items-center gap-2 font-mono text-label tracking-normal">
+              <p className="text-ink flex min-w-0 items-center gap-2 font-mono text-small tracking-normal">
                 <FiFileText className="text-meta size-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{over ? "drop to reload" : (data.source ?? "sample sheet")}</span>
               </p>
-              <span className="text-meta font-mono text-meta whitespace-nowrap uppercase tabular-nums">
+              <span className="text-meta font-mono text-micro whitespace-nowrap uppercase tabular-nums">
                 {pad(total)} rows · {pad(data.fields.length)} cols
               </span>
             </div>
@@ -202,7 +202,7 @@ export function DataPanel({
                 )}
               >
                 <header className="flex items-center justify-between gap-3 py-2.5 pr-3 pl-3.5">
-                  <span className="text-ink font-mono text-meta font-bold uppercase tabular-nums">
+                  <span className="text-ink font-mono text-micro font-bold uppercase tabular-nums">
                     row {pad(current + 1)} <span className="text-meta font-normal">/ {pad(total)}</span>
                   </span>
                   <span className="flex items-center gap-2.5">
@@ -225,14 +225,14 @@ export function DataPanel({
                       >
                         <span
                           className={cn(
-                            "shrink-0 font-mono text-meta uppercase transition-colors duration-200 group-hover:text-indigo",
+                            "shrink-0 font-mono text-micro uppercase transition-colors duration-200 group-hover:text-indigo",
                             used(field) ? "text-meta" : "text-meta opacity-60",
                           )}
                         >
                           {field}
                         </span>
                         <span className="leader" aria-hidden />
-                        <span className="text-ink max-w-[58%] truncate font-mono text-label tracking-normal">
+                        <span className="text-ink max-w-[58%] truncate font-mono text-small tracking-normal">
                           {row[field]?.replace(/\n/g, " ⏎ ") || <span className="text-meta">—</span>}
                         </span>
                         <FiEdit2
@@ -263,7 +263,7 @@ export function DataPanel({
               </div>
             ) : (
               <div className="border-wash flex flex-col items-center gap-3 rounded-card border border-dashed px-4 py-6">
-                <p className="text-meta font-mono text-meta uppercase">every row is gone</p>
+                <p className="text-meta font-mono text-micro uppercase">every row is gone</p>
                 <Button variant="outline" onClick={(e) => onEdit(null, e.currentTarget)}>
                   <FiPlus className="size-3.5" aria-hidden />
                   add a row
@@ -298,7 +298,7 @@ export function DataPanel({
                           here ? "bg-surface-high text-ink" : "text-label hover:text-indigo",
                         )}
                       >
-                        <span className={cn("shrink-0 font-mono text-meta tabular-nums", here ? "text-indigo" : "text-meta")}>
+                        <span className={cn("shrink-0 font-mono text-micro tabular-nums", here ? "text-indigo" : "text-meta")}>
                           {pad(i + 1)}
                         </span>
                         <span className="min-w-0 truncate font-mono text-label tracking-normal">
@@ -350,7 +350,7 @@ export function DataPanel({
 function SubHead({ title, aside }: { title: string; aside?: ReactNode }) {
   return (
     <div className="border-hairline-faint flex items-center justify-between gap-3 border-b pb-2">
-      <h3 className="text-meta font-mono text-meta uppercase">{title}</h3>
+      <h3 className="text-meta font-mono text-micro uppercase">{title}</h3>
       {aside}
     </div>
   );
@@ -363,7 +363,7 @@ function SubHead({ title, aside }: { title: string; aside?: ReactNode }) {
 function Severed({ tokens, onReconcile }: { tokens: string[]; onReconcile: () => void }) {
   return (
     <div role="status" className="border-edge flex flex-col gap-3 rounded-card border px-3.5 pt-3 pb-3.5">
-      <p className="text-ink flex items-center gap-2 font-mono text-meta font-bold uppercase">
+      <p className="text-ink flex items-center gap-2 font-mono text-micro font-bold uppercase">
         <FiAlertCircle className="size-3.5 shrink-0" aria-hidden />
         {tokens.length === 1 ? "a column went missing" : `${tokens.length} columns went missing`}
       </p>
@@ -371,7 +371,7 @@ function Severed({ tokens, onReconcile }: { tokens: string[]; onReconcile: () =>
         The template uses{" "}
         {tokens.map((t, i) => (
           <span key={t}>
-            <code className="text-ink font-mono text-label tracking-normal">&lt;{t}&gt;</code>
+            <code className="text-ink font-mono text-small tracking-normal">&lt;{t}&gt;</code>
             {i < tokens.length - 2 ? ", " : i === tokens.length - 2 ? " and " : ""}
           </span>
         ))}
@@ -404,7 +404,7 @@ function Timeline({ data, onRollback }: { data: MergeData; onRollback: (id: stri
     <div className="flex flex-col gap-2">
       <SubHead
         title="edits"
-        aside={<span className="text-meta font-mono text-meta tabular-nums">{history.length ? pad(history.length) : "—"}</span>}
+        aside={<span className="text-meta font-mono text-micro tabular-nums">{history.length ? pad(history.length) : "—"}</span>}
       />
 
       {history.length === 0 ? (
@@ -434,13 +434,13 @@ function Timeline({ data, onRollback }: { data: MergeData; onRollback: (id: stri
                 <div className="flex items-baseline justify-between gap-2">
                   <span
                     className={cn(
-                      "text-ink min-w-0 truncate font-mono text-meta uppercase",
+                      "text-ink min-w-0 truncate font-mono text-micro uppercase",
                       doomed && "decoration-indigo line-through",
                     )}
                   >
                     {headline(entry)}
                   </span>
-                  <time className="text-meta shrink-0 font-mono text-meta tabular-nums" dateTime={entry.at}>
+                  <time className="text-meta shrink-0 font-mono text-micro tabular-nums" dateTime={entry.at}>
                     {clock(entry.at)}
                   </time>
                 </div>
@@ -467,7 +467,7 @@ function Timeline({ data, onRollback }: { data: MergeData; onRollback: (id: stri
         {history.length ? (
           <li className="flex items-center gap-3 pt-2">
             <span className="border-edge size-[7px] shrink-0 rotate-45 border" aria-hidden />
-            <span className="text-meta font-mono text-meta uppercase">
+            <span className="text-meta font-mono text-micro uppercase">
               {full ? "earlier edits are kept as is" : "as loaded"}
             </span>
           </li>
