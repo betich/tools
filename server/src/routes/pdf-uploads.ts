@@ -3,7 +3,17 @@ import { copyFile, link, mkdir, open, readdir, rename, rm, stat } from "node:fs/
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Elysia, t } from "elysia";
-import { UPLOAD_MAX_BYTES, UPLOAD_PART_BYTES, type UploadedFile, type UploadKind, type UploadSession, type UploadStatus } from "@tools/shared";
+import {
+  PAGE_THUMB_BATCH,
+  pageThumbBatch,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_PART_BYTES,
+  type PdfPageCount,
+  type UploadedFile,
+  type UploadKind,
+  type UploadSession,
+  type UploadStatus,
+} from "@tools/shared";
 import { env, paths } from "../env";
 import { db, id, nowIso } from "../lib/db";
 import { clientIp, DISK_FULL, diskHasRoom, rateLimit, refuse } from "../lib/limits";
@@ -40,6 +50,15 @@ const partPath = (uploadId: string, n: number) => join(dirOf(uploadId), `part-${
 const thumbnailPath = (uploadId: string) => join(dirOf(uploadId), "thumbnail.png");
 /** Thumbnails waiting for the worker, across everyone. Each takes well under a second; past this, the tile will do. */
 const MAX_QUEUED_THUMBNAILS = 32;
+/** A page view's thumbnails (#37), drawn by the same lane in batches: `uploads/<id>/pages/<n>.png` (worker PAGES_DIR). */
+const pagePath = (uploadId: string, n: number) => join(dirOf(uploadId), "pages", `${n}.png`);
+/**
+ * Page batches waiting, across everyone and per caller. A batch is up to
+ * PAGE_THUMB_BATCH small renders, a few seconds of the lane; the client asks
+ * only for pages on screen, so a few batches each is a screenful and more.
+ */
+const MAX_QUEUED_PAGE_BATCHES = 24;
+const MAX_QUEUED_PAGE_BATCHES_PER_CALLER = 6;
 
 /** Where a completed upload's bytes live — what a job reads. */
 export const uploadPath = (uploadId: string) => join(dirOf(uploadId), "file");
@@ -241,37 +260,137 @@ setInterval(() => void sweepUploads().catch((err) => console.error("[uploads] sw
 
 // ── routes ─────────────────────────────────────────────────────────────────
 
+// ── thumbnails and page counts (#17, #37) ─────────────────────────────────
+//
+// All three routes answer the same way: 200 once the worker's lane has done
+// the work, 202 `{ retryAfter }` while it does, anything else means "show a
+// tile". The row in pdf_thumbnails draws page 1 and counts the pages; a page
+// thumbnail needs the count first (to know the page exists), then a row in
+// pdf_page_thumbs draws its whole batch.
+
+type Reply = { status?: number | string; headers: Record<string, string | number> };
+type ThumbRow = { state: string; pages: number | null };
+
+const WORKER_OFFLINE = "The PDF worker is offline — try again shortly.";
+const BUSY = "the server is busy drawing previews — try again shortly";
+const PNG_HEADERS = { "content-type": "image/png", "cache-control": "private, max-age=3600" };
+
+const thumbRow = (uploadId: string) =>
+  db.query<ThumbRow, [string]>("SELECT state, pages FROM pdf_thumbnails WHERE upload_id = ?").get(uploadId);
+
+function pending(set: Reply) {
+  set.status = 202;
+  set.headers["retry-after"] = "1";
+  return { retryAfter: 1 };
+}
+
+/**
+ * Busy is worth asking again about, unlike an offline worker, so it says when
+ * — in the body too, since a cross-origin client cannot read `retry-after`.
+ */
+function busy(set: Reply) {
+  set.headers["retry-after"] = "2";
+  return { ...refuse(set, 503, BUSY), retryAfter: 2 };
+}
+
+/**
+ * Asks the lane for page 1 and the count, unless it is already on it. A row
+ * marked done whose work has gone missing (the PNG, or a count from before
+ * #37) is asked again. Returns a refusal, or null when the caller should 202.
+ */
+async function queueFirst(set: Reply, uploadId: string, row: ThumbRow | null) {
+  if (!workerStatus().up) return refuse(set, 503, WORKER_OFFLINE);
+  if (row && row.state !== "done") return null;
+  const queued = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM pdf_thumbnails WHERE state = 'queued'").get()?.n ?? 0;
+  if (queued >= MAX_QUEUED_THUMBNAILS) return busy(set);
+  if (!(await diskHasRoom(paths.jobs, 1024 * 1024))) return refuse(set, 507, DISK_FULL);
+  const now = Date.now();
+  db.run(
+    "INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at) VALUES (?, 'queued', ?, ?) ON CONFLICT (upload_id) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at",
+    [uploadId, now, now],
+  );
+  return null;
+}
+
+/** The refusal for a count the lane could not make; null when there is a count or none yet. */
+function uncounted(set: Reply, row: ThumbRow | null) {
+  if (row?.pages === -1) return refuse(set, 422, "this PDF is password-protected");
+  if (row?.pages === 0 || (row?.pages === null && row.state === "failed")) return refuse(set, 422, "this PDF's pages could not be counted");
+  return null;
+}
+
 export const pdfUploads = new Elysia({ prefix: "/api/pdf/uploads" })
   .get(
     "/:id/thumbnail.png",
     async ({ params, set }) => {
-      // 200 with the PNG once drawn; 202 while the worker's lane draws it; anything else means "show a tile".
       const upload = completedUpload(params.id);
       if (!upload) return refuse(set, 404, NOT_FOUND);
       if (upload.kind !== "pdf") return refuse(set, 415, "only a PDF has a page to preview");
       const png = Bun.file(thumbnailPath(upload.id));
-      if (await png.exists()) {
-        return new Response(png, { headers: { "content-type": "image/png", "cache-control": "private, max-age=3600" } });
-      }
-      const row = db.query<{ state: string }, [string]>("SELECT state FROM pdf_thumbnails WHERE upload_id = ?").get(upload.id);
+      if (await png.exists()) return new Response(png, { headers: PNG_HEADERS });
+      const row = thumbRow(upload.id);
       if (row?.state === "failed") return refuse(set, 422, "this PDF's first page could not be drawn");
-      if (!workerStatus().up) return refuse(set, 503, "The PDF worker is offline — try again shortly.");
-      // No row yet, or one marked done whose file has gone: ask for it.
-      if (!row || row.state === "done") {
-        const queued = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM pdf_thumbnails WHERE state = 'queued'").get()?.n ?? 0;
-        if (queued >= MAX_QUEUED_THUMBNAILS) return refuse(set, 503, "the server is busy drawing previews — try again shortly");
-        if (!(await diskHasRoom(paths.jobs, 1024 * 1024))) return refuse(set, 507, DISK_FULL);
-        const now = Date.now();
-        db.run(
-          "INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at) VALUES (?, 'queued', ?, ?) ON CONFLICT (upload_id) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at",
-          [upload.id, now, now],
-        );
-      }
-      set.status = 202;
-      set.headers["retry-after"] = "1";
-      return { retryAfter: 1 };
+      return (await queueFirst(set, upload.id, row)) ?? pending(set);
     },
     { beforeHandle: rateLimit("pdf-thumbnail", 240) },
+  )
+  .get(
+    "/:id/pages",
+    async ({ params, set }) => {
+      // 200 `{ pages }` — qpdf's count, the one Merge will use.
+      const upload = completedUpload(params.id);
+      if (!upload) return refuse(set, 404, NOT_FOUND);
+      if (upload.kind !== "pdf") return refuse(set, 415, "only a PDF has pages to count");
+      const row = thumbRow(upload.id);
+      if (row?.pages && row.pages > 0) return { pages: row.pages } satisfies PdfPageCount;
+      return uncounted(set, row) ?? (await queueFirst(set, upload.id, row)) ?? pending(set);
+    },
+    { beforeHandle: rateLimit("pdf-thumbnail", 240) },
+  )
+  .get(
+    "/:id/pages/:file",
+    async (ctx) => {
+      // `:file` is `<n>.png`, n 1-based. Elysia has no `:n.png`, so it is parsed here.
+      const { params, set } = ctx;
+      const upload = completedUpload(params.id);
+      if (!upload) return refuse(set, 404, NOT_FOUND);
+      if (upload.kind !== "pdf") return refuse(set, 415, "only a PDF has a page to preview");
+      const n = Number(/^([1-9][0-9]{0,5})\.png$/.exec(params.file)?.[1] ?? NaN);
+      if (!Number.isInteger(n)) return refuse(set, 404, "there is no such page");
+
+      const row = thumbRow(upload.id);
+      if (!row?.pages) return uncounted(set, row) ?? (await queueFirst(set, upload.id, row)) ?? pending(set);
+      if (row.pages < 0) return uncounted(set, row);
+      if (n > row.pages) return refuse(set, 404, `this PDF has ${row.pages} page${row.pages === 1 ? "" : "s"}`);
+
+      const png = Bun.file(pagePath(upload.id, n));
+      if (await png.exists()) return new Response(png, { headers: PNG_HEADERS });
+      const batch = pageThumbBatch(n);
+      const job = db
+        .query<{ state: string }, [string, number]>("SELECT state FROM pdf_page_thumbs WHERE upload_id = ? AND batch = ?")
+        .get(upload.id, batch);
+      if (job?.state === "failed") return refuse(set, 422, `page ${n} could not be drawn`);
+      if (!workerStatus().up) return refuse(set, 503, WORKER_OFFLINE);
+      // No row yet, or one marked done whose file has gone: ask for the batch.
+      if (!job || job.state === "done") {
+        const queued = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM pdf_page_thumbs WHERE state = 'queued'").get()?.n ?? 0;
+        const mine =
+          db
+            .query<{ n: number }, [string]>(
+              "SELECT COUNT(*) AS n FROM pdf_page_thumbs p JOIN uploads u ON u.id = p.upload_id WHERE p.state = 'queued' AND u.caller = ?",
+            )
+            .get(clientIp(ctx))?.n ?? 0;
+        if (queued >= MAX_QUEUED_PAGE_BATCHES || mine >= MAX_QUEUED_PAGE_BATCHES_PER_CALLER) return busy(set);
+        if (!(await diskHasRoom(paths.jobs, PAGE_THUMB_BATCH * 256 * 1024))) return refuse(set, 507, DISK_FULL);
+        const now = Date.now();
+        db.run(
+          "INSERT INTO pdf_page_thumbs (upload_id, batch, state, requested_at, updated_at) VALUES (?, ?, 'queued', ?, ?) ON CONFLICT (upload_id, batch) DO UPDATE SET state = 'queued', requested_at = excluded.requested_at, updated_at = excluded.updated_at",
+          [upload.id, batch, now, now],
+        );
+      }
+      return pending(set);
+    },
+    { beforeHandle: rateLimit("pdf-page-thumb", 600) },
   )
   .post(
     "/",

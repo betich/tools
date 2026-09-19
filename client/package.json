@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "bun test test",
     "deploy": "bun run build && wrangler pages deploy dist --project-name=betich-tools"
   },
   "dependencies": {
