@@ -12,7 +12,13 @@ const Admin = lazy(() => import("@/routes/Admin").then((m) => ({ default: m.Admi
 const MailMerge = lazy(() => import("@/tools/mailmerge/MailMergePage").then((m) => ({ default: m.MailMergePage })));
 const PdfCompress = lazy(() => import("@/tools/pdfcompress/PdfCompress").then((m) => ({ default: m.PdfCompress })));
 const PdfMerge = lazy(() => import("@/tools/pdfmerge/PdfMerge").then((m) => ({ default: m.PdfMerge })));
-const Media2Media = lazy(() => import("@/tools/media2media/Media2MediaPage").then((m) => ({ default: m.Media2MediaPage })));
+// A bench for the shared timeline, compiled out of production builds.
+const TimelineDemo = import.meta.env.DEV
+  ? lazy(() => import("@/routes/dev/TimelineDemo").then((m) => ({ default: m.TimelineDemo })))
+  : null;
+const Media2Media = lazy(() =>
+  import("@/tools/media2media/Media2MediaPage").then((m) => ({ default: m.Media2MediaPage })),
+);
 
 export function App() {
   return (
@@ -30,6 +36,7 @@ export function App() {
             <Route path="/media2media" element={<Navigate to="/media2media/image" replace />} />
             <Route path="/media2media/:tab" element={<Media2Media />} />
             <Route path="/admin" element={<Admin />} />
+            {TimelineDemo ? <Route path="/dev/timeline" element={<TimelineDemo />} /> : null}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
@@ -41,7 +48,7 @@ export function App() {
 function Loading() {
   return (
     <Shell>
-      <p className="text-meta font-mono text-meta uppercase">loading…</p>
+      <p className="text-meta text-meta font-mono uppercase">loading…</p>
     </Shell>
   );
 }
@@ -49,7 +56,7 @@ function Loading() {
 function NotFound() {
   return (
     <Shell>
-      <h1 className="text-ink font-mono text-title font-bold uppercase">404</h1>
+      <h1 className="text-ink text-title font-mono font-bold uppercase">404</h1>
       <div className="mt-4">
         <Empty>nothing here</Empty>
       </div>
