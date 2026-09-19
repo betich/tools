@@ -83,6 +83,14 @@ export function TabRail({ inFlow = false }: { inFlow?: boolean }) {
         >
           betich.me
         </a>
+        {/* AGPL-3.0: the PDF engines oblige the service to offer its source to whoever uses it. */}
+        <span aria-hidden> · </span>
+        <a
+          href="https://github.com/betich/tools"
+          className="hover:text-indigo underline decoration-wash underline-offset-4 transition-colors duration-200"
+        >
+          source
+        </a>
       </p>
     </div>
   );
