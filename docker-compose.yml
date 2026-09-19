@@ -54,6 +54,8 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    # A fixed tag, whatever the compose project name, so the image can be run on its own.
+    image: tools-pdf-worker:latest
     container_name: tools-pdf-worker
     restart: unless-stopped
     environment:

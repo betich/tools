@@ -5,6 +5,14 @@
 # 8.16, libjxl 0.11, OpenJPEG 2.5, libheif 1.19. Only mozjpeg and libjxl's
 # metric tools (ssimulacra2, butteraugli) are missing and are built here, in
 # stages of their own so a code change never rebuilds them.
+#
+# This builds on the production Pi (4 cores, 8 GB shared with live services):
+# compile parallelism is capped at 2, and libjxl is cloned without submodules
+# and configured to build only what the two metric tools need. BuildKit runs
+# independent stages concurrently, so with buildx build the two source stages
+# one at a time (--target mozjpeg, then --target jxlmetrics) before the image.
+# The Pi has no buildx; compose falls back to the classic builder, which is
+# sequential already. Measured there: ~6 min cold, lowest MemAvailable 3.4 GB.
 
 ARG MOZJPEG_VERSION=v4.1.5
 # Matches the libjxl Debian ships, so the metrics score what cjxl encodes.
@@ -15,26 +23,30 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates pkg-config \
      libpng-dev zlib1g-dev libhwy-dev libbrotli-dev liblcms2-dev libjpeg-dev libgif-dev \
   && rm -rf /var/lib/apt/lists/*
+ENV CMAKE_BUILD_PARALLEL_LEVEL=2
 
 FROM toolbuild AS mozjpeg
 ARG MOZJPEG_VERSION
 RUN git clone --depth 1 --branch ${MOZJPEG_VERSION} https://github.com/mozilla/mozjpeg /src \
   && cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=OFF -DPNG_SUPPORTED=ON \
+     -DWITH_TURBOJPEG=OFF \
      -DCMAKE_INSTALL_PREFIX=/opt/mozjpeg \
-  && cmake --build /build -j3 \
+  && cmake --build /build -j2 \
   && cmake --install /build
 
 FROM toolbuild AS jxlmetrics
 ARG LIBJXL_VERSION
-RUN git clone --depth 1 --branch ${LIBJXL_VERSION} --recurse-submodules --shallow-submodules \
-     https://github.com/libjxl/libjxl /src \
+# No submodules: highway, brotli and lcms2 come from Debian, and skcms, sjpeg,
+# jpegli and the (large) test corpus are switched off.
+RUN git clone --depth 1 --branch ${LIBJXL_VERSION} https://github.com/libjxl/libjxl /src \
   && cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF \
      -DJPEGXL_ENABLE_DEVTOOLS=ON -DJPEGXL_ENABLE_TOOLS=ON -DJPEGXL_ENABLE_BENCHMARK=OFF \
      -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF \
      -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_OPENEXR=OFF \
      -DJPEGXL_ENABLE_PLUGINS=OFF -DJPEGXL_FORCE_SYSTEM_HWY=ON -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
-     -DJPEGXL_FORCE_SYSTEM_LCMS2=ON \
-  && cmake --build /build -j3 --target ssimulacra2 butteraugli_main \
+     -DJPEGXL_FORCE_SYSTEM_LCMS2=ON -DJPEGXL_ENABLE_SKCMS=OFF -DJPEGXL_ENABLE_JPEGLI=OFF \
+     -DJPEGXL_ENABLE_TRANSCODE_JPEG=OFF -DJPEGXL_ENABLE_VIEWERS=OFF -DJPEGXL_ENABLE_FUZZERS=OFF \
+  && cmake --build /build -j2 --target ssimulacra2 butteraugli_main \
   && install -D /build/tools/ssimulacra2 /opt/jxl/bin/ssimulacra2 \
   && install -D /build/tools/butteraugli_main /opt/jxl/bin/butteraugli
 
@@ -63,8 +75,11 @@ RUN apt-get update \
 
 COPY --from=mozjpeg /opt/mozjpeg /opt/mozjpeg
 COPY --from=jxlmetrics /opt/jxl /opt/jxl
+ARG LIBJXL_VERSION
 # mozjpeg's cjpeg/jpegtran shadow nothing: libjpeg-turbo-progs is not installed.
-RUN ln -s /opt/mozjpeg/bin/cjpeg /opt/mozjpeg/bin/jpegtran /opt/jxl/bin/ssimulacra2 /opt/jxl/bin/butteraugli /usr/local/bin/
+# ssimulacra2 and butteraugli have no --version, so the tag they came from is written down.
+RUN ln -s /opt/mozjpeg/bin/cjpeg /opt/mozjpeg/bin/jpegtran /opt/jxl/bin/ssimulacra2 /opt/jxl/bin/butteraugli /usr/local/bin/ \
+  && echo "${LIBJXL_VERSION}" > /opt/jxl/VERSION
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json bun.lock ./
