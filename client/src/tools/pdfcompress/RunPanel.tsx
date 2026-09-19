@@ -23,7 +23,7 @@ import { CodecSection } from "./CodecSection";
 import { DpiControl, PutBack, QualityControl } from "./controls";
 import { CODEC_SHORT } from "./overrides";
 import { InputCautions } from "./SpecialInputs";
-import { SEARCH_DEFAULTS, SearchSection, TargetField, type SearchSettings } from "./target";
+import { SEARCH_DEFAULTS, SearchSection, TARGET_SIZE_READY, TargetField, type SearchSettings } from "./target";
 
 /** What each preset is for, in one line under the picker. */
 const PURPOSE: Record<PresetId, string> = {
@@ -95,7 +95,7 @@ export function RunPanel({
   const [search, setSearch] = useState<SearchSettings>(SEARCH_DEFAULTS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const params = useMemo<CompressParams>(
-    () => ({ ...base, target: targetBytes === null ? null : { bytes: targetBytes, ...search } }),
+    () => ({ ...base, target: !TARGET_SIZE_READY || targetBytes === null ? null : { bytes: targetBytes, ...search } }),
     [base, targetBytes, search],
   );
 
@@ -129,7 +129,9 @@ export function RunPanel({
           options={PRESET_IDS.map((id) => ({ value: id, label: PRESETS[id].label }))}
         />
         <p className="text-prose text-body font-sans normal-case">{PURPOSE[params.preset]}</p>
-        <TargetField value={targetBytes} search={search} inputBytes={analysis?.bytes ?? null} onChange={setTargetBytes} />
+        {TARGET_SIZE_READY ? (
+          <TargetField value={targetBytes} search={search} inputBytes={analysis?.bytes ?? null} onChange={setTargetBytes} />
+        ) : null}
         <Supported support={support.pass("downsample")}>
           <Field
             label="downsample above"
@@ -254,12 +256,14 @@ export function RunPanel({
                 );
               })}
             </div>
-            <SearchSection
-              value={search}
-              active={targetBytes !== null}
-              onChange={setSearch}
-              onCommitStart={onCommitStart}
-            />
+            {TARGET_SIZE_READY ? (
+              <SearchSection
+                value={search}
+                active={targetBytes !== null}
+                onChange={setSearch}
+                onCommitStart={onCommitStart}
+              />
+            ) : null}
           </div>
         ) : null}
       </section>
