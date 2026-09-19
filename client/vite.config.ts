@@ -19,7 +19,7 @@ export default defineConfig({
   // libheif-js inlines its wasm, but it is only imported when a HEIC arrives; left to
   // discovery, that first HEIC would trigger a re-optimise and a full dev reload.
   optimizeDeps: {
-    exclude: ["@jsquash/avif", "@jsquash/jpeg", "@jsquash/png", "@jsquash/webp", "@jsquash/oxipng", "@jsquash/jxl", "libheif-js"],
+    exclude: ["@jsquash/avif", "@jsquash/jpeg", "@jsquash/png", "@jsquash/webp", "@jsquash/oxipng", "@jsquash/jxl", "libheif-js", "gifski-wasm"],
   },
   server: {
     port: 5173,
