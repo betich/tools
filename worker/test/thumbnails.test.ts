@@ -14,8 +14,10 @@ import { PAGE_THUMB_EDGE } from "@tools/shared";
 
 const hasTools = !!Bun.which("qpdf") && !!Bun.which("mutool");
 const root = mkdtempSync(join(tmpdir(), "thumbs-"));
+// Only takes effect when this file is the first to load the worker's env; in a
+// full run another file's data dir wins, so the lane is handed its uploads dir.
 process.env.DATA_DIR = join(root, "data");
-process.env.JOBS_DIR = join(root, "jobs");
+const uploads = join(root, "jobs", "uploads");
 const fx = join(root, "fx");
 
 let lane: typeof import("../src/thumbnails");
@@ -33,7 +35,7 @@ function pngSize(file: string) {
 }
 
 function upload(id: string, pdf: string) {
-  const dir = join(root, "jobs", "uploads", id);
+  const dir = join(uploads, id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "file"), readFileSync(join(fx, pdf)));
   return dir;
@@ -71,6 +73,9 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
     writeFileSync(join(fx, "junk.pdf"), "%PDF-1.7\nthis is not a pdf\n");
     lane = await import("../src/thumbnails");
     db = (await import("../src/db")).db;
+    // The database may be shared with other test files in one run; start from an empty lane.
+    db.run("DELETE FROM pdf_page_thumbs");
+    db.run("DELETE FROM pdf_thumbnails");
   }, 60_000);
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
@@ -108,16 +113,16 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
     );
 
     // First pages go before batches, even ones asked for later.
-    expect(await lane.drawNext()).toBe(true);
+    expect(await lane.drawNext(uploads)).toBe(true);
     expect(row(id)).toEqual({ state: "done", pages: 30 });
     expect(existsSync(join(dir, lane.THUMBNAIL_FILE))).toBe(true);
 
-    expect(await lane.drawNext()).toBe(true);
+    expect(await lane.drawNext(uploads)).toBe(true);
     expect(db.query("SELECT state FROM pdf_page_thumbs WHERE upload_id = ?").get(id)).toEqual({ state: "done" });
     expect(readdirSync(join(dir, lane.PAGES_DIR)).sort((a, b) => parseInt(a) - parseInt(b))).toEqual(
       ["25", "26", "27", "28", "29", "30"].map((n) => `${n}.png`),
     );
-    expect(await lane.drawNext()).toBe(false);
+    expect(await lane.drawNext(uploads)).toBe(false);
   });
 
   test("an old first page with no count is counted without drawing it again", async () => {
@@ -125,7 +130,7 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
     const dir = upload(id, "thirty.pdf");
     writeFileSync(join(dir, lane.THUMBNAIL_FILE), "old");
     db.run("INSERT INTO pdf_thumbnails (upload_id, state, requested_at, updated_at) VALUES (?, 'queued', 1, 1)", [id]);
-    await lane.drawNext();
+    await lane.drawNext(uploads);
     expect(row(id)).toEqual({ state: "done", pages: 30 });
     expect(readFileSync(join(dir, lane.THUMBNAIL_FILE), "utf8")).toBe("old");
   });
@@ -138,9 +143,9 @@ describe.skipIf(!hasTools)("thumbnail lane", () => {
       "INSERT INTO pdf_page_thumbs (upload_id, batch, state, requested_at, updated_at) VALUES (?, 0, 'queued', 2, 2)",
       [id],
     );
-    await lane.drawNext();
+    await lane.drawNext(uploads);
     expect(row(id)).toEqual({ state: "failed", pages: -1 });
-    await lane.drawNext();
+    await lane.drawNext(uploads);
     expect(db.query("SELECT state FROM pdf_page_thumbs WHERE upload_id = ?").get(id)).toEqual({ state: "failed" });
   });
 });
