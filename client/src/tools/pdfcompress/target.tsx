@@ -14,6 +14,9 @@ import { DPI_MIN, clampDpi, clampQuality } from "./overrides";
  * clearing the size and setting it again keeps them.
  */
 
+/** Flip when the #12 search lands on the worker. */
+export const TARGET_SIZE_READY = false;
+
 export type SearchSettings = Omit<TargetSize, "bytes">;
 
 /** The ticket's floors (~q40 / 72 dpi) and a two-minute budget. */
