@@ -35,15 +35,18 @@ export function TextButton({
 
 type ButtonLook = {
   variant?: "primary" | "outline" | "ghost";
-  /** `sm` is a section's own action, set in its header: 28px, the same voice at half the weight. */
-  size?: "md" | "sm";
+  /**
+   * `sm` is a section's own action, set in its header: 28px, the same voice at half the weight.
+   * `lg` is the step a whole surface turns on — convert, download all: 56px, full width, a size up.
+   */
+  size?: "md" | "sm" | "lg";
 };
 
 /** The button's classes, for the one place a link must look like one — a download served by another origin. */
 export function buttonClass({ variant = "primary", size = "md" }: ButtonLook = {}, className?: string) {
   return cn(
     "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-meta whitespace-nowrap uppercase",
-    size === "sm" ? "h-7 gap-1.5 px-2.5" : "h-9 gap-2 px-4",
+    size === "sm" ? "h-7 gap-1.5 px-2.5" : size === "lg" ? "h-14 w-full gap-3 px-6 text-[0.75rem] tracking-[0.16em]" : "h-9 gap-2 px-4",
     "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
     "disabled:cursor-not-allowed disabled:opacity-35",
     variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
