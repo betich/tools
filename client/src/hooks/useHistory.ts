@@ -1,77 +1,75 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useReducer, useRef } from "react";
+import { History } from "@/lib/history";
 
-/**
- * Undo history for one value, kept as a single piece of state so every step
- * is a pure function of the last — safe under StrictMode, which runs state
- * updaters twice.
- *
- * `commit` is an edit that can be undone: it records what was there before.
- * `preview` writes through without a record, for the frames of a drag; the
- * gesture calls `snapshot` once as it begins, so the whole drag is one step
- * (CLAUDE.md: undo snapshots happen on gesture start, not per frame).
- */
-export type History<T> = { past: T[]; present: T; future: T[] };
+/** A new value, or a function of the present one. */
+export type Edit<T> = T | ((prev: T) => T);
 
-export const HISTORY_LIMIT = 40;
+export type HistoryApi<T> = {
+  value: T;
+  /** Record a step and replace the value. */
+  set: (next: Edit<T>) => void;
+  /** Replace the value without a step of its own — every frame of a drag. */
+  preview: (next: Edit<T>) => void;
+  /** Call on gesture start (pointer-down, slider grab). The gesture becomes one step. */
+  snapshot: () => void;
+  /** `set` or `preview` by name, for components that report which one they mean. */
+  change: (next: T, kind: "commit" | "preview") => void;
+  undo: () => void;
+  redo: () => void;
+  /** Replace the value and clear every step. */
+  reset: (value: T) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+};
 
-type Edit<T> = T | ((prev: T) => T);
 const resolve = <T>(edit: Edit<T>, prev: T): T => (typeof edit === "function" ? (edit as (p: T) => T)(prev) : edit);
 
-export const startHistory = <T>(present: T): History<T> => ({ past: [], present, future: [] });
+/**
+ * Undo history for one value, snapshotting on gesture start rather than per
+ * frame. The bookkeeping lives in a plain `History` held in a ref; state is
+ * only a version counter, so nothing is ever mutated inside an updater.
+ */
+export function useHistory<T>(initial: T | (() => T), limit = 50): HistoryApi<T> {
+  const ref = useRef<History<T> | null>(null);
+  if (ref.current === null) {
+    ref.current = new History(typeof initial === "function" ? (initial as () => T)() : initial, limit);
+  }
+  const h = ref.current;
+  const [version, bump] = useReducer((n: number) => n + 1, 0);
 
-/** An undoable edit. Nothing is recorded when the edit changes nothing. */
-export function commitTo<T>(h: History<T>, edit: Edit<T>, limit = HISTORY_LIMIT): History<T> {
-  const next = resolve(edit, h.present);
-  if (Object.is(next, h.present)) return h;
-  return { past: [...h.past, h.present].slice(-limit), present: next, future: [] };
-}
-
-/** A write-through: the value changes, the history doesn't. */
-export function previewTo<T>(h: History<T>, edit: Edit<T>): History<T> {
-  const next = resolve(edit, h.present);
-  return Object.is(next, h.present) ? h : { ...h, present: next };
-}
-
-/** The value as it is now, recorded as a step to come back to: a gesture is beginning. */
-export function snapshotOf<T>(h: History<T>, limit = HISTORY_LIMIT): History<T> {
-  return { past: [...h.past, h.present].slice(-limit), present: h.present, future: [] };
-}
-
-export function undoOf<T>(h: History<T>, limit = HISTORY_LIMIT): History<T> {
-  const previous = h.past.at(-1);
-  if (h.past.length === 0) return h;
-  return { past: h.past.slice(0, -1), present: previous as T, future: [h.present, ...h.future].slice(0, limit) };
-}
-
-export function redoOf<T>(h: History<T>, limit = HISTORY_LIMIT): History<T> {
-  if (h.future.length === 0) return h;
-  return { past: [...h.past, h.present].slice(-limit), present: h.future[0] as T, future: h.future.slice(1) };
-}
-
-/** A value with undo and redo. See `History`. */
-export function useHistory<T>(initial: T | (() => T), limit = HISTORY_LIMIT) {
-  const [h, setH] = useState<History<T>>(() => startHistory(typeof initial === "function" ? (initial as () => T)() : initial));
-
-  const commit = useCallback((edit: Edit<T>) => setH((x) => commitTo(x, edit, limit)), [limit]);
-  const preview = useCallback((edit: Edit<T>) => setH((x) => previewTo(x, edit)), []);
-  const snapshot = useCallback(() => setH((x) => snapshotOf(x, limit)), [limit]);
-  const undo = useCallback(() => setH((x) => undoOf(x, limit)), [limit]);
-  const redo = useCallback(() => setH((x) => redoOf(x, limit)), [limit]);
-  /** Starts over from `value` with no history, as when the thing being edited is thrown away. */
-  const reset = useCallback((value: T) => setH(startHistory(value)), []);
+  const set = useCallback((next: Edit<T>) => (h.set(resolve(next, h.present)), bump()), [h]);
+  const preview = useCallback((next: Edit<T>) => (h.preview(resolve(next, h.present)), bump()), [h]);
+  const snapshot = useCallback(() => h.snapshot(), [h]);
+  const change = useCallback(
+    (next: T, kind: "commit" | "preview") => {
+      if (kind === "commit") h.set(next);
+      else h.preview(next);
+      bump();
+    },
+    [h],
+  );
+  const undo = useCallback(() => {
+    if (h.undo()) bump();
+  }, [h]);
+  const redo = useCallback(() => {
+    if (h.redo()) bump();
+  }, [h]);
+  const reset = useCallback((value: T) => (h.reset(value), bump()), [h]);
 
   return useMemo(
     () => ({
       value: h.present,
-      commit,
+      set,
       preview,
       snapshot,
+      change,
       undo,
       redo,
       reset,
-      canUndo: h.past.length > 0,
-      canRedo: h.future.length > 0,
+      canUndo: h.canUndo,
+      canRedo: h.canRedo,
     }),
-    [h, commit, preview, snapshot, undo, redo, reset],
+    // `version` stands in for the ref's contents.
+    [version, h, set, preview, snapshot, change, undo, redo, reset],
   );
 }

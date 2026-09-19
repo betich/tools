@@ -152,7 +152,7 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
    * The one way the order changes: one call per gesture, one undo step. A
    * drag changes nothing until it lands, so its drop is its one commit.
    */
-  const { commit: record, reset: forget } = history;
+  const { set: record, reset: forget } = history;
   const commit = useCallback(
     (edit: (order: PageOrder, files: OrderFile[]) => PageOrder) => record((o) => edit(o, live.current)),
     [record],

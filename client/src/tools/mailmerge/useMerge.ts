@@ -25,7 +25,7 @@ import { useHistory } from "@/hooks/useHistory";
  */
 export function useMerge(initial?: MergeDoc) {
   const history = useHistory<MergeDoc>(() => initial ?? newDoc());
-  const { value: doc, commit, preview, snapshot, undo, redo } = history;
+  const { value: doc, set: commit, preview, snapshot, undo, redo } = history;
   const [data, setRawData] = useState<MergeData>(emptyData);
   // Every row has a key, always — the per-row layout hangs off it.
   const setData = useCallback((next: SetStateAction<MergeData>) => {

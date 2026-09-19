@@ -1,87 +1,83 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { defaultOptions, formatMeta, type EncodeOptions, type Job, type WorkerRequest, type WorkerResponse } from "./types";
-
-const POOL_SIZE = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
-
-function makeWorker(): Worker {
-  return new Worker(new URL("./codec.worker.ts", import.meta.url), { type: "module" });
-}
+import { isImageFile, pixelsToBlob } from "@/lib/codecs";
+import { useCodecPool } from "@/hooks/useCodecPool";
+import { fileStem } from "@/tools/media2media/names";
+import { defaultOptions, formatMeta, type EncodeOptions, type Job } from "./types";
 
 /**
- * Owns the worker pool and the job list. Changing an encode setting re-runs
- * every job, so the panel always describes what is on screen.
+ * Owns the job list on top of the shared codec pool. Changing an encode
+ * setting re-runs every job, so the panel always describes what is on screen;
+ * each re-run aborts the job's previous one so a stale result can't land last.
  */
 export function useCodec() {
   const [options, setOptions] = useState<EncodeOptions>(defaultOptions);
   const [jobs, setJobs] = useState<Job[]>([]);
 
-  const pool = useRef<Worker[]>([]);
-  const queue = useRef<WorkerRequest[]>([]);
-  const idle = useRef<Worker[]>([]);
+  const runs = useRef(new Map<string, AbortController>());
   const jobsRef = useRef<Job[]>([]);
   jobsRef.current = jobs;
 
-  useEffect(() => {
-    pool.current = Array.from({ length: POOL_SIZE }, makeWorker);
-    idle.current = [...pool.current];
-    for (const worker of pool.current) worker.addEventListener("message", onMessage);
-    return () => {
-      for (const worker of pool.current) worker.terminate();
-      pool.current = [];
-      idle.current = [];
-      queue.current = [];
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      for (const c of runs.current.values()) c.abort();
+      runs.current.clear();
+    },
+    [],
+  );
+  // After the effect above, so the jobs are aborted before the pool goes.
+  const pool = useCodecPool();
+
+  /** An upright PNG of the original, for sources the page can't show itself (HEIC outside Safari). */
+  const preview = useCallback(async (file: File) => pixelsToBlob((await pool().decode(file)).image), [pool]);
+
+  const patch = useCallback((id: string, next: Partial<Job>) => {
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...next } : j)));
   }, []);
 
-  const pump = useCallback(() => {
-    while (idle.current.length > 0 && queue.current.length > 0) {
-      const worker = idle.current.pop()!;
-      const request = queue.current.shift()!;
-      setJobs((prev) => prev.map((j) => (j.id === request.id ? { ...j, status: "working" } : j)));
-      worker.postMessage(request, [request.buffer]);
-    }
+  const cancel = useCallback((id: string) => {
+    runs.current.get(id)?.abort();
+    runs.current.delete(id);
   }, []);
-
-  function onMessage(event: MessageEvent<WorkerResponse>) {
-    const worker = event.currentTarget as Worker;
-    idle.current.push(worker);
-    const res = event.data;
-
-    setJobs((prev) =>
-      prev.map((job) => {
-        if (job.id !== res.id) return job;
-        if (!res.ok) return { ...job, status: "error", error: res.error, outBlob: null, outSize: 0 };
-        const blob = new Blob([res.buffer], { type: res.mime });
-        return {
-          ...job,
-          status: "done",
-          error: null,
-          outBlob: blob,
-          outSize: blob.size,
-          outWidth: res.width,
-          outHeight: res.height,
-          elapsedMs: res.elapsedMs,
-        };
-      }),
-    );
-    pump();
-  }
 
   const enqueue = useCallback(
-    async (targets: Job[], opts: EncodeOptions) => {
+    (targets: Job[], opts: EncodeOptions) => {
+      const ids = new Set(targets.map((t) => t.id));
+      setJobs((prev) => prev.map((j) => (ids.has(j.id) ? { ...j, status: "queued", error: null } : j)));
+
       for (const job of targets) {
-        queue.current.push({ id: job.id, buffer: await job.file.arrayBuffer(), type: job.file.type, options: opts });
+        cancel(job.id);
+        const run = new AbortController();
+        runs.current.set(job.id, run);
+        pool()
+          .encode(job.file, opts, { signal: run.signal, onStart: () => patch(job.id, { status: "working" }) })
+          .then((out) =>
+            patch(job.id, {
+              status: "done",
+              error: null,
+              width: out.sourceWidth,
+              height: out.sourceHeight,
+              outBlob: out.blob,
+              outSize: out.blob.size,
+              outWidth: out.width,
+              outHeight: out.height,
+              elapsedMs: out.elapsedMs,
+            }),
+          )
+          .catch((error: unknown) => {
+            if (run.signal.aborted) return;
+            patch(job.id, { status: "error", error: error instanceof Error ? error.message : String(error), outBlob: null, outSize: 0 });
+          })
+          .finally(() => {
+            if (runs.current.get(job.id) === run) runs.current.delete(job.id);
+          });
       }
-      setJobs((prev) => prev.map((j) => (targets.some((t) => t.id === j.id) ? { ...j, status: "queued", error: null } : j)));
-      pump();
     },
-    [pump],
+    [cancel, patch, pool],
   );
 
   const addFiles = useCallback(
     (files: File[]) => {
-      const images = files.filter((f) => f.type.startsWith("image/"));
+      const images = files.filter(isImageFile);
       if (images.length === 0) return 0;
 
       const fresh: Job[] = images.map((file) => ({
@@ -99,7 +95,7 @@ export function useCodec() {
       }));
 
       setJobs((prev) => [...prev, ...fresh]);
-      void enqueue(fresh, options);
+      enqueue(fresh, options);
       return images.length;
     },
     [enqueue, options],
@@ -109,13 +105,22 @@ export function useCodec() {
   const apply = useCallback(
     (next: EncodeOptions) => {
       setOptions(next);
-      if (jobsRef.current.length > 0) void enqueue(jobsRef.current, next);
+      if (jobsRef.current.length > 0) enqueue(jobsRef.current, next);
     },
     [enqueue],
   );
 
-  const remove = useCallback((id: string) => setJobs((prev) => prev.filter((j) => j.id !== id)), []);
-  const clear = useCallback(() => setJobs([]), []);
+  const remove = useCallback(
+    (id: string) => {
+      cancel(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    },
+    [cancel],
+  );
+  const clear = useCallback(() => {
+    for (const id of [...runs.current.keys()]) cancel(id);
+    setJobs([]);
+  }, [cancel]);
 
   const totals = useMemo(() => {
     const done = jobs.filter((j) => j.status === "done");
@@ -128,11 +133,10 @@ export function useCodec() {
 
   const outputName = useCallback(
     (job: Job) => {
-      const stem = job.file.name.replace(/\.[^.]+$/, "");
-      return `${stem}.${formatMeta(options.format).ext}`;
+      return `${fileStem(job.file.name, "image")}.${formatMeta(options.format).ext}`;
     },
     [options.format],
   );
 
-  return { options, setOptions: apply, jobs, addFiles, remove, clear, totals, busy, outputName };
+  return { options, setOptions: apply, jobs, addFiles, remove, clear, totals, busy, outputName, preview };
 }
