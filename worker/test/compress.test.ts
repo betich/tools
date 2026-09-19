@@ -172,20 +172,13 @@ describe.skipIf(!hasTools)("compress", () => {
     expect(renderDifference(file, out)).toBeLessThan(0.001);
   });
 
-  test("grayscale is skipped with a reason; other engines skip what they can't do", async () => {
+  test("grayscale is skipped with a reason", async () => {
     const file = join(fixtures, "deck.pdf");
     const gray = await compress(file, { ...defaultCompressParams("print"), advanced: ["grayscale"] });
     expect(gray.result.skipped.find((s) => s.pass === "grayscale")?.reason).toBe(
       "Converting to grayscale isn't available yet.",
     );
-
-    const q = await compress(file, { ...defaultCompressParams("print"), engine: "qpdf" });
-    expect(q.stages).not.toContain("rewriting the file");
-    expect(q.stages).toContain("recompressing streams");
-    expect(q.result.skipped).toContainEqual({ pass: "dedupe", reason: "qpdf can't deduplicate objects." });
-    expect(q.result.skipped.find((s) => s.pass === "garbage-collect")?.reason).toMatch(/qpdf/);
-    expect(q.result.bytes).toBeLessThanOrEqual(q.result.inputBytes);
-    expectSameRender(file, q.out);
+    // The other engines (#13) are covered in engines.test.ts.
   });
 
   test("an output that would not be smaller is served as the original", async () => {
