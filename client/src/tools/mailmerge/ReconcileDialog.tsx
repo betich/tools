@@ -83,7 +83,7 @@ export function ReconcileDialog({
           <h2 id={titleId} className="flex min-w-0 items-baseline gap-3">
             <span className="text-ink shrink-0 font-mono text-title font-bold uppercase">match columns</span>
             {source ? (
-              <span className="text-label truncate font-mono text-label tracking-normal">{source}</span>
+              <span className="text-label truncate font-mono text-small tracking-normal">{source}</span>
             ) : null}
           </h2>
           <button
@@ -106,7 +106,7 @@ export function ReconcileDialog({
 
         {/* the two columns */}
         <div className="px-6 pt-5 pb-2">
-          <div className="text-meta grid grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1.25fr)] gap-x-3 pb-2.5 font-mono text-meta uppercase">
+          <div className="text-meta grid grid-cols-[minmax(0,1fr)_1.5rem_minmax(0,1.25fr)] gap-x-3 pb-2.5 font-mono text-micro uppercase">
             <span>template asks for</span>
             <span aria-hidden />
             <span>sheet column</span>
@@ -124,7 +124,7 @@ export function ReconcileDialog({
                   <span className="flex min-h-9 items-center">
                     <span
                       className={cn(
-                        "inline-flex max-w-full items-center truncate rounded-full border px-2.5 py-1 font-mono text-meta tracking-normal transition-colors duration-200",
+                        "inline-flex max-w-full items-center truncate rounded-full border px-2.5 py-1 font-mono text-micro tracking-normal transition-colors duration-200",
                         value ? "border-indigo/50 text-ink" : "border-edge border-dashed text-label",
                       )}
                     >
@@ -150,7 +150,7 @@ export function ReconcileDialog({
                         </option>
                       ))}
                     </Select>
-                    <span className="text-meta min-w-0 truncate font-mono text-meta">
+                    <span className="text-meta min-w-0 truncate font-mono text-micro">
                       {value ? (
                         <>
                           <span className="uppercase">e.g.</span>{" "}
@@ -168,7 +168,7 @@ export function ReconcileDialog({
           </ul>
 
           {matched > 0 ? (
-            <p className="text-meta pt-3 font-mono text-meta uppercase">
+            <p className="text-meta pt-3 font-mono text-micro uppercase">
               {matched} other {matched === 1 ? "column" : "columns"} still {matched === 1 ? "matches" : "match"}
             </p>
           ) : null}

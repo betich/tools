@@ -93,8 +93,8 @@ function Door({ tool, delay, down }: { tool: ClientTool; delay: number; down: bo
         </div>
 
         <div className="border-hairline-faint relative flex items-center justify-between gap-4 border-t pt-3.5">
-          <span className="text-meta text-meta font-mono uppercase">{down ? `${tool.tagline} · api offline` : tool.tagline}</span>
-          <span className="text-meta group-hover:text-indigo text-meta flex items-center gap-2 font-mono uppercase transition-colors duration-300">
+          <span className="text-meta text-micro font-mono uppercase">{down ? `${tool.tagline} · api offline` : tool.tagline}</span>
+          <span className="text-meta group-hover:text-indigo text-micro flex items-center gap-2 font-mono uppercase transition-colors duration-300">
             open
             <FiArrowRight
               className="size-3 transition-transform duration-300 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
@@ -199,8 +199,8 @@ function CompareArt() {
         </div>
       </div>
 
-      <span className="text-meta absolute -bottom-6 left-0 font-mono text-meta uppercase">original</span>
-      <span className="text-meta absolute right-0 -bottom-6 font-mono text-meta uppercase">webp</span>
+      <span className="text-meta absolute -bottom-6 left-0 font-mono text-micro uppercase">original</span>
+      <span className="text-meta absolute right-0 -bottom-6 font-mono text-micro uppercase">webp</span>
     </div>
   );
 }

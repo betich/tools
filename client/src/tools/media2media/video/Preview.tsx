@@ -177,7 +177,7 @@ export function Preview({
         />
         <canvas ref={canvas} className="absolute inset-0 size-full" aria-label="preview" />
         {source.hasVideo ? null : (
-          <p className="text-meta text-meta absolute inset-0 flex items-center justify-center font-mono uppercase">
+          <p className="text-meta text-micro absolute inset-0 flex items-center justify-center font-mono uppercase">
             sound only
           </p>
         )}

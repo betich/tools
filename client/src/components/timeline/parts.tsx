@@ -65,7 +65,7 @@ export function Transport({
       >
         {playing ? <FiPause className="size-3.5" /> : <FiPlay className="size-3.5 translate-x-px" />}
       </IconButton>
-      <span className="text-ink text-label font-mono tabular-nums tracking-normal">
+      <span className="text-ink text-small font-mono tabular-nums tracking-normal">
         {formatTime(time)}
         <span className="text-meta"> / {formatTime(total)}</span>
       </span>

@@ -190,7 +190,7 @@ export function CanvasStage({
 
       <div className="flex shrink-0 items-center justify-between gap-3">
         {mode}
-        <span className="text-meta text-meta font-mono uppercase tabular-nums">
+        <span className="text-meta text-micro font-mono uppercase tabular-nums">
           {doc.canvas.width}×{doc.canvas.height} · {Math.round(scale * 100)}%
         </span>
       </div>

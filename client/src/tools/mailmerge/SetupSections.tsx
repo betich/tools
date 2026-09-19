@@ -42,15 +42,15 @@ export function DocumentSection({
       </Field>
 
       <div className="flex flex-col gap-2">
-        <span className="text-meta font-mono text-meta uppercase">size</span>
+        <span className="text-meta font-mono text-micro uppercase">size</span>
         <SizeMenu width={canvas.width} height={canvas.height} onPick={onCanvas} />
         <div className="flex items-center gap-2">
           <label className="relative min-w-0 flex-1">
-            <span className="text-meta pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-meta">W</span>
+            <span className="text-meta pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-micro">W</span>
             {dim("width")}
           </label>
           <label className="relative min-w-0 flex-1">
-            <span className="text-meta pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-meta">H</span>
+            <span className="text-meta pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-micro">H</span>
             {dim("height")}
           </label>
           <IconButton
@@ -166,7 +166,7 @@ export function BaseImageSection({
         {image ? <img src={image.src} alt="" className="max-h-full max-w-full object-contain" /> : null}
         <span
           className={cn(
-            "bg-paper/80 text-ink absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 py-1.5 font-mono text-meta uppercase backdrop-blur-sm transition-opacity duration-200",
+            "bg-paper/80 text-ink absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 py-1.5 font-mono text-micro uppercase backdrop-blur-sm transition-opacity duration-200",
             over ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
           )}
         >
@@ -175,7 +175,7 @@ export function BaseImageSection({
       </button>
 
       <div className="flex items-center justify-between gap-3">
-        <span className="text-meta font-mono text-meta uppercase tabular-nums">
+        <span className="text-meta font-mono text-micro uppercase tabular-nums">
           {natural ? `${natural.width}×${natural.height}` : "loading…"}
         </span>
         <TextButton onClick={onRemove}>remove</TextButton>

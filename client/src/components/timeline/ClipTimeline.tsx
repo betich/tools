@@ -111,13 +111,13 @@ export function ClipTimeline(props: ClipTimelineProps) {
         loop={loop}
         onLoopChange={onLoopChange}
       >
-        <span className="text-meta text-meta font-mono uppercase">
+        <span className="text-meta text-micro font-mono uppercase">
           in <span className="text-ink tabular-nums tracking-normal">{formatTime(trim.in)}</span>
         </span>
-        <span className="text-meta text-meta font-mono uppercase">
+        <span className="text-meta text-micro font-mono uppercase">
           out <span className="text-ink tabular-nums tracking-normal">{formatTime(trim.out)}</span>
         </span>
-        <span className="text-meta text-meta font-mono uppercase">
+        <span className="text-meta text-micro font-mono uppercase">
           keeps <span className="text-ink tabular-nums tracking-normal">{formatTime(trim.out - trim.in)}</span>
         </span>
         <TextButton onClick={() => setEdge("in", time, "commit")} title="set in at the playhead · I">

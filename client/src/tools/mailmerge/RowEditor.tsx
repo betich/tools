@@ -164,7 +164,7 @@ export function RowEditor({
       }}
     >
       <header className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-3">
-        <span className="text-ink font-mono text-meta font-bold uppercase tabular-nums">{title}</span>
+        <span className="text-ink font-mono text-micro font-bold uppercase tabular-nums">{title}</span>
         <span className="flex items-center gap-3">
           {!adding ? (
             <>
@@ -207,7 +207,7 @@ export function RowEditor({
                 <label
                   htmlFor={`row-field-${field}`}
                   className={cn(
-                    "font-mono text-meta uppercase transition-colors duration-200",
+                    "font-mono text-micro uppercase transition-colors duration-200",
                     changed ? "text-indigo" : "text-meta",
                   )}
                 >
@@ -228,7 +228,7 @@ export function RowEditor({
                 onSubmit={apply}
               />
               {changed ? (
-                <p className="text-meta flex min-w-0 items-baseline gap-2 font-mono text-meta">
+                <p className="text-meta flex min-w-0 items-baseline gap-2 font-mono text-micro">
                   <span className="shrink-0 uppercase">was</span>
                   <span className="min-w-0 truncate tracking-normal line-through decoration-[rgba(246,245,255,0.34)]">
                     {was || "empty"}
@@ -244,7 +244,7 @@ export function RowEditor({
 
       <footer className="flex items-center justify-between gap-3 px-4 py-3">
         {adding ? (
-          <span className="text-meta hidden font-mono text-meta uppercase sm:inline">↵ adds · esc discards</span>
+          <span className="text-meta hidden font-mono text-micro uppercase sm:inline">↵ adds · esc discards</span>
         ) : (
           <TextButton onClick={() => (armed ? onDelete() : setArmed(true))} className={cn("flex items-center gap-1.5", armed && "text-indigo")}>
             <FiTrash2 className="size-3" aria-hidden />
@@ -301,7 +301,7 @@ function GrowingField({
         }
       }}
       className={cn(
-        "text-ink w-full resize-none overflow-hidden rounded-xs border bg-control px-2.5 py-2 font-mono text-label leading-snug tracking-normal",
+        "text-ink w-full resize-none overflow-hidden rounded-xs border bg-control px-2.5 py-2 font-mono text-small leading-snug tracking-normal",
         "transition-colors duration-200 hover:border-edge focus:bg-surface-high focus:outline-none",
         changed ? "border-indigo/60 focus:border-indigo" : "border-wash focus:border-indigo",
       )}

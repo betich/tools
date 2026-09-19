@@ -81,7 +81,7 @@ export function Settings({ doc, session }: { doc: GifDoc; session: GifSession })
                 label="canvas width in pixels"
                 onCommit={(w) => session.update({ size: resize(size, "width", w, lock, size.width / size.height) })}
               />
-              <span className="text-meta font-mono text-meta" aria-hidden>
+              <span className="text-meta font-mono text-micro" aria-hidden>
                 ×
               </span>
               <DraftNumber
@@ -97,7 +97,7 @@ export function Settings({ doc, session }: { doc: GifDoc; session: GifSession })
               <button
                 type="button"
                 onClick={() => session.update({ size: resize(size, "width", size.width, true, firstAspect) })}
-                className="text-meta hover:text-indigo cursor-pointer font-mono text-meta uppercase transition-colors duration-200"
+                className="text-meta hover:text-indigo cursor-pointer font-mono text-micro uppercase transition-colors duration-200"
               >
                 first frame's shape
               </button>
@@ -136,9 +136,9 @@ export function Settings({ doc, session }: { doc: GifDoc; session: GifSession })
 function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
-      <span className="text-meta font-mono text-meta uppercase">{label}</span>
+      <span className="text-meta font-mono text-micro uppercase">{label}</span>
       {children}
-      {hint ? <span className="text-meta font-mono text-meta tracking-normal normal-case opacity-80">{hint}</span> : null}
+      {hint ? <span className="text-meta font-mono text-micro tracking-normal normal-case opacity-80">{hint}</span> : null}
     </div>
   );
 }

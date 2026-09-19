@@ -75,7 +75,7 @@ export function GifTab() {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-3">
           <Preview doc={doc} store={session.store} time={playback.time} />
-          <p className="text-meta font-mono text-meta uppercase">
+          <p className="text-meta font-mono text-micro uppercase">
             <span className="tabular-nums">{doc.frames.length}</span> frames
             {order.length !== doc.frames.length ? (
               <>
@@ -200,7 +200,7 @@ function LoadProgress({ done, total, onCancel, className }: Loading & { onCancel
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-label font-mono text-meta uppercase">
+        <span className="text-label font-mono text-micro uppercase">
           decoding <span className="tabular-nums tracking-normal">{done} / {total}</span>
         </span>
         <TextButton onClick={onCancel}>stop</TextButton>

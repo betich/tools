@@ -127,7 +127,7 @@ export function ProjectsPanel({
                   <span className="flex w-full min-w-0 items-center gap-1.5">
                     <span
                       className={cn(
-                        "truncate font-mono text-label tracking-normal transition-colors duration-200",
+                        "truncate font-mono text-small tracking-normal transition-colors duration-200",
                         here ? "text-ink" : "text-label group-hover:text-indigo",
                       )}
                     >
@@ -135,7 +135,7 @@ export function ProjectsPanel({
                     </span>
                     {project.locked ? <FiLock className="text-meta size-3 shrink-0" aria-label="locked" role="img" /> : null}
                   </span>
-                  <span className="text-meta flex items-center gap-2 font-mono text-meta tabular-nums">
+                  <span className="text-meta flex items-center gap-2 font-mono text-micro tabular-nums">
                     {here ? <span className="text-indigo uppercase">open</span> : null}
                     {stamp(project.updatedAt)}
                     {!here ? (

@@ -168,7 +168,7 @@ export function ExportPanel({ doc, session }: { doc: GifDoc; session: GifSession
       </Section>
 
       <Section title="file">
-        <p className="text-meta text-meta font-mono uppercase">
+        <p className="text-meta text-micro font-mono uppercase">
           <span className="tabular-nums">{spec.count}</span> frames
           {" · "}
           <span className="tabular-nums tracking-normal">
@@ -309,7 +309,7 @@ function TargetBox({ value, onChange }: { value: number | null; onChange: (n: nu
             }}
             className="w-24 px-2 py-1 text-right"
           />
-          <span className="text-meta text-label font-mono uppercase">mb</span>
+          <span className="text-meta text-small font-mono uppercase">mb</span>
         </span>
       </Field>
       {unreadable ? (
@@ -330,7 +330,7 @@ function Progress({ job, onStop }: { job: Job; onStop: () => void }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-label text-meta truncate font-mono uppercase">{job.label}</span>
+        <span className="text-label text-micro truncate font-mono uppercase">{job.label}</span>
         <TextButton onClick={onStop}>stop</TextButton>
       </div>
       <div
@@ -359,7 +359,7 @@ function Outcome({ done, stale }: { done: Done; stale: boolean }) {
         <Stat label="file" value={bytes(done.blob.size)} accent />
         <Stat label="change" value={delta(done.raw, done.blob.size)} />
       </div>
-      <span className="text-label text-meta font-mono uppercase">
+      <span className="text-label text-micro font-mono uppercase">
         {describeOptions(done.format, done.options)}
         {" · "}
         <span className="tabular-nums tracking-normal">{Math.round(done.changedShare * 100)}%</span> of the canvas per
@@ -369,7 +369,7 @@ function Outcome({ done, stale }: { done: Done; stale: boolean }) {
       </span>
       {fit ? (
         <div className="flex flex-col gap-1.5">
-          <span className={cn("text-meta font-mono uppercase", fit.reached ? "text-indigo" : "text-meta")}>
+          <span className={cn("text-micro font-mono uppercase", fit.reached ? "text-indigo" : "text-meta")}>
             target {bytes(fit.target)} · {fit.reached ? "reached" : "not reached"} · {fit.tries}{" "}
             {fit.tries === 1 ? "try" : "tries"}
           </span>
@@ -386,7 +386,7 @@ function Outcome({ done, stale }: { done: Done; stale: boolean }) {
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div role="group" aria-label={label} className="flex flex-col gap-2">
-      <span className="text-meta text-meta font-mono uppercase">{label}</span>
+      <span className="text-meta text-micro font-mono uppercase">{label}</span>
       {children}
     </div>
   );
@@ -395,7 +395,7 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
 /** A slider's value beside it, one width for all so the tracks line up. */
 function Readout({ children }: { children: ReactNode }) {
   return (
-    <span className="text-indigo text-label w-16 shrink-0 text-right font-mono tabular-nums tracking-normal">
+    <span className="text-indigo text-small w-16 shrink-0 text-right font-mono tabular-nums tracking-normal">
       {children}
     </span>
   );

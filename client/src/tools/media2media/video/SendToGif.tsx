@@ -114,8 +114,8 @@ export function SendToGif({ file, source, edit, frameHook, disabled, onStart }: 
     <section className="border-hairline-faint flex flex-col gap-5 border-t pt-6" aria-label="send to the gif tab">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-meta text-meta font-mono uppercase">to the gif tab</span>
-          <span className="text-meta text-meta font-mono tabular-nums tracking-normal">
+          <span className="text-meta text-micro font-mono uppercase">to the gif tab</span>
+          <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
             {[
               `${count} frames`,
               formatTime(outputDuration(edit)),
@@ -177,7 +177,7 @@ function Progress({ done, total, onStop }: { done: number; total: number; onStop
   return (
     <div className="flex w-full flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-meta text-meta font-mono uppercase">
+        <span className="text-meta text-micro font-mono uppercase">
           making frames{" "}
           <span className="text-ink tabular-nums tracking-normal">
             {done} / {total}

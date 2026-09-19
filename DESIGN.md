@@ -265,6 +265,8 @@ Three fills, all of them ink over the ground, so everything in the document flow
 - **Label** (400, 12px, `0.1em`, upper): what a control holds. Values the user typed drop tracking to normal, because a filename or a hex code is not a label.
 - **Meta** (400, 11px, `0.18em`, upper): every micro-label, status line, counter and hint. The workhorse.
 
+**In code** the label and meta steps are the classes `text-small` and `text-micro`, because `label` and `meta` are also ink colours (`text-label`, `text-meta`). A name that is both a colour and a size makes Tailwind emit only the colour, and for a while that is exactly what shipped: every micro-label rendered at the body's 12px with no tracking. `cn()` knows the ramp, so a later colour class never strips a size. Prose set in Inter takes a step's size but never its tracking.
+
 ### Named Rules
 
 **The Tracking-Rises-As-Size-Falls Rule.** `0.22em` at 15px, `0.18em` at 11px, `0.1em` at 12px, normal for user-entered values, and negative only at hero size (`-0.035em`), where the mono's own spacing is already wide. Tracking is how this system adds formality; weight is reserved for hierarchy.
@@ -426,6 +428,17 @@ Saved with the merge, newest first, at most 24 steps: a 1px rule running down th
 
 The share dialog's frame at 38rem, laid out in two columns: `TEMPLATE ASKS FOR` on the left (each token as a chip, dashed until matched), `SHEET COLUMN` on the right (a select, pre-filled with a guess only when the names are close, and the column's first value underneath so `name` can be told from `nickname`). Applying rewrites the template's tokens to the sheet's names, so the next reload of the same file matches without asking, and records a step that rolls back with the reload that caused it.
 
+### Image bench (media2media)
+
+The image tab is laid out the way the work flows: **`IN` · the machine · `OUT`**. From a laptop up it is three columns (`1fr / 15rem / 1fr`, `17rem` from `xl`); below that it stacks in the same order.
+
+- **The two sides** are panels (ink at 4%, a 16% hairline, 16px radius) with a header carrying the side's name at title weight and a meta count: `IN 04 FILES · 364 KB`, `OUT 02 / 04 READY`. Both stretch to the row's height. Empty, `IN` is one tall dropzone with an outline `CHOOSE IMAGES`; `OUT` says in one sentence what lands there.
+- **What was brought** is summarised as chips by source extension (`PNG 02 · JPG 01`) above a slim `+ ADD MORE IMAGES` drop strip.
+- **Rows mirror.** The block above each list is one height on both sides, so every output row sits across from its source. A waiting output shows a dashed thumbnail, which fits the dashed rule because it is waiting for a file.
+- **The machine** holds the format as a 3-column grid of 44px cells (the chosen cell is periwinkle-edged at a 7% fill, not solid), the two sliders, the metadata switches, and at the foot the `lg` button. It sits on a **pipe**: a hairline from each panel into the button, edge grey at rest and signal while converting. From a laptop up the column is sticky.
+- **One solid at a time.** While anything is waiting, the solid shape is `CONVERT 04 TO WEBP →`. While it runs, it becomes an outline `■ STOP 02 / 04` in a signal border that fills with signal at 35% as files land. Once everything is made it steps down to a disabled `✓ ALL 04 CONVERTED`, and `DOWNLOAD ALL 04 · ZIP` on the output side takes the solid. A partial result offers an outline `ZIP THE 02 READY`.
+- A file's own format, quality and size open from its **output** row, because they are settings of the output.
+
 ### Admin readout
 
 `/admin` is a password gate (the share dialog's field and a solid `OPEN`) in front of one page that answers one question: is anyone using this today? It is read in the order the question is asked, and nothing on it is a card.
@@ -438,7 +451,7 @@ The share dialog's frame at 38rem, laid out in two columns: `TEMPLATE ASKS FOR` 
 
 ### Button
 
-The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. **Ghost** has the button's height and a 7% wash on hover but no edge, for an action that belongs in the row without competing with the other two. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog. The editor's toolbar climbs in weight left to right: ghost `SHARE`, outline `SAVE`, solid `EXPORT`, each with its 14px glyph.
+The one action a surface exists for gets a real button: 36px tall, 6px radius, uppercase meta in bold. **Primary** is solid ink with ground-coloured text — the only solid-ink shape in the chrome, so it is found without reading — and arrives at periwinkle on hover. **Outline** is a 34% edge with ink text for the second-best action. Size `lg` (56px, full width, 12px bold at `0.16em`) is for the step a whole surface turns on, such as the image bench's convert and download-all. **Ghost** has the button's height and a 7% wash on hover but no edge, for an action that belongs in the row without competing with the other two. Everything else stays a text button. There is one primary per surface: `EXPORT` in the editor, `DOWNLOAD` in the export sheet, `COPY LINK` (or `CREATE LINK`) in the share dialog. The editor's toolbar climbs in weight left to right: ghost `SHARE`, outline `SAVE`, solid `EXPORT`, each with its 14px glyph.
 
 ### Share dialog (mail merge)
 

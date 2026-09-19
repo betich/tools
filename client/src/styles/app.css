@@ -61,12 +61,15 @@
   --text-title--letter-spacing: 0.22em;
   --text-body: 0.875rem;
   --text-body--line-height: 1.7143;
-  --text-label: 0.75rem;
-  --text-label--line-height: 1.6;
-  --text-label--letter-spacing: 0.1em;
-  --text-meta: 0.6875rem;
-  --text-meta--line-height: 1.45;
-  --text-meta--letter-spacing: 0.18em;
+  /* The label and meta steps are named small and micro here because `label` and
+     `meta` are already ink colours: a name that is both a colour and a size makes
+     Tailwind emit the colour only, and the size silently never lands. */
+  --text-small: 0.75rem;
+  --text-small--line-height: 1.6;
+  --text-small--letter-spacing: 0.1em;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.45;
+  --text-micro--letter-spacing: 0.18em;
 
   --radius-hairline: 2px;
   --radius-xs: 6px;
@@ -103,7 +106,7 @@
     background: var(--color-paper);
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: var(--text-label);
+    font-size: var(--text-small);
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
@@ -222,7 +225,7 @@
     border: 1px solid var(--color-wash);
     color: var(--color-ink);
     font-family: var(--font-mono);
-    font-size: var(--text-meta);
+    font-size: var(--text-micro);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     line-height: 1.4;
@@ -348,5 +351,15 @@
   }
   .animate-resolve {
     filter: none;
+  }
+}
+
+/* Prose is never tracked. The small and micro steps carry their own tracking for
+   the uppercase chrome; a sentence set in Inter at the same size takes the size
+   and leaves the tracking. `--tw-tracking` does not inherit, so mono children
+   keep theirs, and an explicit `tracking-*` still wins. */
+@layer utilities {
+  .font-sans:not([class*="tracking-"]) {
+    --tw-tracking: normal;
   }
 }

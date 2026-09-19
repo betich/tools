@@ -54,7 +54,7 @@ export function Bezel() {
         <path d="M5 0 9.33 7.5H0.67z" fill="currentColor" />
       </svg>
 
-      <div className="mt-5 flex flex-wrap items-baseline justify-center gap-x-5 gap-y-1 font-mono text-meta uppercase">
+      <div className="mt-5 flex flex-wrap items-baseline justify-center gap-x-5 gap-y-1 font-mono text-meta text-micro uppercase">
         <time className="text-ink tabular-nums">{now}</time>
       </div>
     </div>

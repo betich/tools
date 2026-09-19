@@ -33,7 +33,7 @@ export function QualityControl({
         onCommitStart={onCommitStart}
         disabled={disabled}
       />
-      <span className={`text-indigo text-label w-8 text-right font-mono tabular-nums ${disabled ? "opacity-35" : ""}`}>
+      <span className={`text-indigo text-small w-8 text-right font-mono tabular-nums ${disabled ? "opacity-35" : ""}`}>
         {value}
       </span>
     </span>

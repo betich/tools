@@ -123,7 +123,7 @@ export function Inspector({
             onChange={(e) => onChange({ text: e.target.value })}
             rows={3}
             spellCheck={false}
-            className="border-wash text-ink hover:border-edge focus:border-indigo w-full resize-y rounded-xs border bg-control px-2.5 py-2 font-mono text-label tracking-normal transition-colors duration-200 focus:outline-none"
+            className="border-wash text-ink hover:border-edge focus:border-indigo w-full resize-y rounded-xs border bg-control px-2.5 py-2 font-mono text-small tracking-normal transition-colors duration-200 focus:outline-none"
           />
         </Field>
 
@@ -358,7 +358,7 @@ function RowHeader({ row }: { row: RowContext }) {
   return (
     <section className="flex flex-col gap-3.5">
       <header className="flex min-h-5 items-center justify-between gap-3">
-        <h2 className="text-indigo flex min-w-0 items-center gap-2 font-mono text-meta uppercase">
+        <h2 className="text-indigo flex min-w-0 items-center gap-2 font-mono text-micro uppercase">
           <OwnMark title="" />
           <span className="shrink-0 tabular-nums">row {pad(row.index + 1)}</span>
           <span className="text-ink min-w-0 truncate tracking-normal normal-case">{row.title}</span>
@@ -384,7 +384,7 @@ function RowHeader({ row }: { row: RowContext }) {
           {armed ? `revert ${row.changes} ${row.changes === 1 ? "change" : "changes"}?` : "revert to main design"}
         </Button>
       ) : (
-        <p className="text-meta font-mono text-meta uppercase">matches the main design</p>
+        <p className="text-meta font-mono text-micro uppercase">matches the main design</p>
       )}
     </section>
   );

@@ -83,7 +83,7 @@ export function Dropzone({
           <Button variant="outline" onClick={() => (onPick ? onPick() : input.current?.click())}>
             {cta}
           </Button>
-          <p className={cn("font-mono text-meta uppercase transition-colors duration-200", over ? "text-indigo" : "text-label")}>
+          <p className={cn("font-mono text-micro uppercase transition-colors duration-200", over ? "text-indigo" : "text-label")}>
             {over ? "let go to load it" : label}
           </p>
         </>
@@ -92,14 +92,14 @@ export function Dropzone({
           type="button"
           onClick={() => (onPick ? onPick() : input.current?.click())}
           className={cn(
-            "cursor-pointer font-mono text-meta uppercase transition-colors duration-200",
+            "cursor-pointer font-mono text-micro uppercase transition-colors duration-200",
             over ? "text-indigo" : "text-label hover:text-indigo",
           )}
         >
           {label}
         </button>
       )}
-      {hint ? <p className="text-meta font-mono text-meta uppercase opacity-80">{hint}</p> : null}
+      {hint ? <p className="text-meta font-mono text-micro uppercase opacity-80">{hint}</p> : null}
       {children}
     </div>
   );

@@ -85,7 +85,7 @@ export function TargetSizeSection({
               }}
               className="w-24 px-2 py-1 text-right"
             />
-            <span className="text-meta text-label font-mono uppercase">mb</span>
+            <span className="text-meta text-small font-mono uppercase">mb</span>
           </span>
         </Field>
 
@@ -97,7 +97,7 @@ export function TargetSizeSection({
           <Prose>{budget.reason}</Prose>
         ) : budget ? (
           <>
-            <span className="text-meta text-meta font-mono tabular-nums tracking-normal">
+            <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
               {[
                 `video ${formatBitrate(budget.videoBitrate)}`,
                 budget.audio ? `audio ${formatBitrate(budget.audio.bitrate)}` : "no audio",
@@ -145,7 +145,7 @@ export function TargetOutcome({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-meta text-meta font-mono uppercase">
+      <p className="text-meta text-micro font-mono uppercase">
         target <Value>{bytes(outcome.targetBytes)}</Value>{" "}
         <Value accent={!outcome.over}>{formatOff(outcome.off)}</Value>
         {bitrateMode ? (

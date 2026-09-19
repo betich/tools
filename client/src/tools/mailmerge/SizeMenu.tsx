@@ -112,7 +112,7 @@ export function SizeMenu({
         )}
       >
         <Shape width={width} height={height} className="text-label" />
-        <span className="min-w-0 flex-1 truncate font-mono text-label uppercase">
+        <span className="min-w-0 flex-1 truncate font-mono text-label text-small uppercase">
           {current ? current.name : "custom"}
           {current ? <span className="text-meta"> · {current.ratio}</span> : null}
         </span>
@@ -131,7 +131,7 @@ export function SizeMenu({
             >
               {SIZE_GROUPS.map((group) => (
                 <div key={group.title} role="group" aria-label={group.title} className="not-first:mt-1.5 not-first:border-hairline-faint not-first:border-t not-first:pt-1.5">
-                  <p className="text-meta px-2.5 pt-1.5 pb-1 font-mono text-meta uppercase">{group.title}</p>
+                  <p className="text-meta px-2.5 pt-1.5 pb-1 font-mono text-micro uppercase">{group.title}</p>
                   {group.presets.map((p) => {
                     index += 1;
                     const i = index;
@@ -152,10 +152,10 @@ export function SizeMenu({
                         )}
                       >
                         <Shape width={p.width} height={p.height} />
-                        <span className="min-w-0 flex-1 truncate font-mono text-label uppercase">
+                        <span className="min-w-0 flex-1 truncate font-mono text-label text-small uppercase">
                           {p.name} <span className={cn(i === active ? "text-indigo/80" : "text-meta")}>· {p.ratio}</span>
                         </span>
-                        <span className={cn("shrink-0 font-mono text-meta tabular-nums", i === active ? "text-indigo" : "text-meta")}>
+                        <span className={cn("shrink-0 font-mono text-micro tabular-nums", i === active ? "text-indigo" : "text-meta")}>
                           {p.width}×{p.height}
                         </span>
                         <FiCheck className={cn("size-3 shrink-0", chosen ? "opacity-100" : "opacity-0")} aria-hidden />

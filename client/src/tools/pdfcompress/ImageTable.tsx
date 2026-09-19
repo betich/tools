@@ -160,7 +160,7 @@ export function ImageTable({
 
       {images.length > FIRST ? (
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-meta text-meta font-mono uppercase tabular-nums">
+          <span className="text-meta text-micro font-mono uppercase tabular-nums">
             {all ? images.length : FIRST} of {images.length}
           </span>
           <TextButton onClick={() => setAll((a) => !a)}>{all ? "show fewer" : `show all ${images.length}`}</TextButton>
@@ -200,7 +200,7 @@ function Head({
     <th
       scope="col"
       aria-sort={active ? (sort!.desc ? "descending" : "ascending") : undefined}
-      className={cn("text-meta py-2 pr-4 font-mono font-normal uppercase last:pr-0", end && "text-right")}
+      className={cn("text-meta text-micro py-2 pr-4 font-mono font-normal uppercase last:pr-0", end && "text-right")}
     >
       {by && onSort ? (
         <button

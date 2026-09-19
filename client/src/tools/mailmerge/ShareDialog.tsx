@@ -124,7 +124,7 @@ export function ShareDialog({
         <header className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
           <h2 id={titleId} className="flex min-w-0 items-baseline gap-3">
             <span className="text-ink font-mono text-title font-bold uppercase">share</span>
-            <span className="text-label truncate font-mono text-label tracking-normal">{name || "untitled"}</span>
+            <span className="text-label truncate font-mono text-small tracking-normal">{name || "untitled"}</span>
           </h2>
           <button
             type="button"
@@ -141,7 +141,7 @@ export function ShareDialog({
 
         {/* the link */}
         <div className="flex flex-col gap-2.5 px-6 pt-5">
-          <span className="text-meta font-mono text-meta uppercase">link</span>
+          <span className="text-meta font-mono text-micro uppercase">link</span>
           {url && share ? (
             <div className="flex items-stretch gap-2">
               <input
@@ -149,7 +149,7 @@ export function ShareDialog({
                 value={url}
                 aria-label="share link"
                 onFocus={(e) => e.currentTarget.select()}
-                className="border-wash text-label min-w-0 flex-1 truncate rounded-xs border bg-control px-2.5 font-mono text-label tracking-normal focus:border-indigo focus:outline-none"
+                className="border-wash text-label min-w-0 flex-1 truncate rounded-xs border bg-control px-2.5 font-mono text-small tracking-normal focus:border-indigo focus:outline-none"
               />
               <Button ref={copyButton} onClick={() => void copy(share.slug)} className="w-[8.5rem]">
                 {copied ? <FiCheck className="size-3.5" aria-hidden /> : <FiCopy className="size-3.5" aria-hidden />}
@@ -168,7 +168,7 @@ export function ShareDialog({
 
         {/* who it lets in */}
         <div role="radiogroup" aria-labelledby={`${titleId}-access`} className="flex flex-col gap-1 px-6 pt-6 pb-5">
-          <span id={`${titleId}-access`} className="text-meta mb-1.5 font-mono text-meta uppercase">
+          <span id={`${titleId}-access`} className="text-meta mb-1.5 font-mono text-micro uppercase">
             general access
           </span>
 
@@ -282,7 +282,7 @@ function AccessRow({
         {icon}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className={cn("font-mono text-label uppercase", checked ? "text-ink" : "text-label")}>{title}</span>
+        <span className={cn("font-mono text-small uppercase", checked ? "text-ink" : "text-label")}>{title}</span>
         <span className="text-meta font-sans text-body leading-snug normal-case">{detail}</span>
       </span>
     </label>

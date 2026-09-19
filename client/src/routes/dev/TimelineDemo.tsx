@@ -107,7 +107,7 @@ function ClipBench({ thumbnails }: { thumbnails: ThumbnailProvider }) {
 
 function Readout({ lines }: { lines: string[] }) {
   return (
-    <div className="text-meta text-meta mt-6 flex flex-col gap-1 font-mono uppercase">
+    <div className="text-meta text-micro mt-6 flex flex-col gap-1 font-mono uppercase">
       {lines.map((l) => (
         <span key={l} className="tabular-nums">
           {l}

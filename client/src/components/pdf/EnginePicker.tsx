@@ -67,16 +67,16 @@ export function EnginePicker({
               <span className="flex items-baseline gap-2.5 font-mono uppercase">
                 <span
                   className={cn(
-                    "text-meta transition-colors duration-200",
+                    "text-micro transition-colors duration-200",
                     on ? "text-ink" : "text-meta group-hover:text-indigo",
                   )}
                 >
                   {info.label}
                 </span>
-                {id === DEFAULT_ENGINE ? <span className="text-meta text-meta opacity-70">default</span> : null}
+                {id === DEFAULT_ENGINE ? <span className="text-meta text-micro opacity-70">default</span> : null}
               </span>
               {tool === "compress" ? (
-                <span className="text-meta text-meta font-mono uppercase">{reach(id)}</span>
+                <span className="text-meta text-micro font-mono uppercase">{reach(id)}</span>
               ) : null}
               {note ? <span className="text-meta text-body font-sans normal-case leading-snug">{note}</span> : null}
               {info.caution ? (

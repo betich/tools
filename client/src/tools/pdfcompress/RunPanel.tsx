@@ -189,7 +189,7 @@ export function RunPanel({
             const { reason, note } = support.pass(pass);
             return (
               <li key={pass} className={cn("flex flex-col gap-0.5", reason && "opacity-35")}>
-                <span className="text-label text-meta flex items-baseline gap-2.5 font-mono uppercase">
+                <span className="text-label text-micro flex items-baseline gap-2.5 font-mono uppercase">
                   <span aria-hidden className="bg-ink/40 size-1 shrink-0 self-center rounded-full" />
                   {passInfo(pass).label}
                 </span>
@@ -211,7 +211,7 @@ export function RunPanel({
           onClick={() => setAdvancedOpen((o) => !o)}
           className="group flex min-h-5 cursor-pointer items-center justify-between gap-3 text-left"
         >
-          <span className="text-meta text-meta group-hover:text-indigo font-mono uppercase transition-colors duration-200">
+          <span className="text-meta text-micro group-hover:text-indigo font-mono uppercase transition-colors duration-200">
             {["advanced", engineLabel, on ? `${on} on` : null].filter(Boolean).join(" · ")}
           </span>
           <FiChevronDown
@@ -226,7 +226,7 @@ export function RunPanel({
         {advancedOpen ? (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
-              <span className="text-meta text-meta font-mono uppercase">engine</span>
+              <span className="text-meta text-micro font-mono uppercase">engine</span>
               <EnginePicker
                 tool="compress"
                 value={params.engine}
@@ -239,7 +239,7 @@ export function RunPanel({
               onChange={(codec) => setParams((p) => ({ ...p, codec }))}
             />
             <div className="flex flex-col gap-4">
-              <span className="text-meta text-meta font-mono uppercase">changes the document</span>
+              <span className="text-meta text-micro font-mono uppercase">changes the document</span>
               {optIns.map((pass) => {
                 const { reason, note } = support.pass(pass);
                 return (
@@ -308,8 +308,8 @@ function Fact({ label, value, support }: { label: string; value: string; support
       )}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-meta text-meta font-mono uppercase">{label}</dt>
-        <dd className="text-ink text-label font-mono tabular-nums tracking-normal">{value}</dd>
+        <dt className="text-meta text-micro font-mono uppercase">{label}</dt>
+        <dd className="text-ink text-small font-mono tabular-nums tracking-normal">{value}</dd>
       </div>
       {said ? <dd className="text-meta text-body font-sans normal-case leading-snug">{said}</dd> : null}
     </div>

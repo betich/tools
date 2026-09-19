@@ -48,7 +48,7 @@ export function App() {
 function Loading() {
   return (
     <Shell>
-      <p className="text-meta text-meta font-mono uppercase">loading…</p>
+      <p className="text-meta text-micro font-mono uppercase">loading…</p>
     </Shell>
   );
 }

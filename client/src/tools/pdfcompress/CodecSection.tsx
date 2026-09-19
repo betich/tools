@@ -53,7 +53,7 @@ export function CodecSection({
       <Row key={id} id={id} dim={reason} note={reason ?? WHY[id]}>
         <span className="flex items-center gap-2.5">
           <Toggle checked={codec === id} onChange={pick} label={CODECS[id].label} />
-          {experimental ? <span className="text-meta text-meta font-mono uppercase">· experimental</span> : null}
+          {experimental ? <span className="text-meta text-micro font-mono uppercase">· experimental</span> : null}
         </span>
       </Row>
     );
@@ -61,10 +61,10 @@ export function CodecSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <span className="text-meta text-meta font-mono uppercase">images are written as</span>
+      <span className="text-meta text-micro font-mono uppercase">images are written as</span>
       <ul className="flex flex-col gap-4">
         <Row id="mozjpeg" note={WHY.mozjpeg}>
-          <span className="text-meta flex items-center gap-2.5 font-mono uppercase">
+          <span className="text-meta text-micro flex items-center gap-2.5 font-mono uppercase">
             <Bullet on={codec === "mozjpeg"} />
             <span className={codec === "mozjpeg" ? "text-ink" : "text-meta"}>{CODECS.mozjpeg.label}</span>
             <span className="text-meta">· default</span>
@@ -73,7 +73,7 @@ export function CodecSection({
         {optIn("openjpeg")}
         {optIn("libjxl")}
         <Row id="flate" note={WHY.flate}>
-          <span className="text-meta flex items-center gap-2.5 font-mono uppercase">
+          <span className="text-meta text-micro flex items-center gap-2.5 font-mono uppercase">
             <Bullet />
             {CODECS.flate.label}
           </span>
@@ -81,11 +81,11 @@ export function CodecSection({
       </ul>
       {jxl.dialog}
 
-      <span className="text-meta text-meta font-mono uppercase">never offered</span>
+      <span className="text-meta text-micro font-mono uppercase">never offered</span>
       <ul className="flex flex-col gap-3">
         {NEVER_CODECS.map((c) => (
           <li key={c.label} className="flex flex-col gap-1 opacity-40">
-            <span className="text-meta text-meta font-mono uppercase line-through decoration-1">{c.label}</span>
+            <span className="text-meta text-micro font-mono uppercase line-through decoration-1">{c.label}</span>
             <p className="text-meta text-body font-sans normal-case leading-snug">{c.reason}</p>
           </li>
         ))}
@@ -108,7 +108,7 @@ function Row({
   return (
     <li className={cn("flex flex-col gap-1.5", dim && "opacity-35")} title={dim ?? undefined}>
       {children}
-      <span className="text-meta text-meta pl-6 font-mono normal-case tracking-normal">{codecLine(id)}</span>
+      <span className="text-meta text-micro pl-6 font-mono normal-case tracking-normal">{codecLine(id)}</span>
       {note ? <p className="text-meta text-body pl-6 font-sans normal-case leading-snug">{note}</p> : null}
     </li>
   );

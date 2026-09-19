@@ -382,7 +382,7 @@ function Facts({ analysis, size }: { analysis: PdfAnalysis | null; size: number 
     analysis?.flags?.tagged ? "tagged" : null,
     analysis?.flags?.encrypted ? "encrypted" : null,
   ].filter(Boolean);
-  return <span className="text-label text-label font-mono tabular-nums tracking-normal">{parts.join(" · ")}</span>;
+  return <span className="text-label text-small font-mono tabular-nums tracking-normal">{parts.join(" · ")}</span>;
 }
 
 /** What the file is carrying, in the order the eye asks: where the bytes go, then the images, then the fonts. */
