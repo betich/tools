@@ -9,11 +9,12 @@ import { useToast } from "@/hooks/useToast";
 import { cn } from "@/lib/cn";
 import { bytes, delta, ms, pad } from "@/lib/format";
 import { download } from "@/lib/download";
+import { IMAGE_ACCEPT } from "@/lib/codecs";
 import { useCodec } from "./useCodec";
 import { formatMeta, formats, type Job, type OutputFormat } from "./types";
 
 export function SquooshPage() {
-  const { options, setOptions, jobs, addFiles, remove, clear, totals, busy, outputName } = useCodec();
+  const { options, setOptions, jobs, addFiles, remove, clear, totals, busy, outputName, preview } = useCodec();
   const toast = useToast();
   const [compare, setCompare] = useState<Job | null>(null);
 
@@ -114,9 +115,9 @@ export function SquooshPage() {
               const n = addFiles(files);
               if (n === 0) toast("no images in that drop");
             }}
-            accept="image/*"
+            accept={IMAGE_ACCEPT}
             label="drop images, or choose files"
-            hint="jpeg · png · webp · avif · gif"
+            hint="jpeg · png · webp · avif · gif · heic"
           />
 
           <Section
@@ -148,7 +149,7 @@ export function SquooshPage() {
         </div>
       </div>
 
-      {compare ? <Compare job={compare} name={outputName(compare)} onClose={() => setCompare(null)} /> : null}
+      {compare ? <Compare job={compare} name={outputName(compare)} onClose={() => setCompare(null)} preview={preview} /> : null}
     </Shell>
   );
 }
@@ -220,18 +221,31 @@ function JobRow({
 }
 
 /** Before/after lightbox. Hold space, or use the toggle, to flip back to the original. */
-function Compare({ job, name, onClose }: { job: Job; name: string; onClose: () => void }) {
+function Compare({
+  job,
+  name,
+  onClose,
+  preview,
+}: {
+  job: Job;
+  name: string;
+  onClose: () => void;
+  preview: (file: File) => Promise<Blob>;
+}) {
   const [showing, setShowing] = useState<"after" | "before">("after");
+  // The original as-is, until the browser refuses it (HEIC outside Safari); then a decoded copy.
+  const [beforeBlob, setBeforeBlob] = useState<Blob>(job.file);
 
-  const beforeUrl = useMemo(() => URL.createObjectURL(job.file), [job.file]);
+  const beforeUrl = useMemo(() => URL.createObjectURL(beforeBlob), [beforeBlob]);
   const afterUrl = useMemo(() => (job.outBlob ? URL.createObjectURL(job.outBlob) : ""), [job.outBlob]);
 
-  useEffect(() => {
-    return () => {
-      URL.revokeObjectURL(beforeUrl);
-      if (afterUrl) URL.revokeObjectURL(afterUrl);
-    };
-  }, [beforeUrl, afterUrl]);
+  useEffect(() => () => URL.revokeObjectURL(beforeUrl), [beforeUrl]);
+  useEffect(() => () => void (afterUrl && URL.revokeObjectURL(afterUrl)), [afterUrl]);
+
+  const onImageError = () => {
+    if (showing !== "before" || beforeBlob !== job.file) return;
+    preview(job.file).then(setBeforeBlob, () => undefined);
+  };
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => e.code === "Space" && (e.preventDefault(), setShowing("before"));
@@ -259,6 +273,7 @@ function Compare({ job, name, onClose }: { job: Job; name: string; onClose: () =
         className="checkers max-h-full max-w-full rounded-md object-contain"
         style={{ boxShadow: "var(--shadow-lightbox)" }}
         onClick={(e) => e.stopPropagation()}
+        onError={onImageError}
       />
       <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
         <Segmented

@@ -14,9 +14,12 @@ export default defineConfig({
   // The codec worker imports its encoders on demand, which needs a real module worker.
   worker: { format: "es" },
 
-  // jSquash ships its own wasm; Vite's dep pre-bundler mangles the module URLs.
+  // Every wasm-shipping package stays out of the dep pre-bundler. jSquash resolves its
+  // wasm via `new URL(..., import.meta.url)`, which pre-bundling rewrites into a 404.
+  // libheif-js inlines its wasm, but it is only imported when a HEIC arrives; left to
+  // discovery, that first HEIC would trigger a re-optimise and a full dev reload.
   optimizeDeps: {
-    exclude: ["@jsquash/avif", "@jsquash/jpeg", "@jsquash/png", "@jsquash/webp", "@jsquash/oxipng"],
+    exclude: ["@jsquash/avif", "@jsquash/jpeg", "@jsquash/png", "@jsquash/webp", "@jsquash/oxipng", "libheif-js"],
   },
   server: {
     port: 5173,

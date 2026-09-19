@@ -23,6 +23,7 @@
     "@tools/shared": "workspace:*",
     "client-zip": "^2.5.1",
     "clsx": "^2.1.1",
+    "libheif-js": "^1.23.2",
     "papaparse": "^5.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
