@@ -191,6 +191,26 @@ export function MergeWorkbench() {
   );
   useHotkey("mod+a", onPickAll, { enabled: view === "pages" });
 
+  // Undo walks the page order back (#42): mod+Z, and mod+shift+Z or mod+Y forward. Fields keep their own.
+  const { undo, redo } = pages;
+  const onUndo = useCallback(
+    (e: KeyboardEvent) => {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    },
+    [undo, redo],
+  );
+  const onRedo = useCallback(
+    (e: KeyboardEvent) => {
+      e.preventDefault();
+      redo();
+    },
+    [redo],
+  );
+  useHotkey("mod+z", onUndo, { enabled: entries.length > 0 });
+  useHotkey("mod+y", onRedo, { enabled: entries.length > 0 });
+
   // A file moved in the list takes its pages with it when the page order has been edited.
   const moveTo = (key: string, to: number) => {
     files.moveTo(key, to);

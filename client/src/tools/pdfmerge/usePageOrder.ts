@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useHistory } from "@/hooks/useHistory";
 import {
+  interleavePages,
   isWhole,
   layout,
   moveFile,
+  movePages,
   NO_SELECTION,
   pick,
   prune,
   removePages,
   resetFile,
   setFilePages,
+  shiftPages,
   type OrderFile,
   type PageOrder,
   type Selection,
@@ -66,15 +70,19 @@ function orderFiles(entries: MergeEntry[], counts: ReadonlyMap<string, number | 
 /**
  * The page view's state: the order (see `pageOrder.ts`), the page counts it
  * is laid out with, and the pages picked in it. Every change to the order
- * goes through `commit`, one call per gesture, which is where #42 hangs its
- * undo history; the selection is view state and is never undone.
+ * goes through `commit`, one call per gesture, and is one step of undo
+ * history (#42); the selection is view state and is never undone. Only the
+ * order is kept in history — never the entries, whose uploads are live — and
+ * an old order laid out today drops any file removed since, so undo can't
+ * bring a removed file back.
  *
  * Counts are only asked for when needed: every PDF's while the page view is
  * open (`all`) or the order has been edited, and otherwise only the PDF being
  * looked at (`focus`), for its range box.
  */
 export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boolean; focus: string | null }) {
-  const [order, setOrder] = useState<PageOrder>(null);
+  const history = useHistory<PageOrder>(null);
+  const order = history.value;
   const [selection, setSelection] = useState<Selection>(NO_SELECTION);
   const counts = usePageCounts(entries, (e) => all || order !== null || e.key === focus);
   const files = orderFiles(entries, counts);
@@ -95,10 +103,15 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
     setSelection((s) => prune(s, shown));
   }, [ids]);
 
-  /** The one way the order changes. */
-  const commit = useCallback((edit: (order: PageOrder, files: OrderFile[]) => PageOrder) => {
-    setOrder((o) => edit(o, live.current));
-  }, []);
+  /**
+   * The one way the order changes: one call per gesture, one undo step. A
+   * drag changes nothing until it lands, so its drop is its one commit.
+   */
+  const { commit: record, reset: forget } = history;
+  const commit = useCallback(
+    (edit: (order: PageOrder, files: OrderFile[]) => PageOrder) => record((o) => edit(o, live.current)),
+    [record],
+  );
 
   const removePicked = useCallback(() => {
     if (!selection.ids.size) return;
@@ -137,8 +150,21 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
         }),
       [commit],
     ),
-    /** Forget the order — the list was emptied. */
-    clear: useCallback(() => (setOrder(null), setSelection(NO_SELECTION)), []),
+    /** Drops pages `ids` before page `before` (`null`: at the end). */
+    movePages: useCallback(
+      (ids: ReadonlySet<string>, before: string | null) => commit((o, f) => movePages(o, f, ids, before)),
+      [commit],
+    ),
+    /** The keyboard's move: pages `ids` one place earlier or later. */
+    shiftPages: useCallback((ids: ReadonlySet<string>, by: -1 | 1) => commit((o, f) => shiftPages(o, f, ids, by)), [commit]),
+    /** Deals pages `ids` out a file at a time: fronts and backs into one document. */
+    interleave: useCallback((ids: ReadonlySet<string>) => commit((o, f) => interleavePages(o, f, ids)), [commit]),
+    undo: history.undo,
+    redo: history.redo,
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
+    /** Forget the order and its history — the list was emptied. */
+    clear: useCallback(() => (forget(null), setSelection(NO_SELECTION)), [forget]),
   };
 }
 
