@@ -30,6 +30,7 @@ db.exec(`
 const NOISY = new Set([
   "GET /api/health",
   "GET /api/pdf/uploads/:id",
+  "GET /api/pdf/uploads/:id/thumbnail.png",
   "PUT /api/pdf/uploads/:id/parts/:n",
   "GET /api/pdf/jobs/:id",
   "GET /api/pdf/jobs/:id/events",
