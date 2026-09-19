@@ -5,8 +5,9 @@
  *
  * It receives each frame *after* rotate, crop and resize — the output's
  * framing — and returns what to use instead: a canvas (reused across calls
- * is fine; it is copied before the next call), the same `frame` to leave it
- * alone, or `null` to drop it. It may be async (a WebGL readback), and runs
+ * is fine; it is copied before the next call), a new `VideoFrame` (handed
+ * over: the caller closes it — the keyer returns one for `"export"`), the
+ * same `frame` to leave it alone, or `null` to drop it. It may be async (a WebGL readback), and runs
  * one frame at a time.
  *
  * In the preview the frame is at preview scale, so `width`/`height` differ

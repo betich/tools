@@ -8,6 +8,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 import type { Trim } from "@/components/timeline/model";
+import { DEFAULT_KEY, type KeySettings } from "./key/settings";
 
 export type Container = "mp4" | "webm";
 export type VideoCodecId = "avc" | "hevc" | "vp9" | "av1";
@@ -36,6 +37,8 @@ export type VideoEdit = {
   speed: number;
   mute: boolean;
   quality: QualityLevel;
+  /** Chroma key to transparency. Off by default; needs WebM + VP9 when on. */
+  key: KeySettings;
 };
 
 /** What the export and preview need to know about the file. */
@@ -110,6 +113,7 @@ export function defaultEdit(source: Pick<SourceInfo, "duration">): VideoEdit {
     speed: 1,
     mute: false,
     quality: "high",
+    key: DEFAULT_KEY,
   };
 }
 
@@ -267,5 +271,6 @@ export function editSummary(edit: VideoEdit, source: SourceInfo): string[] {
   }
   if (edit.speed !== 1) out.push(`${edit.speed}×`);
   if (edit.mute && edit.output === "video") out.push("mute");
+  if (edit.key.enabled && edit.output === "video") out.push("key");
   return out;
 }

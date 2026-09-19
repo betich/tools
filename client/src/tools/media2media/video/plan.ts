@@ -113,6 +113,8 @@ export function planConversion(edit: VideoEdit, source: SourceInfo, options: Pla
     video.fit = "fill";
   }
   if (edit.fps && !retime) video.frameRate = edit.fps;
+  // Keyed: the frame hook hands back RGBA frames and the alpha goes into the file.
+  if (edit.key.enabled) video.alpha = "keep";
   // What `process` hands the encoder, should the pipeline set one (a frame
   // hook, a speed change). Mediabunny reads these only when it does.
   video.processedWidth = size.width;

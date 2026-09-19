@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import type { FrameHook } from "./frameHook";
+import { sampleColor } from "./key/pick";
+import type { Rgb } from "./key/settings";
 import { moveCrop, resizeCrop, rotatedSize, type Corner, type Rect, type SourceInfo, type VideoEdit } from "./settings";
 
 /** The stage never takes more than this share of the viewport's height. */
@@ -29,6 +31,7 @@ export function Preview({
   cropAspect,
   onCrop,
   onGestureStart,
+  onPick,
 }: {
   source: SourceInfo;
   edit: VideoEdit;
@@ -44,6 +47,8 @@ export function Preview({
   cropAspect: number | null;
   onCrop: (crop: Rect, kind: "commit" | "preview") => void;
   onGestureStart: () => void;
+  /** Eyedropper on: a click reads the source colour there (before any hook). */
+  onPick?: ((rgb: Rgb) => void) | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -184,6 +189,27 @@ export function Preview({
             ratio={cropAspect}
             onCrop={onCrop}
             onGestureStart={onGestureStart}
+          />
+        ) : null}
+        {onPick && source.hasVideo ? (
+          <button
+            type="button"
+            aria-label="pick the key colour — click the backdrop"
+            className="absolute inset-0 cursor-crosshair"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              const v = video.current;
+              const img = still ?? (v && v.readyState >= 2 && v.videoWidth > 0 ? v : null);
+              if (!img || r.width <= 0 || r.height <= 0) return;
+              const rgb = sampleColor(
+                img,
+                source,
+                edit.rotate,
+                (e.clientX - r.left) / r.width,
+                (e.clientY - r.top) / r.height,
+              );
+              if (rgb) onPick(rgb);
+            }}
           />
         ) : null}
       </div>

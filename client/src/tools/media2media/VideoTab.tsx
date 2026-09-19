@@ -10,6 +10,10 @@ import { download } from "@/lib/download";
 import { bytes } from "@/lib/format";
 import { EditSection, OutputSection } from "./video/Controls";
 import type { ExportProgress } from "./video/export";
+import { createKeyer } from "./video/key/keyer";
+import { KeySection } from "./video/key/KeySection";
+import { ALPHA_PLAYBACK_NOTE } from "./video/key/settings";
+import { keyExportBlocker, useKey } from "./video/key/useKey";
 import { Preview } from "./video/Preview";
 import { decodeNote, exportBlocker, NO_WEBCODECS_DECODE, saveNote } from "./video/probe";
 import {
@@ -125,6 +129,7 @@ function Editor({
     output: source.hasVideo ? "video" : "audio",
   }));
   const edit = history.value;
+  const key = useKey(edit, (next) => history.set(next(history.value)));
   const [cropAspect, setCropAspect] = useState("none");
   const [job, setJob] = useState<Job>({ phase: "idle" });
   const busy = job.phase === "running";
@@ -169,7 +174,7 @@ function Editor({
     [history],
   );
 
-  const blocker = exportBlocker(edit, source, caps);
+  const blocker = keyExportBlocker(edit, caps) ?? exportBlocker(edit, source, caps);
   const summary = editSummary(edit, source);
   const name = outputName(file.name, edit);
   const notes = [
@@ -193,6 +198,8 @@ function Editor({
     const controller = new AbortController();
     const toDisk = target.kind === "stream";
     setJob({ phase: "running", progress: null, stop: () => controller.abort(), toDisk });
+    // Its own GL context, so the preview can repaint while the export draws.
+    const keyer = edit.output === "video" && edit.key.enabled ? createKeyer() : null;
     try {
       // Mediabunny and the pipeline load on the first export, not with the tab.
       const { exportVideo } = await import("./video/export");
@@ -201,11 +208,13 @@ function Editor({
         edit,
         source,
         target,
+        frameHook: keyer?.hookFor(edit.key),
         signal: controller.signal,
         onProgress: (progress) => setJob((j) => (j.phase === "running" ? { ...j, progress } : j)),
       });
       if (result.blob) download(result.blob, name);
-      setJob({ phase: "done", name, bytes: result.bytes, notes: result.notes, toDisk });
+      const notes = keyer ? [...result.notes, ALPHA_PLAYBACK_NOTE] : result.notes;
+      setJob({ phase: "done", name, bytes: result.bytes, notes, toDisk });
       onDone(toDisk ? `${name} saved` : `${name} downloaded`);
     } catch (e) {
       if (e instanceof ExportCanceled) setJob({ phase: "idle" });
@@ -214,6 +223,8 @@ function Editor({
           phase: "failed",
           message: e instanceof ExportError ? e.message : "The export stopped for a reason this browser didn't give.",
         });
+    } finally {
+      keyer?.dispose();
     }
   };
 
@@ -238,6 +249,7 @@ function Editor({
       <aside className="flex flex-col gap-8">
         <OutputSection {...controls} />
         <EditSection {...controls} />
+        <KeySection {...controls} file={file} picking={key.picking} onPicking={key.setPicking} />
       </aside>
 
       <div className="flex min-w-0 flex-col gap-6">
@@ -255,6 +267,8 @@ function Editor({
           cropAspect={aspectRatio}
           onCrop={setCrop}
           onGestureStart={history.snapshot}
+          frameHook={key.frameHook}
+          onPick={key.onPick}
         />
 
         <Timeline
@@ -294,12 +308,11 @@ function Editor({
           onExport={run}
         />
 
-        {/* frameHook: the tab's active hook (the chroma keyer, #30), once there is one. */}
         <SendToGif
           file={file}
           source={source}
           edit={edit}
-          frameHook={null}
+          frameHook={key.frameHook}
           disabled={busy}
           onStart={() => playback.setPlaying(false)}
         />
