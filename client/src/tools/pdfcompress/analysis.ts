@@ -84,3 +84,12 @@ export function change(before: number, after: number): string {
   const pct = Math.round(((after - before) / before) * 100);
   return pct === 0 ? "±0%" : pct < 0 ? `−${-pct}%` : `+${pct}%`;
 }
+
+/** `PDF/A-2b` — the analysis may name the conformance with or without the prefix. */
+export const pdfaName = (pdfa: string) => (/^pdf/i.test(pdfa) ? pdfa : `PDF/A-${pdfa}`);
+
+/** The part of a PDF/A conformance (1–4), or null when the name doesn't say. */
+export function pdfaPart(pdfa: string): number | null {
+  const m = /([1-4])/.exec(pdfa);
+  return m ? Number(m[1]) : null;
+}

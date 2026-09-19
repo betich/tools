@@ -15,6 +15,7 @@ import {
 } from "@tools/shared";
 import { Button, Section, Sections, Segmented, Toggle } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { InputCautions } from "./SpecialInputs";
 
 /** What each preset is for, in one line under the picker. */
 const PURPOSE: Record<PresetId, string> = {
@@ -156,6 +157,8 @@ export function RunPanel({
       </section>
 
       <div className="flex flex-col gap-3">
+        {/* #15: re-encrypt, and cautions about what the settings would undo in this file. */}
+        <InputCautions analysis={analysis} params={params} onChange={setParams} />
         <Button disabled={!analysis || busy || !onRun} onClick={() => onRun?.(params)} className="w-full">
           run
         </Button>
