@@ -5,11 +5,13 @@ import { Empty } from "@/components/ui";
 import { ToastProvider } from "@/hooks/useToast";
 import { Launchpad } from "@/routes/Launchpad";
 
-// Both tools pull in heavy dependencies (wasm codecs, spreadsheet parsers);
-// the index page should not pay for either.
+// The tools pull in heavy dependencies (wasm codecs, spreadsheet parsers);
+// the index page should not pay for any of them.
 const Squoosh = lazy(() => import("@/tools/squoosh/SquooshPage").then((m) => ({ default: m.SquooshPage })));
 const Admin = lazy(() => import("@/routes/Admin").then((m) => ({ default: m.Admin })));
 const MailMerge = lazy(() => import("@/tools/mailmerge/MailMergePage").then((m) => ({ default: m.MailMergePage })));
+const PdfCompress = lazy(() => import("@/tools/pdfcompress/PdfCompress").then((m) => ({ default: m.PdfCompress })));
+const PdfMerge = lazy(() => import("@/tools/pdfmerge/PdfMerge").then((m) => ({ default: m.PdfMerge })));
 
 export function App() {
   return (
@@ -22,6 +24,8 @@ export function App() {
             <Route path="/mail-merge" element={<MailMerge />} />
             <Route path="/mail-merge/s/:slug" element={<MailMerge />} />
             <Route path="/mail-merge/p/:id" element={<MailMerge />} />
+            <Route path="/pdf-compress" element={<PdfCompress />} />
+            <Route path="/pdf-merge" element={<PdfMerge />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -170,7 +170,7 @@ export type GoogleFont = {
   files: Record<string, string>;
 };
 
-export type ToolId = "squoosh" | "mail-merge";
+export type ToolId = "squoosh" | "mail-merge" | "pdf-compress" | "pdf-merge";
 
 export type ToolMeta = {
   id: ToolId;

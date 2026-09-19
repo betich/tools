@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Bezel } from "@/components/Bezel";
 import { Shell } from "@/components/Shell";
 import { useHotkey } from "@/hooks/useHotkey";
+import { useServerStatus } from "@/hooks/useServerStatus";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { registry, type ClientTool } from "@/tools/registry";
@@ -16,6 +17,7 @@ import { registry, type ClientTool } from "@/tools/registry";
 export function Launchpad() {
   const navigate = useNavigate();
   const [tools, setTools] = useState<ClientTool[]>(registry);
+  const offline = useServerStatus() === "offline";
 
   // The server may know about tools this build does not.
   useEffect(() => {
@@ -35,10 +37,11 @@ export function Launchpad() {
       });
   }, []);
 
-  // 1…3 jump straight to whatever is live in that slot.
+  // 1…4 jump straight to whatever is live in that slot.
   useHotkey("1", () => tools[0] && navigate(tools[0].href));
   useHotkey("2", () => tools[1] && navigate(tools[1].href));
   useHotkey("3", () => tools[2] && navigate(tools[2].href));
+  useHotkey("4", () => tools[3] && navigate(tools[3].href));
 
   return (
     <Shell width="wide">
@@ -48,20 +51,25 @@ export function Launchpad() {
 
       <ul className={cn("mt-8 grid grid-cols-1 gap-3 sm:mt-10", tools.length > 1 && "lg:grid-cols-2")}>
         {tools.map((tool, i) => (
-          <Door key={tool.id} tool={tool} delay={160 + i * 90} />
+          <Door key={tool.id} tool={tool} delay={160 + i * 90} down={offline && !!tool.needsServer} />
         ))}
       </ul>
     </Shell>
   );
 }
 
-function Door({ tool, delay }: { tool: ClientTool; delay: number }) {
+/**
+ * A door to a tool that needs the api dims while the server is down — opacity,
+ * never a colour — but still opens, so its page can say why it is idle.
+ */
+function Door({ tool, delay, down }: { tool: ClientTool; delay: number; down: boolean }) {
   return (
     <li className="animate-resolve" style={{ animationDelay: `${delay}ms` }}>
       <Link
         to={tool.href}
-        aria-label={`${tool.name} — ${tool.tagline}`}
+        aria-label={`${tool.name} — ${tool.tagline}${down ? " — needs the api, which is offline" : ""}`}
         className={cn(
+          down && "opacity-45",
           "rounded-card group relative flex h-full min-h-[27rem] flex-col overflow-hidden border p-6 sm:min-h-[32rem] sm:p-8",
           "lg:h-[min(calc(100dvh-21.5rem),44rem)] lg:min-h-[26rem]",
           "border-wash bg-surface transition-colors duration-300",
@@ -84,7 +92,7 @@ function Door({ tool, delay }: { tool: ClientTool; delay: number }) {
         </div>
 
         <div className="border-hairline-faint relative flex items-center justify-between gap-4 border-t pt-3.5">
-          <span className="text-meta text-meta font-mono uppercase">{tool.tagline}</span>
+          <span className="text-meta text-meta font-mono uppercase">{down ? `${tool.tagline} · api offline` : tool.tagline}</span>
           <span className="text-meta group-hover:text-indigo text-meta flex items-center gap-2 font-mono uppercase transition-colors duration-300">
             open
             <FiArrowRight

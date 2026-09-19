@@ -22,6 +22,22 @@ export const registry: ToolMeta[] = [
     index: "02",
     status: "live",
   },
+  {
+    id: "pdf-compress",
+    name: "pdf compress",
+    blurb: "shrink a pdf by re-encoding its images and trimming what it carries. runs on the server.",
+    href: "/pdf-compress",
+    index: "03",
+    status: "wip",
+  },
+  {
+    id: "pdf-merge",
+    name: "pdf merge",
+    blurb: "pdfs and images in, one pdf out, in the order you set. runs on the server.",
+    href: "/pdf-merge",
+    index: "04",
+    status: "wip",
+  },
 ];
 
 export const tools = new Elysia().get("/api/tools", () => registry);

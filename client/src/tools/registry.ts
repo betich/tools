@@ -4,6 +4,8 @@ export type ClientTool = ToolMeta & {
   /** Single-key shortcut from the index page. */
   key: string;
   tagline: string;
+  /** Does nothing without the api; its door dims and its page says so while the server is down. */
+  needsServer?: boolean;
 };
 
 /**
@@ -31,5 +33,27 @@ export const registry: ClientTool[] = [
     index: "02",
     status: "live",
     key: "2",
+  },
+  {
+    id: "pdf-compress",
+    name: "pdf compress",
+    blurb: "Shrink a PDF by re-encoding its images and trimming what it carries. The work happens on the server.",
+    tagline: "pdf compression",
+    href: "/pdf-compress",
+    index: "03",
+    status: "wip",
+    key: "3",
+    needsServer: true,
+  },
+  {
+    id: "pdf-merge",
+    name: "pdf merge",
+    blurb: "PDFs and images in, one PDF out, in the order you set. The work happens on the server.",
+    tagline: "pdf and image merge",
+    href: "/pdf-merge",
+    index: "04",
+    status: "wip",
+    key: "4",
+    needsServer: true,
   },
 ];
