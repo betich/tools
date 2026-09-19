@@ -1,7 +1,7 @@
 import { copyFile, rename, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { repairNote, type PdfAnalysis, type RunResult } from "@tools/shared";
-import { readParams, runPipeline } from "../compress";
+import { fontBytesAfter, readParams, runPipeline } from "../compress";
 import { outputName, registerHandler } from "../jobs";
 import { analyseFile } from "./analyse";
 
@@ -47,6 +47,11 @@ registerHandler("compress", async (ctx) => {
     notes: keptOriginal ? [] : [...repairNotes(inputAnalysis), ...outcome.notes],
     fileName: outputName(input.name, "compressed", "pdf"),
   };
+  if (inputAnalysis && !inputAnalysis.truncated && !analysis.truncated) {
+    result.fontBytes = keptOriginal
+      ? Object.fromEntries(inputAnalysis.fonts.filter((f) => f.embedded).map((f) => [f.id, f.bytes]))
+      : fontBytesAfter(inputAnalysis.fonts, analysis.fonts);
+  }
   return { result, file: { name: OUTPUT, downloadName: result.fileName } };
 });
 

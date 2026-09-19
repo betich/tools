@@ -15,7 +15,7 @@ import { useJob } from "@/hooks/useJob";
 import { useToast } from "@/hooks/useToast";
 import { useUpload } from "@/hooks/useUpload";
 import { bytes } from "@/lib/format";
-import { asAnalysis, pdfaName } from "./analysis";
+import { asAnalysis, asRunResult, pdfaName } from "./analysis";
 import { CropPanel } from "./CropPanel";
 import { FontTable } from "./FontTable";
 import { ImageTable } from "./ImageTable";
@@ -225,6 +225,8 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
   const [labels, setLabels] = useState(storedLabels);
   const [picked, setPicked] = useState<string | null>(null);
   const shown = runs.find((t) => t.id === picked) ?? runs[runs.length - 1] ?? null;
+  // The shown run's font sizes, for the font table's after column (#11).
+  const fontsAfter = shown?.state === "done" ? asRunResult(shown.result)?.fontBytes : undefined;
   // A signed file's run waits here for the dialog's confirmation.
   const [confirming, setConfirming] = useState<CompressParams | null>(null);
 
@@ -335,7 +337,7 @@ function Opened({ info, job, onDiscard }: { info: JobInfo; job: ReturnType<typeo
             <RunResults jobId={info.id} runs={runs} labels={labels} input={readable} shown={shown} onShow={setPicked} />
           ) : null}
           {readable ? (
-            <Analysis analysis={readable} images={imageTable} />
+            <Analysis analysis={readable} images={imageTable} fontsAfter={fontsAfter} />
           ) : locked && !reading && analyse?.state !== "failed" ? (
             <UnlockPrompt onUnlock={job.unlock} />
           ) : analyse ? (
@@ -384,7 +386,16 @@ function Facts({ analysis, size }: { analysis: PdfAnalysis | null; size: number 
 }
 
 /** What the file is carrying, in the order the eye asks: where the bytes go, then the images, then the fonts. */
-function Analysis({ analysis, images }: { analysis: PdfAnalysis; images: ReactNode }) {
+function Analysis({
+  analysis,
+  images,
+  fontsAfter,
+}: {
+  analysis: PdfAnalysis;
+  images: ReactNode;
+  /** Each font's bytes in the shown run's output, by font id. */
+  fontsAfter?: Record<string, number>;
+}) {
   const notes = flagNotes(analysis);
   return (
     <>
@@ -411,7 +422,7 @@ function Analysis({ analysis, images }: { analysis: PdfAnalysis; images: ReactNo
       <Section title={`images · ${analysis.images.length}`}>{images}</Section>
 
       <Section title={`fonts · ${analysis.fonts.length}`}>
-        <FontTable fonts={analysis.fonts} />
+        <FontTable fonts={analysis.fonts} after={fontsAfter} />
       </Section>
     </>
   );

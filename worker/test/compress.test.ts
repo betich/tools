@@ -26,6 +26,7 @@ async function compress(
   file: string,
   params: Partial<CompressParams> = {},
   name = "input.pdf",
+  analysis: PdfAnalysis | null = null,
 ): Promise<{ result: RunResult; out: string; stages: string[] }> {
   const dir = mkdtempSync(join(root, "task-"));
   const input = join(dir, "upload.pdf");
@@ -40,7 +41,7 @@ async function compress(
     task: { id: "task_test", kind: "compress", params: { ...defaultCompressParams(), ...params } },
     job: { id: "job_test", tool: "compress", password: null },
     inputs: [{ id: "up", name, kind: "pdf", size: statSync(input).size, path: input }],
-    analysis: null,
+    analysis,
     outDir,
     workDir,
     signal,
@@ -67,6 +68,42 @@ function expectSameRender(before: string, after: string) {
   const b = render(after);
   expect(b.length).toBe(a.length);
   a.forEach((page, i) => expect(Buffer.compare(page, b[i]!), `page ${i + 1} differs`).toBe(0));
+}
+
+/** Every page's extracted text — what copy and search see. */
+function text(file: string): string {
+  const r = Bun.spawnSync(["mutool", "draw", "-q", "-F", "txt", file]);
+  expect(r.exitCode).toBe(0);
+  return r.stdout.toString();
+}
+
+/** Every page drawn by Ghostscript — a second renderer, so a font only MuPDF can read would show. */
+function renderGs(file: string): Buffer {
+  const r = Bun.spawnSync(["gs", "-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=ppmraw", "-r96", "-o", "-", file]);
+  expect(r.exitCode).toBe(0);
+  return r.stdout;
+}
+
+/** Share of samples that differ by more than a rounding step. */
+function difference(a: Buffer, b: Buffer): number {
+  expect(b.length).toBe(a.length);
+  let off = 0;
+  for (let k = 0; k < a.length; k++) if (Math.abs(a[k]! - b[k]!) > 2) off++;
+  return off / a.length;
+}
+
+/** The analysis the job would have of this file (#8), for runs that need it. */
+async function analyse(file: string): Promise<PdfAnalysis> {
+  const dir = mkdtempSync(join(root, "an-"));
+  const signal = new AbortController().signal;
+  const { analyseFile } = await import("../src/handlers/analyse");
+  const ctx = {
+    workDir: dir,
+    signal,
+    progress: () => {},
+    run: jobs.toolRunner(dir, signal),
+  } as unknown as Parameters<typeof analyseFile>[0];
+  return analyseFile(ctx, file, statSync(file).size);
 }
 
 /** Share of samples that differ by more than a rounding step, over all pages. */
@@ -96,7 +133,7 @@ describe.skipIf(!hasTools)("compress", () => {
   }, 60_000);
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  for (const name of ["deck.pdf", "deck-gs.pdf", "scan.pdf", "bloated.pdf"]) {
+  for (const name of ["deck.pdf", "deck-gs.pdf", "scan.pdf", "bloated.pdf", "thai.pdf"]) {
     for (const preset of ["ebook", "print"] as const) {
       test(`${name}, ${preset}: never larger, every page renders identically`, async () => {
         const file = join(fixtures, name);
@@ -105,6 +142,7 @@ describe.skipIf(!hasTools)("compress", () => {
         expect(result.bytes).toBeLessThanOrEqual(result.inputBytes);
         expect(result.inputBytes).toBe(statSync(file).size);
         expectSameRender(file, out);
+        expect(text(out)).toBe(text(file));
         expect(result.analysis.bytes).toBe(result.bytes);
         if (result.keptOriginal) expect(Buffer.compare(readFileSync(out), readFileSync(file))).toBe(0);
       });
@@ -119,7 +157,13 @@ describe.skipIf(!hasTools)("compress", () => {
     const analysis: PdfAnalysis = result.analysis;
     // Two identical photos became one; the thumbnail stays (extras are opt-in).
     expect(analysis.images.filter((i) => i.width === 1200)).toHaveLength(1);
-    expect(stages).toEqual(["repacking JPEG images", "rewriting the file", "recompressing streams", "measuring the result"]);
+    expect(stages).toEqual([
+      "repacking JPEG images",
+      "subsetting fonts",
+      "rewriting the file",
+      "recompressing streams",
+      "measuring the result",
+    ]);
 
     const trailer = show(out, "trailer");
     const info = show(out, "trailer/Info");
@@ -130,8 +174,84 @@ describe.skipIf(!hasTools)("compress", () => {
     expect(trailer).toContain("/Root");
 
     const passes = result.skipped.map((s) => s.pass).sort();
-    expect(passes).toEqual(["downsample", "reencode-images", "subset-fonts"]);
+    expect(passes).toEqual(["downsample", "reencode-images"]);
     for (const s of result.skipped) expect(s.reason).toMatch(/\.$/);
+  });
+
+  test("thai.pdf: whole Thai and Latin fonts are subset; pages, text and ToUnicode stay the same", async () => {
+    const file = join(fixtures, "thai.pdf");
+    const before = await analyse(file);
+    expect(before.fonts.map((f) => [f.name, f.type, f.subset])).toEqual([
+      ["Sarabun-Thai", "Type0/CIDFontType2", false],
+      ["Sarabun", "Type0/CIDFontType2", false],
+      ["Sarabun-Bold", "TrueType", false],
+    ]);
+    const { result, out, stages } = await compress(file, defaultCompressParams("ebook"), "input.pdf", before);
+    expect(stages).toContain("subsetting fonts");
+    expect(result.skipped.map((s) => s.pass)).not.toContain("subset-fonts");
+    expect(result.notes).toEqual([]);
+    expect(result.bytes).toBeLessThan(result.inputBytes * 0.6);
+
+    // Each font program is a fraction of what it was, and says it is a subset.
+    for (const font of before.fonts) {
+      const after = result.fontBytes?.[font.id];
+      expect(after, font.name).toBeGreaterThan(0);
+      expect(after!, font.name).toBeLessThan(font.bytes * 0.6);
+    }
+    expect(result.analysis.fonts.every((f) => f.subset && f.embedded)).toBe(true);
+
+    expectSameRender(file, out);
+    // Ghostscript grid-fits TrueType a touch differently once the unused tables (gasp, post, cmap) go.
+    expect(difference(renderGs(file), renderGs(out))).toBeLessThan(0.002);
+    const words = text(out);
+    expect(words).toBe(text(file));
+    expect(words).toContain("รายงานประจำไตรมาส");
+    expect(words).toContain("ขอบคุณ");
+    expect(words).toContain("Simple TrueType, WinAnsi");
+    expect(show(out, "grep")).toContain("/ToUnicode");
+  });
+
+  test("a font a form field uses is kept whole, with a note; the rest are still subset", async () => {
+    // The Thai font becomes the form's default font too: a user typing into a field needs all of it.
+    const src = join(fixtures, "thai.pdf");
+    const file = join(root, "thai-form.pdf");
+    const script = join(root, "form.js");
+    await Bun.write(
+      script,
+      `var pdf = new PDFDocument(scriptArgs[0]);
+       var th = pdf.findPage(0).get("Resources").get("Font").get("TH");
+       pdf.getTrailer().get("Root").put("AcroForm", pdf.addObject({ Fields: [], DR: { Font: { TH: th } }, DA: pdf.newString("/TH 12 Tf 0 g") }));
+       pdf.save(scriptArgs[1], "");`,
+    );
+    expect(Bun.spawnSync(["mutool", "run", script, src, file]).exitCode).toBe(0);
+    const before = await analyse(file);
+    const { result, out } = await compress(file, defaultCompressParams("print"), "input.pdf", before);
+    expect(result.notes).toContain(
+      "Kept 1 font whole: Sarabun-Thai (used by form fields, which need every character a user might type).",
+    );
+    const thai = before.fonts.find((f) => f.name === "Sarabun-Thai")!;
+    const latin = before.fonts.find((f) => f.name === "Sarabun")!;
+    expect(result.fontBytes?.[thai.id]).toBeGreaterThan(thai.bytes * 0.9);
+    expect(result.fontBytes?.[latin.id]).toBeLessThan(latin.bytes * 0.6);
+    expect(result.analysis.fonts.find((f) => f.name === "Sarabun-Thai")?.subset).toBe(false);
+    // The hiding is undone: the Thai program is embedded under its own key again.
+    expect(show(out, "grep")).not.toContain("HiddenFontFile");
+    expectSameRender(file, out);
+    expect(text(out)).toBe(text(file));
+  });
+
+  test("CFF and already-subset fonts are left to themselves", async () => {
+    // deck.pdf embeds Courier whole as CFF; MuPDF's CFF subsetter isn't trusted with it.
+    const deck = await compress(join(fixtures, "deck.pdf"), defaultCompressParams("print"));
+    expect(deck.result.skipped.find((s) => s.pass === "subset-fonts")?.reason).toMatch(
+      /^Kept 1 font whole: .+ \(a CFF font, which MuPDF can't subset reliably\)\.$/,
+    );
+    // Ghostscript's output is subset already, as CFF — which MuPDF garbles if let at it.
+    const file = join(fixtures, "deck-gs.pdf");
+    const gs = await compress(file, defaultCompressParams("print"));
+    expect(gs.result.skipped.map((s) => s.pass)).not.toContain("subset-fonts");
+    expect(gs.result.notes).toEqual([]);
+    expectSameRender(file, gs.out);
   });
 
   test("the JPEG repack keeps the exact pixels and makes the stream smaller", async () => {
