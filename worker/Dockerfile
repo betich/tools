@@ -85,6 +85,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json bun.lock ./
 COPY shared ./shared
 COPY worker ./worker
+# Bun links a workspace's own dependencies (pdf-lib) from worker/node_modules.
+COPY --from=deps /app/worker/node_modules ./worker/node_modules
 
 ENV NODE_ENV=production \
     WORKER_PORT=8788 \
