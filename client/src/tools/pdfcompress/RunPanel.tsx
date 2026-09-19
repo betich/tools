@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FiChevronDown } from "react-icons/fi";
 import {
   DEFAULT_CODEC,
@@ -18,10 +18,12 @@ import { EnginePicker } from "@/components/pdf/EnginePicker";
 import { Button, Field, Section, Sections, Segmented, Toggle } from "@/components/ui";
 import { useEngineSupport, type RowSupport } from "@/hooks/useEngineSupport";
 import { cn } from "@/lib/cn";
+import { bytes } from "@/lib/format";
 import { CodecSection } from "./CodecSection";
 import { DpiControl, PutBack, QualityControl } from "./controls";
 import { CODEC_SHORT } from "./overrides";
 import { InputCautions } from "./SpecialInputs";
+import { SEARCH_DEFAULTS, SearchSection, TargetField, type SearchSettings } from "./target";
 
 /** What each preset is for, in one line under the picker. */
 const PURPOSE: Record<PresetId, string> = {
@@ -43,6 +45,7 @@ export function describeParams(params: CompressParams): string {
   return [
     ...(params.engine && params.engine !== DEFAULT_ENGINE ? [ENGINES[params.engine]?.label ?? params.engine] : []),
     PRESETS[params.preset]?.label ?? params.preset,
+    params.target ? `target ${bytes(params.target.bytes)}` : null,
     params.dpiCap ? `${params.dpiCap} dpi` : "full resolution",
     `q${params.quality}`,
     params.codec && params.codec !== DEFAULT_CODEC ? (CODEC_SHORT[params.codec] ?? params.codec) : null,
@@ -59,7 +62,7 @@ export function describeParams(params: CompressParams): string {
  * and are listed so it is clear what "lossless" covers. Advanced holds what
  * changes the document itself, off until asked for, in the order later tickets
  * fill it: the engine (#13), the codecs (#10), these opt-ins, then the time
- * budget of a target size (#12). `busy` while the queue holds a task for this
+ * budget and floors of a target size (#12). `busy` while the queue holds a task for this
  * job — one at a time per caller — and RUN says why it waits.
  *
  * The DPI cap and quality start at the preset's and can be edited (#10);
@@ -68,6 +71,11 @@ export function describeParams(params: CompressParams): string {
  * the sliders' drag start, when the page holds that crop until release.
  * Per-image overrides live with the image table, not here: the page lays them
  * over these params.
+ *
+ * A target size (#12) sits with the presets: set, the preset's numbers become
+ * where the search starts. Its budget and floors are kept apart from `params`
+ * so emptying the size box and filling it again doesn't reset them; the two
+ * are joined into `params.target` for everything outside this column.
  */
 export function RunPanel({
   analysis,
@@ -82,8 +90,14 @@ export function RunPanel({
   onChange?: (params: CompressParams) => void;
   onCommitStart?: () => void;
 }) {
-  const [params, setParams] = useState<CompressParams>(() => defaultCompressParams());
+  const [base, setParams] = useState<CompressParams>(() => defaultCompressParams());
+  const [targetBytes, setTargetBytes] = useState<number | null>(null);
+  const [search, setSearch] = useState<SearchSettings>(SEARCH_DEFAULTS);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const params = useMemo<CompressParams>(
+    () => ({ ...base, target: targetBytes === null ? null : { bytes: targetBytes, ...search } }),
+    [base, targetBytes, search],
+  );
 
   useEffect(() => onChange?.(params), [params]); // eslint-disable-line react-hooks/exhaustive-deps -- report changes only
 
@@ -115,6 +129,7 @@ export function RunPanel({
           options={PRESET_IDS.map((id) => ({ value: id, label: PRESETS[id].label }))}
         />
         <p className="text-prose text-body font-sans normal-case">{PURPOSE[params.preset]}</p>
+        <TargetField value={targetBytes} search={search} inputBytes={analysis?.bytes ?? null} onChange={setTargetBytes} />
         <Supported support={support.pass("downsample")}>
           <Field
             label="downsample above"
@@ -239,7 +254,12 @@ export function RunPanel({
                 );
               })}
             </div>
-            {/* #12 target size's time budget goes last. */}
+            <SearchSection
+              value={search}
+              active={targetBytes !== null}
+              onChange={setSearch}
+              onCommitStart={onCommitStart}
+            />
           </div>
         ) : null}
       </section>
