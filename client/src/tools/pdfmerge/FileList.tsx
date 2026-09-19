@@ -124,7 +124,9 @@ export function FileList({
             {entry.upload.phase === "failed" ? (
               <span className="flex items-baseline justify-between gap-3 px-2.5 pb-2 pl-10">
                 <span className="text-meta font-sans text-body leading-snug normal-case">{entry.upload.message}</span>
-                <TextButton onClick={() => onRetry(entry.key)}>try again</TextButton>
+                <TextButton className="shrink-0 whitespace-nowrap" onClick={() => onRetry(entry.key)}>
+                  try again
+                </TextButton>
               </span>
             ) : null}
           </li>
