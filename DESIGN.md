@@ -439,6 +439,30 @@ The image tab is laid out the way the work flows: **`IN` · the machine · `OUT`
 - **One solid at a time.** While anything is waiting, the solid shape is `CONVERT 04 TO WEBP →`. While it runs, it becomes an outline `■ STOP 02 / 04` in a signal border that fills with signal at 35% as files land. Once everything is made it steps down to a disabled `✓ ALL 04 CONVERTED`, and `DOWNLOAD ALL 04 · ZIP` on the output side takes the solid. A partial result offers an outline `ZIP THE 02 READY`.
 - A file's own format, quality and size open from its **output** row, because they are settings of the output.
 
+### Video bench (media2media)
+
+The video tab uses the image bench's parts (`bench.tsx`: `Bench`, `Panel`, `Machine`, `Pipe`, `RunFill`, `FlowArrow`) on the **wide** measure, with the source column at twice the output's width (`1.7fr / 15rem / 1fr`, `2fr / 17rem / 1fr` from `xl`). The source is a picture you work on.
+
+- **`IN`** holds the clip: its facts in the header, `REPLACE` at the right, then the preview, the trim timeline, and the edits (`EDIT` and `KEY` side by side from `xl`).
+- **The machine** holds the output format, then the `lg` button (`EXPORT MP4 →`), then the optional target size. The button sits right under the format so it never falls below the fold. While the export runs, it becomes `■ STOP 42%` filling with signal; once the file is made, it steps down to an outline `↻ EXPORT AGAIN`.
+- **`OUT`** is the file the export will make: its name, what it will be, the live readout while it runs, and once done `SAVED` with the size change in display type. Sending to the GIF tab is its second way out, in outline, under a hairline.
+- Empty, all three columns are still drawn: a dropzone, a disabled `EXPORT` on its pipe, and one sentence of what lands in `OUT`.
+
+### GIF room (media2media)
+
+The GIF composer is a **room**, like the merge editor. From 1024 up it takes exactly the viewport, and the tab strip moves into its toolbar (`MEDIA2MEDIA / IMAGE VIDEO GIF`). Two rows:
+
+| from | columns | bottom row |
+| ---- | ------- | ---------- |
+| 1280 | 288 / 1fr / 336 | the timeline, the room's full width |
+| 1024 | 264 / 1fr / 304 | the timeline, the room's full width |
+| phone | a column: stage, timeline, timing & canvas, export | — |
+
+- **The stage** is the animation at its real timing, as large as the room allows, over a caption line (`12 FRAMES · 00:01.20 · 480 × 480`) and a play control: `● PLAYING · ON A LOOP` with a signal dot, or `▶ PLAY`.
+- **It plays on arrival.** Frames that land from a load, a spin or the video tab start playing on a loop immediately. Under reduced motion they wait for the play control.
+- **The timeline is the room's floor.** Tiles are 88px pictures at 1 px/ms, so a 100ms frame is 100px wide. Its header carries `TIMELINE`, the count and length, and the ways in: `+ IMAGES` (outline), `FOLDER` and `SPIN` (ghost), and `START OVER`. Drop images or a folder anywhere on it and they join the end; a dashed periwinkle overlay says so. Empty, it is a dashed lane.
+- **Side panes** scroll on their own. Timing and canvas are on the left, dimmed and inert until there are frames. Export is on the right, with the file line and one `lg` button pinned to its foot (`EXPORT GIF →`, then `DOWNLOAD GIF · 1.2 MB`, and `■ STOP` with the stage name while it encodes).
+
 ### Admin readout
 
 `/admin` is a password gate (the share dialog's field and a solid `OPEN`) in front of one page that answers one question: is anyone using this today? It is read in the order the question is asked, and nothing on it is a card.

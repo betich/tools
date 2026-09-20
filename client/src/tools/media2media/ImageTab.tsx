@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { downloadZip } from "client-zip";
-import { FiArrowDown, FiArrowRight, FiCheck, FiDownload, FiSliders, FiSquare, FiX } from "react-icons/fi";
+import { FiCheck, FiDownload, FiSliders, FiSquare, FiX } from "react-icons/fi";
 import { Dropzone } from "@/components/Dropzone";
 import { Button, Field, IconButton, Segmented, Slider, TextButton, Toggle } from "@/components/ui";
 import { useObjectUrl } from "@/hooks/useObjectUrl";
@@ -10,6 +10,7 @@ import { IMAGE_ACCEPT, formatMeta, formats, type OutputFormat } from "@/lib/code
 import { download } from "@/lib/download";
 import { bytes, delta, pad } from "@/lib/format";
 import { overriddenFields, resolveOptions, type BatchSettings, type OverrideField } from "./batch";
+import { Bench, FlowArrow, headBlock, Machine, Panel, Pipe, RunFill } from "./bench";
 import { useImageBatch, type ImageRow } from "./useImageBatch";
 
 const formatOptions = formats.map((f) => ({ value: f.value, label: f.label }));
@@ -45,9 +46,9 @@ export function ImageTab() {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_15rem_minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_17rem_minmax(0,1fr)] xl:gap-8">
+    <Bench>
       <InputPanel rows={b.rows} totals={totals} onFiles={addFiles} onRemove={b.remove} onClear={b.clear} />
-      <Machine batch={batch} set={set} totals={totals} onConvert={b.convert} onStop={b.stop} />
+      <Converter batch={batch} set={set} totals={totals} onConvert={b.convert} onStop={b.stop} />
       <OutputPanel
         rows={b.rows}
         batch={batch}
@@ -58,42 +59,13 @@ export function ImageTab() {
         onReset={b.resetOverride}
         onDownloadAll={downloadAll}
       />
-    </div>
+    </Bench>
   );
 }
-
-/** The block above each list. One height on both sides, so every output row sits across from its source. */
-const headBlock = "flex flex-col justify-end gap-4 lg:min-h-[7.25rem]";
 
 type Totals = ReturnType<typeof useImageBatch>["totals"];
 
 /* ── the two sides ─────────────────────────────────────────────────────────── */
-
-/** A side of the bench: ink over the ground, a hairline, and a header that says what it holds. */
-function Panel({
-  title,
-  count,
-  aside,
-  label,
-  children,
-}: {
-  title: string;
-  count: ReactNode;
-  aside?: ReactNode;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <section aria-label={label} className="border-wash rounded-card bg-surface flex min-w-0 flex-col border">
-      <header className="border-hairline-faint flex min-h-14 items-center gap-3 border-b px-5">
-        <h2 className="text-ink text-title font-mono font-bold uppercase">{title}</h2>
-        <span className="text-meta text-micro font-mono uppercase tabular-nums">{count}</span>
-        <span className="ml-auto flex items-center">{aside}</span>
-      </header>
-      <div className="flex flex-1 flex-col gap-5 p-5">{children}</div>
-    </section>
-  );
-}
 
 /** What the batch is made of, by the extension each file arrived with: `HEIC 08 · PNG 03`. */
 function sourceKinds(rows: ImageRow[]): [string, number][] {
@@ -218,7 +190,7 @@ function InputRow({ row, onRemove }: { row: ImageRow; onRemove: () => void }) {
 
 /* ── the machine ───────────────────────────────────────────────────────────── */
 
-function Machine({
+function Converter({
   batch,
   set,
   totals,
@@ -233,7 +205,7 @@ function Machine({
 }) {
   const meta = formatMeta(batch.format);
   return (
-    <section aria-label="convert" className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
+    <Machine label="convert">
       {/* Not a <Field>: that is a <label>, and a label full of buttons fires the first one when its text is clicked. */}
       <div className="flex flex-col gap-3">
         <h2 className="text-meta text-micro font-mono uppercase">convert to</h2>
@@ -259,7 +231,7 @@ function Machine({
       </div>
 
       <ConvertButton format={meta.label} totals={totals} onConvert={onConvert} onStop={onStop} />
-    </section>
+    </Machine>
   );
 }
 
@@ -311,13 +283,6 @@ function ConvertButton({
 }) {
   const busy = totals.running > 0;
   const share = totals.total > 0 ? totals.fresh / totals.total : 0;
-  const Arrow = ({ className }: { className?: string }) => (
-    <>
-      <FiArrowDown className={cn("size-4 shrink-0 lg:hidden", className)} aria-hidden />
-      <FiArrowRight className={cn("hidden size-4 shrink-0 lg:block", className)} aria-hidden />
-    </>
-  );
-
   let button: ReactNode;
   if (totals.total === 0) {
     button = (
@@ -334,11 +299,7 @@ function ConvertButton({
         className="border-signal text-ink hover:text-ink relative overflow-hidden"
         aria-describedby="convert-progress"
       >
-        <span
-          className="bg-signal/35 absolute inset-y-0 left-0 transition-[width] duration-300 ease-out"
-          style={{ width: `${share * 100}%` }}
-          aria-hidden
-        />
+        <RunFill share={share} />
         <span className="relative flex items-center gap-3">
           <FiSquare className="size-3.5" aria-hidden /> stop
           <span className="tabular-nums tracking-normal">
@@ -351,7 +312,7 @@ function ConvertButton({
     button = (
       <Button size="lg" onClick={onConvert} className="group">
         convert {pad(totals.pending)} to {format}
-        <Arrow className="transition-transform duration-200 group-hover:translate-x-1 max-lg:group-hover:translate-x-0 max-lg:group-hover:translate-y-0.5" />
+        <FlowArrow className="transition-transform duration-200 group-hover:translate-x-1 max-lg:group-hover:translate-x-0 max-lg:group-hover:translate-y-0.5" />
       </Button>
     );
   } else {
@@ -363,26 +324,19 @@ function ConvertButton({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        className={cn(
-          "relative",
-          // The pipe: a hairline from the input panel into the button and on out to the output.
-          "lg:before:absolute lg:before:right-full lg:before:top-1/2 lg:before:h-px lg:before:w-6 xl:before:w-8",
-          "lg:after:absolute lg:after:left-full lg:after:top-1/2 lg:after:h-px lg:after:w-6 xl:after:w-8",
-          busy ? "lg:before:bg-signal lg:after:bg-signal" : "lg:before:bg-edge lg:after:bg-edge",
-        )}
-      >
-        {button}
-      </div>
-      <p id="convert-progress" className="text-meta text-micro text-center font-mono uppercase" aria-live="polite">
-        {busy
+    <Pipe
+      live={busy}
+      statusId="convert-progress"
+      status={
+        busy
           ? `converting · ${pad(totals.running)} in the works`
           : totals.failed > 0
             ? `${pad(totals.failed)} failed — see the output`
-            : "nothing leaves this browser"}
-      </p>
-    </div>
+            : "nothing leaves this browser"
+      }
+    >
+      {button}
+    </Pipe>
   );
 }
 
@@ -551,7 +505,10 @@ function OutputRow({
         {made ? (
           <span className="flex shrink-0 flex-col items-end">
             <span
-              className={cn("text-small font-mono tabular-nums tracking-normal", size < row.file.size ? "text-indigo" : "text-ink")}
+              className={cn(
+                "text-small font-mono tabular-nums tracking-normal",
+                size < row.file.size ? "text-indigo" : "text-ink",
+              )}
             >
               {delta(row.file.size, size)}
             </span>

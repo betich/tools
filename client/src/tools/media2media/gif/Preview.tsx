@@ -11,7 +11,20 @@ import { canvasSize, playList, type GifDoc } from "./model";
  * It draws through `paintFrame`, the same code the export uses. `time` is
  * in played time (ping-pong included).
  */
-export function Preview({ doc, store, time, className }: { doc: GifDoc; store: FrameStore; time: number; className?: string }) {
+export function Preview({
+  doc,
+  store,
+  time,
+  fill = false,
+  className,
+}: {
+  doc: GifDoc;
+  store: FrameStore;
+  time: number;
+  /** Take the whole box it is given — the composer's stage — instead of sitting in its own card. */
+  fill?: boolean;
+  className?: string;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = canvasSize(doc);
   const list = useMemo(() => playList(doc), [doc]);
@@ -31,8 +44,8 @@ export function Preview({ doc, store, time, className }: { doc: GifDoc; store: F
   return (
     <div
       className={cn(
-        "border-wash flex items-center justify-center overflow-hidden rounded-card border p-4 sm:p-6",
-        "min-h-[240px]",
+        "flex items-center justify-center overflow-hidden",
+        fill ? "size-full min-h-0" : "border-wash rounded-card min-h-[240px] border p-4 sm:p-6",
         className,
       )}
     >
@@ -40,7 +53,11 @@ export function Preview({ doc, store, time, className }: { doc: GifDoc; store: F
         ref={ref}
         role="img"
         aria-label={frame ? `preview, ${frame.name}` : "preview"}
-        className={cn("block max-h-[56vh] max-w-full", doc.background ? null : "checkers")}
+        className={cn(
+          "block max-w-full",
+          fill ? "max-h-full" : "max-h-[56vh]",
+          doc.background ? null : "checkers",
+        )}
         style={{ aspectRatio: `${size.width} / ${size.height}` }}
       />
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { FiDownload } from "react-icons/fi";
+import { FiArrowRight, FiDownload, FiSquare } from "react-icons/fi";
 import { Button, Field, Input, Prose, Section, Sections, Slider, Stat, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { download } from "@/lib/download";
@@ -23,6 +23,7 @@ import {
 } from "./encode";
 import type { GifDoc } from "./model";
 import type { GifSession } from "./session";
+import { RunFill } from "../bench";
 
 type Settings = { format: AnimFormat; options: EncodeOptions };
 
@@ -107,67 +108,73 @@ export function ExportPanel({ doc, session }: { doc: GifDoc; session: GifSession
   const fileName = (d: Done) => `animation.${FORMATS[d.format].ext}`;
 
   return (
-    <Sections>
-      <Section title="export">
-        <Group label="format">
-          <Choices
-            value={format}
-            onChange={(f) => setSettings((s) => ({ ...s, format: f }))}
-            options={ANIM_FORMATS.map((f) => ({ value: f, label: FORMATS[f].label, support: true }))}
-          />
-          <Prose>{info.blurb}</Prose>
-        </Group>
+    <>
+      <Sections>
+        <Section title="export">
+          <Group label="format">
+            <Choices
+              value={format}
+              onChange={(f) => setSettings((s) => ({ ...s, format: f }))}
+              options={ANIM_FORMATS.map((f) => ({ value: f, label: FORMATS[f].label, support: true }))}
+            />
+            <Prose>{info.blurb}</Prose>
+          </Group>
 
-        <Control support={info.controls.quality}>
-          <Field label="quality">
+          <Control support={info.controls.quality}>
+            <Field label="quality">
+              <span className="flex items-center gap-3">
+                <Slider value={resolved.quality} min={1} max={100} onChange={(quality) => set({ quality })} />
+                <Readout>{resolved.quality}</Readout>
+              </span>
+            </Field>
+          </Control>
+
+          <Control support={info.controls.colours}>
+            <Group label="colours">
+              <Choices
+                value={resolved.colours === 0 ? "all" : "palette"}
+                onChange={(v) => set({ colours: v === "all" ? 0 : clampColours(options.colours || 256) })}
+                options={[
+                  // A format without the choice has the whole control dimmed, so the options needn't be.
+                  { value: "all", label: "every colour", support: true },
+                  { value: "palette", label: "palette", support: true },
+                ]}
+              />
+              {resolved.colours > 0 ? (
+                <span className="flex items-center gap-3">
+                  <Slider value={resolved.colours} min={2} max={256} onChange={(colours) => set({ colours })} />
+                  <Readout>{resolved.colours}</Readout>
+                </span>
+              ) : null}
+            </Group>
+          </Control>
+
+          <DitherControl format={format} options={resolved} onChange={(dither) => set({ dither })} />
+
+          <Field
+            label="frame diff"
+            hint="Changes smaller than this keep what's already on screen, so only real motion is written. 0 is exact."
+          >
             <span className="flex items-center gap-3">
-              <Slider value={resolved.quality} min={1} max={100} onChange={(quality) => set({ quality })} />
-              <Readout>{resolved.quality}</Readout>
+              <Slider
+                value={resolved.tolerance}
+                min={0}
+                max={MAX_TOLERANCE}
+                onChange={(tolerance) => set({ tolerance })}
+              />
+              <Readout>{resolved.tolerance === 0 ? "exact" : `± ${resolved.tolerance}`}</Readout>
             </span>
           </Field>
-        </Control>
 
-        <Control support={info.controls.colours}>
-          <Group label="colours">
-            <Choices
-              value={resolved.colours === 0 ? "all" : "palette"}
-              onChange={(v) => set({ colours: v === "all" ? 0 : clampColours(options.colours || 256) })}
-              options={[
-                // A format without the choice has the whole control dimmed, so the options needn't be.
-                { value: "all", label: "every colour", support: true },
-                { value: "palette", label: "palette", support: true },
-              ]}
-            />
-            {resolved.colours > 0 ? (
-              <span className="flex items-center gap-3">
-                <Slider value={resolved.colours} min={2} max={256} onChange={(colours) => set({ colours })} />
-                <Readout>{resolved.colours}</Readout>
-              </span>
-            ) : null}
-          </Group>
-        </Control>
+          <TargetBox value={options.targetBytes} onChange={(targetBytes) => set({ targetBytes })} />
+        </Section>
+      </Sections>
 
-        <DitherControl format={format} options={resolved} onChange={(dither) => set({ dither })} />
-
-        <Field
-          label="frame diff"
-          hint="Changes smaller than this keep what's already on screen, so only real motion is written. 0 is exact."
-        >
-          <span className="flex items-center gap-3">
-            <Slider
-              value={resolved.tolerance}
-              min={0}
-              max={MAX_TOLERANCE}
-              onChange={(tolerance) => set({ tolerance })}
-            />
-            <Readout>{resolved.tolerance === 0 ? "exact" : `± ${resolved.tolerance}`}</Readout>
-          </span>
-        </Field>
-
-        <TargetBox value={options.targetBytes} onChange={(targetBytes) => set({ targetBytes })} />
-      </Section>
-
-      <Section title="file">
+      {/*
+      The file and the one action, pinned to the foot of the pane so the
+      button never scrolls away from the settings that feed it.
+    */}
+      <footer className="border-hairline-faint mt-7 flex flex-col gap-4 border-t pt-6 lg:sticky lg:bottom-0 lg:z-10 lg:-mx-6 lg:mt-auto lg:bg-paper/85 lg:px-6 lg:pb-6 lg:pt-5 lg:backdrop-blur-md xl:-mx-7 xl:px-7">
         <p className="text-meta text-micro font-mono uppercase">
           <span className="tabular-nums">{spec.count}</span> frames
           {" · "}
@@ -176,33 +183,49 @@ export function ExportPanel({ doc, session }: { doc: GifDoc; session: GifSession
           </span>
           {" · "}
           {spec.plays === 0 ? "plays forever" : spec.plays === 1 ? "plays once" : `plays ${spec.plays} times`}
-          {" · "}
-          {info.label}
         </p>
 
+        {error ? <p className="text-ink text-body font-sans normal-case leading-snug">{error}</p> : null}
+        {done && !job ? <Outcome done={done} stale={!current} /> : null}
+
         {job ? (
-          <Progress job={job} onStop={stop} />
-        ) : error ? (
-          <p className="text-ink text-body font-sans normal-case leading-snug">{error}</p>
-        ) : null}
-
-        {done ? <Outcome done={done} stale={!current} /> : null}
-
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          {done ? (
-            <Button variant={current ? "primary" : "outline"} onClick={() => download(done.blob, fileName(done))}>
-              <FiDownload className="size-3.5" aria-hidden />
-              download {FORMATS[done.format].label}
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={stop}
+            className="border-signal text-ink hover:text-ink relative overflow-hidden"
+            aria-label={`stop — ${job.label}`}
+          >
+            <RunFill share={job.fraction} />
+            <span className="relative flex min-w-0 items-center gap-3">
+              <FiSquare className="size-3.5 shrink-0" aria-hidden /> stop
+              <span className="truncate normal-case tracking-normal">{job.label}</span>
+            </span>
+          </Button>
+        ) : current && done ? (
+          <Button size="lg" onClick={() => download(done.blob, fileName(done))}>
+            <FiDownload className="size-4" aria-hidden />
+            download {FORMATS[done.format].label} · {bytes(done.blob.size)}
+          </Button>
+        ) : (
+          <>
+            <Button size="lg" onClick={run} disabled={spec.count === 0} className="group">
+              {done ? "export again" : `export ${info.label}`}
+              <FiArrowRight
+                className="size-4 transition-transform duration-200 group-hover:translate-x-1"
+                aria-hidden
+              />
             </Button>
-          ) : null}
-          {!current ? (
-            <Button onClick={run} disabled={!!job || spec.count === 0}>
-              {done ? `export again` : `export ${info.label}`}
-            </Button>
-          ) : null}
-        </div>
-      </Section>
-    </Sections>
+            {done ? (
+              <Button variant="ghost" onClick={() => download(done.blob, fileName(done))} className="self-center">
+                <FiDownload className="size-3.5" aria-hidden />
+                the earlier {FORMATS[done.format].label} · {bytes(done.blob.size)}
+              </Button>
+            ) : null}
+          </>
+        )}
+      </footer>
+    </>
   );
 }
 
@@ -325,30 +348,6 @@ function TargetBox({ value, onChange }: { value: number | null; onChange: (n: nu
 }
 
 /* ── Progress and result ────────────────────────────────────────────────── */
-
-function Progress({ job, onStop }: { job: Job; onStop: () => void }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-label text-micro truncate font-mono uppercase">{job.label}</span>
-        <TextButton onClick={onStop}>stop</TextButton>
-      </div>
-      <div
-        role="progressbar"
-        aria-label="exporting"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(job.fraction * 100)}
-        className="bg-wash relative h-0.5 w-full overflow-hidden rounded-full"
-      >
-        <div
-          className="bg-indigo absolute inset-y-0 left-0 transition-[width] duration-200"
-          style={{ width: `${Math.max(2, job.fraction * 100)}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function Outcome({ done, stale }: { done: Done; stale: boolean }) {
   const fit = done.fit;

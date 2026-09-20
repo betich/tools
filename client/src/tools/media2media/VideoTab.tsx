@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dropzone } from "@/components/Dropzone";
 import { formatTime, Timeline, usePlayback } from "@/components/timeline";
-import { Button, Prose, TextButton, Value } from "@/components/ui";
+import { FiCheck, FiFilm, FiRotateCw, FiSquare } from "react-icons/fi";
+import { Button, Prose, Stat, TextButton } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { useHistory } from "@/hooks/useHistory";
 import { useObjectUrl } from "@/hooks/useObjectUrl";
 import { useToast } from "@/hooks/useToast";
 import { download } from "@/lib/download";
-import { bytes } from "@/lib/format";
+import { bytes, delta } from "@/lib/format";
+import { Bench, FlowArrow, Machine, Panel, Pipe, RunFill } from "./bench";
 import { budgetFor, correctedBitrate, outcome, type Outcome } from "./video/budget";
 import { EditSection, OutputSection } from "./video/Controls";
 import type { ExportProgress } from "./video/export";
@@ -100,18 +103,39 @@ export function VideoTab() {
 
   if (!opened || !url) {
     return (
-      <div className="flex flex-col gap-4">
-        <Dropzone
-          onFiles={open}
-          accept={VIDEO_ACCEPT}
-          multiple={false}
-          cta="choose a video"
-          label={reading ? "reading the file" : "or drop one here"}
-          hint="mp4 · mov · webm · mkv — any size; it's read in pieces, never loaded whole"
-          className="min-h-72"
-        />
-        {problem ? <p className="text-meta text-body font-sans normal-case">{problem}</p> : null}
-      </div>
+      <Bench className={WIDE}>
+        <Panel title="in" label="the video to convert" count={reading ? "reading…" : "nothing yet"}>
+          <Dropzone
+            onFiles={open}
+            accept={VIDEO_ACCEPT}
+            multiple={false}
+            cta="choose a video"
+            label={reading ? "reading the file" : "or drop one anywhere in here"}
+            hint="mp4 · mov · webm · mkv — any size; it's read in pieces, never loaded whole"
+            className="min-h-80 flex-1 gap-4"
+          />
+          {problem ? <Prose>{problem}</Prose> : null}
+        </Panel>
+        <Machine label="export">
+          <p className="text-label text-micro font-sans">
+            Trim, crop, speed and format appear here once a video is in. Nothing is uploaded — it's all made in this
+            browser.
+          </p>
+          <Pipe live={false} statusId="export-status" status="add a video first">
+            <Button size="lg" disabled>
+              export
+            </Button>
+          </Pipe>
+        </Machine>
+        <Panel title="out" label="the exported file" count="nothing yet">
+          <div className="flex min-h-80 flex-1 flex-col items-center justify-center gap-3 text-center">
+            <FiFilm className="text-edge size-6" aria-hidden />
+            <p className="text-label text-body max-w-[30ch] font-sans">
+              The exported file lands here — or goes on to the GIF tab as frames.
+            </p>
+          </div>
+        </Panel>
+      </Bench>
     );
   }
 
@@ -278,29 +302,61 @@ function Editor({
     disabled: busy,
   };
 
-  return (
-    <div className="grid gap-10 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-12">
-      <aside className="flex flex-col gap-8">
-        <OutputSection {...controls} />
-        {edit.output === "video" && source.hasVideo ? (
-          <TargetSizeSection
-            edit={edit}
-            source={source}
-            fileBytes={file.size}
-            value={targetBytes}
-            budget={budget}
-            onChange={setTargetBytes}
-            onHeight={(height) => history.set({ ...edit, height })}
-            disabled={busy}
-          />
-        ) : null}
-        <EditSection {...controls} />
-        <KeySection {...controls} file={file} picking={key.picking} onPicking={key.setPicking} />
-      </aside>
+  const running = job.phase === "running";
+  const fraction = running ? (job.progress?.fraction ?? 0) : 0;
+  const ext = extensionFor(edit);
+  const saveToDisk = caps?.saveToDisk ?? canSaveToDisk();
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <FileBar file={file} source={source} onReplace={onReplace} disabled={busy} />
-        {problem ? <p className="text-meta text-body font-sans normal-case">{problem}</p> : null}
+  let cta: React.ReactNode;
+  if (running) {
+    cta = (
+      <Button
+        size="lg"
+        variant="outline"
+        onClick={job.stop}
+        className="border-signal text-ink hover:text-ink relative overflow-hidden"
+        aria-describedby="export-status"
+      >
+        <RunFill share={fraction} />
+        <span className="relative flex items-center gap-3">
+          <FiSquare className="size-3.5" aria-hidden /> stop
+          <span className="tabular-nums tracking-normal">{Math.round(fraction * 100)}%</span>
+        </span>
+      </Button>
+    );
+  } else if (job.phase === "done") {
+    cta = (
+      <Button size="lg" variant="outline" onClick={() => void run()} disabled={!!blocker}>
+        <FiRotateCw className="size-4" aria-hidden /> export again
+      </Button>
+    );
+  } else {
+    cta = (
+      <Button
+        size="lg"
+        onClick={() => void run()}
+        disabled={!!blocker}
+        className="group"
+        aria-describedby="export-status"
+      >
+        export {ext}
+        <FlowArrow className="transition-transform duration-200 group-hover:translate-x-1 max-lg:group-hover:translate-x-0 max-lg:group-hover:translate-y-0.5" />
+      </Button>
+    );
+  }
+
+  return (
+    <Bench className={WIDE}>
+      <Panel
+        title="in"
+        label="the video to convert"
+        count={sourceFacts(file, source).join(" · ")}
+        aside={<ReplaceButton onReplace={onReplace} disabled={busy} />}
+      >
+        <span className="text-ink text-small -mt-1 truncate font-mono tracking-normal" title={file.name}>
+          {file.name}
+        </span>
+        {problem ? <Prose>{problem}</Prose> : null}
 
         <Preview
           source={source}
@@ -338,23 +394,45 @@ function Editor({
         />
 
         {notes.map((n) => (
-          <p key={n} className="text-meta text-body font-sans normal-case leading-snug">
-            {n}
-          </p>
+          <Prose key={n}>{n}</Prose>
         ))}
 
-        <ExportRow
-          name={name}
-          summary={summary}
-          length={outputDuration(edit)}
-          size={size}
-          job={job}
-          blocker={blocker}
-          saveToDisk={caps?.saveToDisk ?? canSaveToDisk()}
-          onExport={() => void run()}
-          onRetry={(bitrate) => void run(bitrate)}
-        />
+        <div className="border-hairline-faint grid gap-8 border-t pt-6 xl:grid-cols-2">
+          <EditSection {...controls} />
+          <KeySection {...controls} file={file} picking={key.picking} onPicking={key.setPicking} />
+        </div>
+      </Panel>
 
+      <Machine label="export">
+        <OutputSection {...controls} />
+        <Pipe live={running} statusId="export-status" status={ctaStatus(job, saveToDisk)}>
+          {cta}
+        </Pipe>
+        {!running && blocker ? <Prose>{blocker}</Prose> : null}
+        {edit.output === "video" && source.hasVideo ? (
+          <TargetSizeSection
+            edit={edit}
+            source={source}
+            fileBytes={file.size}
+            value={targetBytes}
+            budget={budget}
+            onChange={setTargetBytes}
+            onHeight={(height) => history.set({ ...edit, height })}
+            disabled={busy}
+          />
+        ) : null}
+      </Machine>
+
+      <OutPanel
+        name={name}
+        summary={summary}
+        length={outputDuration(edit)}
+        size={size}
+        sourceBytes={file.size}
+        job={job}
+        saveToDisk={saveToDisk}
+        onRetry={(bitrate) => void run(bitrate)}
+      >
         <SendToGif
           file={file}
           source={source}
@@ -363,39 +441,42 @@ function Editor({
           disabled={busy}
           onStart={() => playback.setPlaying(false)}
         />
-      </div>
-    </div>
+      </OutPanel>
+    </Bench>
   );
 }
 
-function FileBar({
-  file,
-  source,
-  onReplace,
-  disabled,
-}: {
-  file: File;
-  source: SourceInfo;
-  onReplace: (files: File[]) => void;
-  disabled: boolean;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const facts = [
+/** The source is the picture you work on, so it takes twice the output's width. */
+const WIDE = "lg:grid-cols-[minmax(0,1.7fr)_15rem_minmax(0,1fr)] xl:grid-cols-[minmax(0,2fr)_17rem_minmax(0,1fr)]";
+
+function ctaStatus(job: Job, saveToDisk: boolean): string {
+  if (job.phase === "running") {
+    const p = job.progress;
+    return [
+      p?.fps ? `${formatFps(p.fps)} fps` : "starting",
+      p?.remaining != null ? `${formatRemaining(p.remaining)} left` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (job.phase === "done") return job.toDisk ? "saved · change anything and go again" : "downloaded";
+  return saveToDisk ? "you pick where it's saved" : "downloads when it's done";
+}
+
+function sourceFacts(file: File, source: SourceInfo): string[] {
+  return [
     bytes(file.size),
     formatTime(source.duration),
     source.hasVideo ? `${source.width}×${source.height}` : null,
     source.fps ? `${Math.round(source.fps * 100) / 100} fps` : null,
     [source.videoCodec, source.audioCodec].filter(Boolean).join(" + ") || null,
-  ].filter(Boolean);
+  ].filter((f): f is string => !!f);
+}
 
+function ReplaceButton({ onReplace, disabled }: { onReplace: (files: File[]) => void; disabled: boolean }) {
+  const input = useRef<HTMLInputElement>(null);
   return (
-    <div className="border-hairline-faint flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b pb-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-ink text-small truncate font-mono tracking-normal" title={file.name}>
-          {file.name}
-        </span>
-        <span className="text-meta text-micro font-mono tabular-nums tracking-normal">{facts.join(" · ")}</span>
-      </div>
+    <>
       <TextButton onClick={() => input.current?.click()} disabled={disabled}>
         replace
       </TextButton>
@@ -405,107 +486,107 @@ function FileBar({
         accept={VIDEO_ACCEPT}
         className="sr-only"
         aria-label="replace the video"
+        tabIndex={-1}
         onChange={(e) => {
           if (e.target.files) onReplace([...e.target.files]);
           e.target.value = "";
         }}
       />
-    </div>
+    </>
   );
 }
 
-function ExportRow({
+/**
+ * What comes out: the file this export will make, how the run is going,
+ * and what landed. Its second way out — the same clip as GIF frames — sits
+ * under a hairline at the foot.
+ */
+function OutPanel({
   name,
   summary,
   length,
   size,
+  sourceBytes,
   job,
-  blocker,
   saveToDisk,
-  onExport,
   onRetry,
+  children,
 }: {
   name: string;
   summary: string[];
   length: number;
   size: { width: number; height: number } | null;
+  sourceBytes: number;
   job: Job;
-  blocker: string | null;
   saveToDisk: boolean;
-  onExport: () => void;
   onRetry: (bitrate: number) => void;
+  children: React.ReactNode;
 }) {
-  const running = job.phase === "running";
-  const progress = running ? job.progress : null;
-  const fraction = progress?.fraction ?? 0;
+  const progress = job.phase === "running" ? job.progress : null;
+  const state =
+    job.phase === "running"
+      ? `encoding · ${Math.round((progress?.fraction ?? 0) * 100)}%`
+      : job.phase === "done"
+        ? job.toDisk
+          ? "saved"
+          : "downloaded"
+        : job.phase === "failed"
+          ? "stopped"
+          : "ready to make";
 
   return (
-    <section className="border-hairline-faint flex flex-col gap-4 border-t pt-6" aria-label="export">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-ink text-small truncate font-mono tracking-normal" title={name}>
-            {name}
-          </span>
-          <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
-            {[formatTime(length), size ? `${size.width}×${size.height}` : null, ...summary].filter(Boolean).join(" · ")}
-          </span>
-        </div>
-        {running ? (
-          <TextButton onClick={job.stop}>stop</TextButton>
-        ) : (
-          <Button onClick={onExport} disabled={!!blocker}>
-            export
-          </Button>
-        )}
+    <Panel title="out" label="the exported file" count={state}>
+      <div className="flex flex-col gap-1">
+        <span className="text-ink text-small truncate font-mono tracking-normal" title={name}>
+          {name}
+        </span>
+        <span className="text-meta text-micro font-mono tabular-nums tracking-normal">
+          {[formatTime(length), size ? `${size.width}×${size.height}` : null, ...summary].filter(Boolean).join(" · ")}
+        </span>
       </div>
 
-      {running ? (
-        <div className="flex flex-col gap-2">
-          <div
-            role="progressbar"
-            aria-label={`export ${name}`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(fraction * 100)}
-            className="bg-wash relative h-0.5 w-full overflow-hidden rounded-full"
-          >
-            <div
-              className="bg-indigo absolute inset-y-0 left-0 transition-[width] duration-200"
-              style={{ width: `${fraction * 100}%` }}
-            />
-          </div>
-          <div className="text-meta text-micro flex flex-wrap gap-x-5 gap-y-1 font-mono uppercase" aria-live="polite">
-            <span>
-              done <Value>{Math.round(fraction * 100)}%</Value>
-            </span>
-            <span>
-              fps <Value>{formatFps(progress?.fps ?? null)}</Value>
-            </span>
-            <span>
-              left <Value>{formatRemaining(progress?.remaining ?? null)}</Value>
-            </span>
-            <span>
-              {job.toDisk ? "written" : "held"} <Value>{bytes(progress?.bytes ?? 0)}</Value>
-            </span>
-          </div>
+      {job.phase === "running" ? (
+        <div className="grid grid-cols-2 gap-4" aria-live="polite">
+          <Stat label="done" value={`${Math.round((progress?.fraction ?? 0) * 100)}%`} accent />
+          <Stat label="speed" value={`${formatFps(progress?.fps ?? null)} fps`} />
+          <Stat label="left" value={formatRemaining(progress?.remaining ?? null)} />
+          <Stat label={job.toDisk ? "written" : "held"} value={bytes(progress?.bytes ?? 0)} />
         </div>
       ) : null}
 
       {job.phase === "done" ? (
-        <div className="flex flex-col gap-1">
-          <p className="text-meta text-micro font-mono uppercase">
-            {job.toDisk ? "saved" : "downloaded"} <Value accent>{bytes(job.bytes)}</Value>
-          </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-meta text-micro flex items-center gap-2 font-mono uppercase">
+                <FiCheck className="text-indigo size-3.5" aria-hidden />
+                {job.toDisk ? "saved" : "downloaded"}
+              </span>
+              <span className="text-label text-small font-mono tabular-nums tracking-normal">
+                {bytes(sourceBytes)} → <span className="text-ink">{bytes(job.bytes)}</span>
+              </span>
+            </div>
+            <span
+              className={cn(
+                "text-display font-mono font-bold tabular-nums",
+                job.bytes < sourceBytes ? "text-indigo" : "text-ink",
+              )}
+            >
+              {delta(sourceBytes, job.bytes)}
+            </span>
+          </div>
           {job.target ? <TargetOutcome {...job.target} onRetry={onRetry} /> : null}
           {job.notes.map((n) => (
             <Prose key={n}>{n}</Prose>
           ))}
         </div>
       ) : null}
+
       {job.phase === "failed" ? <Prose>{job.message}</Prose> : null}
-      {!running && blocker ? <Prose>{blocker}</Prose> : null}
-      {!running && !blocker && job.phase !== "done" ? <Prose>{saveNote(saveToDisk, MEMORY_LIMIT)}</Prose> : null}
-    </section>
+      {job.phase === "idle" ? <Prose>{saveNote(saveToDisk, MEMORY_LIMIT)}</Prose> : null}
+
+      {children}
+    </Panel>
   );
 }
 
