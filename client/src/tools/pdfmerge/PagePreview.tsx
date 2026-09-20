@@ -19,12 +19,15 @@ export function PagePreview({
   index,
   count,
   kept,
+  compact,
 }: {
   entry: MergeEntry | null;
   index: number;
   count: number;
   /** For a PDF whose pages were picked (#37): how many of how many go in. */
   kept?: { pages: number; of: number } | null;
+  /** In the inspector, where it shares the column with the settings and the button. */
+  compact?: boolean;
 }) {
   const source = entry?.source;
   const options = entry?.layout;
@@ -38,8 +41,15 @@ export function PagePreview({
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="border-wash checkers relative flex h-[54vh] max-h-[640px] min-h-72 items-center justify-center overflow-hidden rounded-sm border">
+    <div className="flex shrink-0 flex-col gap-3">
+      <div
+        className={cn(
+          "border-wash checkers relative flex items-center justify-center overflow-hidden rounded-sm border",
+          compact
+            ? "h-[28vh] max-h-72 min-h-44 lg:h-[22vh] lg:max-h-64 lg:min-h-32"
+            : "h-[54vh] max-h-[640px] min-h-72",
+        )}
+      >
         {!entry ? (
           <Tile lines={["no file chosen"]} />
         ) : layout && entry.source.state === "image" ? (
@@ -51,12 +61,12 @@ export function PagePreview({
         ) : (
           <Tile
             lines={[`${entry.kind} · ${bytes(entry.file.size)}`]}
-            prose="This browser cannot draw this format, so there is no preview. The server reads it, and lays it out with the settings on the left."
+            prose="This browser cannot draw this format, so there is no preview. The server reads it, and lays it out with the settings beside it."
           />
         )}
       </div>
 
-      <p className="text-meta flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-micro uppercase tabular-nums">
+      <p className="text-meta text-micro flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono uppercase tabular-nums">
         <span>{entry ? `page ${pad(index + 1)} / ${pad(count)}` : "preview"}</span>
         <span>{entry ? caption(entry, layout, kept ?? null) : null}</span>
       </p>
@@ -97,7 +107,8 @@ function PageCanvas({ bitmap, layout }: { bitmap: ImageBitmap; layout: PageLayou
     return () => ro.disconnect();
   }, []);
 
-  const scale = size.w && size.h ? Math.min((size.w - GUTTER * 2) / layout.width, (size.h - GUTTER * 2) / layout.height) : 0;
+  const scale =
+    size.w && size.h ? Math.min((size.w - GUTTER * 2) / layout.width, (size.h - GUTTER * 2) / layout.height) : 0;
   const cssW = Math.max(1, Math.floor(layout.width * scale));
   const cssH = Math.max(1, Math.floor(layout.height * scale));
 
@@ -126,7 +137,9 @@ function PageCanvas({ bitmap, layout }: { bitmap: ImageBitmap; layout: PageLayou
 
   return (
     <div ref={box} className="absolute inset-0 flex items-center justify-center">
-      {scale > 0 ? <canvas ref={canvas} style={{ width: cssW, height: cssH }} aria-label="page preview" role="img" /> : null}
+      {scale > 0 ? (
+        <canvas ref={canvas} style={{ width: cssW, height: cssH }} aria-label="page preview" role="img" />
+      ) : null}
     </div>
   );
 }
@@ -169,11 +182,11 @@ function Tile({ lines, prose }: { lines: string[]; prose?: string }) {
   return (
     <div className="flex max-w-[46ch] flex-col items-center gap-2 px-6 text-center">
       {lines.map((l, i) => (
-        <p key={i} className={cn("font-mono text-micro uppercase tabular-nums", i === 0 ? "text-label" : "text-meta")}>
+        <p key={i} className={cn("text-micro font-mono uppercase tabular-nums", i === 0 ? "text-label" : "text-meta")}>
           {l}
         </p>
       ))}
-      {prose ? <p className="text-prose font-sans text-body normal-case">{prose}</p> : null}
+      {prose ? <p className="text-prose text-body font-sans normal-case">{prose}</p> : null}
     </div>
   );
 }

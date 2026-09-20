@@ -47,7 +47,9 @@ function usePageCounts(entries: MergeEntry[], want: (entry: MergeEntry) => boole
   );
 
   const wanted = entries.flatMap((e) =>
-    e.kind === "pdf" && e.upload.phase === "done" && !asked.current.has(e.upload.result.id) && want(e) ? [e.upload.result.id] : [],
+    e.kind === "pdf" && e.upload.phase === "done" && !asked.current.has(e.upload.result.id) && want(e)
+      ? [e.upload.result.id]
+      : [],
   );
   const signature = wanted.join(",");
 
@@ -165,14 +167,21 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
     setSelection(NO_SELECTION);
   }, [commit, selection]);
 
-  const setPages = useCallback((key: string, pages: number[]) => commit((o, f) => setFilePages(o, f, key, pages)), [commit]);
+  /** Takes the given pages out of the output, picked or not — the tile's own delete. */
+  const removeIds = useCallback((gone: ReadonlySet<string>) => commit((o, f) => removePages(o, f, gone)), [commit]);
+
+  const setPages = useCallback(
+    (key: string, pages: number[]) => commit((o, f) => setFilePages(o, f, key, pages)),
+    [commit],
+  );
   const reset = useCallback((key: string) => commit((o, f) => resetFile(o, f, key)), [commit]);
 
   // The PDF being looked at, once it has uploaded (or failed to): its pages, for its range box.
   const focusAt = entries.findIndex((e) => e.key === focus);
   const focusEntry = focusAt >= 0 ? entries[focusAt]! : null;
   const focusCount = focusAt >= 0 ? stable[focusAt]?.pages : undefined;
-  const focusReady = focusEntry?.kind === "pdf" && (focusEntry.upload.phase === "done" || focusEntry.upload.phase === "failed");
+  const focusReady =
+    focusEntry?.kind === "pdf" && (focusEntry.upload.phase === "done" || focusEntry.upload.phase === "failed");
   const focused = useMemo(
     (): FilePages | null =>
       focus && focusReady
@@ -206,6 +215,7 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
     pickAll: useCallback(() => setSelection({ ids: new Set(ids), anchor: ids[0] ?? null }), [ids]),
     clearPicked: useCallback(() => setSelection(NO_SELECTION), []),
     removePicked,
+    removeIds,
     setPages,
     reset,
     resetAll: useCallback(() => commit(() => null), [commit]),
@@ -217,7 +227,10 @@ export function usePageOrder(entries: MergeEntry[], { all, focus }: { all: boole
       [commit],
     ),
     /** The keyboard's move: pages `ids` one place earlier or later. */
-    shiftPages: useCallback((ids: ReadonlySet<string>, by: -1 | 1) => commit((o, f) => shiftPages(o, f, ids, by)), [commit]),
+    shiftPages: useCallback(
+      (ids: ReadonlySet<string>, by: -1 | 1) => commit((o, f) => shiftPages(o, f, ids, by)),
+      [commit],
+    ),
     /** Deals pages `ids` out a file at a time: fronts and backs into one document. */
     interleave: useCallback((ids: ReadonlySet<string>) => commit((o, f) => interleavePages(o, f, ids)), [commit]),
     undo: history.undo,

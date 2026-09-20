@@ -32,7 +32,11 @@ export function OutputOptions({
       </Field>
 
       <div className="flex flex-col gap-3">
-        <Toggle checked={output.bookmarks} onChange={(bookmarks) => onChange({ bookmarks })} label="a bookmark per file" />
+        <Toggle
+          checked={output.bookmarks}
+          onChange={(bookmarks) => onChange({ bookmarks })}
+          label="a bookmark per file"
+        />
         <Toggle checked={output.pageLabels} onChange={(pageLabels) => onChange({ pageLabels })} label="page labels" />
         <Toggle
           checked={output.compressImages}
@@ -41,12 +45,10 @@ export function OutputOptions({
         />
       </div>
 
-      <p className="text-prose font-sans text-body normal-case">
-        JPEGs go in byte for byte.{" "}
+      <p className="text-meta text-body font-sans normal-case leading-snug">
         {output.compressImages
-          ? "Other images are recompressed, which makes the file smaller and loses a little detail."
-          : "Other images are stored without loss, which can make the file large."}
-        {output.bookmarks ? " A PDF's own bookmarks nest under its file's." : ""}
+          ? "JPEGs go in byte for byte; other images are recompressed — a smaller file, a little detail lost."
+          : "JPEGs go in byte for byte; other images go in without loss, which can make the file large."}
       </p>
     </Section>
   );

@@ -9,14 +9,27 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
-import { FiArrowLeft, FiArrowRight, FiImage } from "react-icons/fi";
-import { IconButton, TextButton } from "@/components/ui";
+import {
+  FiArrowLeft,
+  FiArrowRight,
+  FiCornerUpLeft,
+  FiCornerUpRight,
+  FiImage,
+  FiShuffle,
+  FiTrash2,
+  FiX,
+} from "react-icons/fi";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Button, Kbd, TextButton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
 import { canInterleave, type Slot } from "./pageOrder";
 import { pdfPageThumb } from "./thumbnail";
 import type { MergeEntry } from "./useMergeFiles";
 import type { PageOrderState } from "./usePageOrder";
+
+/** The pick-one-more key, named the way this keyboard names it. */
+const MOD = /mac|iphone|ipad/i.test(typeof navigator === "undefined" ? "" : navigator.userAgent) ? "⌘" : "ctrl";
 
 /** Where a dragged block would land: against one side of the tile under the pointer. */
 type Over = { id: string; side: "before" | "after" };
@@ -133,7 +146,9 @@ export function PageGrid({
     const id = refocus.current;
     if (!id) return;
     refocus.current = null;
-    const tile = [...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-page]") ?? [])].find((b) => b.dataset.page === id);
+    const tile = [...(list.current?.querySelectorAll<HTMLButtonElement>("button[data-page]") ?? [])].find(
+      (b) => b.dataset.page === id,
+    );
     if (tile && document.activeElement !== tile) tile.focus();
   });
 
@@ -156,144 +171,229 @@ export function PageGrid({
     tiles[at + step]?.focus();
   };
 
+  // What a tile's delete glyph would take: that page alone, or the whole pick when the page is in it.
+  const [confirming, setConfirming] = useState<{ ids: ReadonlySet<string>; count: number; what: string } | null>(null);
+  const askRemove = (ids: ReadonlySet<string>, what: string) =>
+    setConfirming({ ids: new Set(ids), count: ids.size, what });
+
   return (
-    <div className="flex flex-col gap-4">
-      {/* What is picked and what can be done with it; the hint while nothing is. */}
-      <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="text-meta font-mono text-micro uppercase tabular-nums" aria-live="polite">
-          {picked ? (
-            <span className="text-ink">
-              {pad(picked)} of {pad(total)} picked
-            </span>
-          ) : (
-            "click · shift-click · ⌘-click to pick · drag to move"
-          )}
-        </p>
-        <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {picked ? (
-            <>
-              <TextButton onClick={state.clearPicked}>clear</TextButton>
-              <span className="flex items-center gap-2">
-                <IconButton label="move earlier · alt ←" onClick={() => shift(-1)}>
-                  <FiArrowLeft className="size-3.5" aria-hidden />
-                </IconButton>
-                <IconButton label="move later · alt →" onClick={() => shift(1)}>
-                  <FiArrowRight className="size-3.5" aria-hidden />
-                </IconButton>
+    <div className="flex min-h-0 flex-col gap-4 lg:flex-1">
+      {/*
+       * Two registers, never mixed: what you can do sits in buttons with edges
+       * around them, and what there is to know sits in prose, in Inter, in
+       * sentence case. The line that used to carry both is now the prose one.
+       */}
+      <div className="flex shrink-0 flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-micro font-mono uppercase tabular-nums" aria-live="polite">
+            {picked ? (
+              <span className="text-ink">
+                {pad(picked)} of {pad(total)} picked
               </span>
-              {dealable ? (
-                <TextButton
-                  onClick={() => state.interleave(selection.ids)}
-                  aria-label="interleave"
-                  data-tip="one page from each file in turn"
-                  className="tooltip"
-                >
-                  interleave
-                </TextButton>
-              ) : null}
-              <TextButton
-                onClick={state.removePicked}
-                aria-label={`remove ${picked === 1 ? "page" : "pages"}`}
-                aria-keyshortcuts="Delete Backspace"
-                data-tip="delete"
-                className="tooltip"
-              >
-                remove {picked === 1 ? "page" : "pages"}
-              </TextButton>
-            </>
-          ) : !state.untouched ? (
-            <TextButton onClick={state.resetAll}>reset all</TextButton>
-          ) : null}
-          <span className="flex items-center gap-4">
-            <TextButton
+            ) : (
+              <span className="text-meta">{pad(total)} pages in this order</span>
+            )}
+          </p>
+
+          <span className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={state.undo}
               disabled={!state.canUndo}
-              aria-label="undo"
               aria-keyshortcuts="Control+Z Meta+Z"
               data-tip="⌘Z"
               className="tooltip"
             >
+              <FiCornerUpLeft className="size-3" aria-hidden />
               undo
-            </TextButton>
-            <TextButton
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={state.redo}
               disabled={!state.canRedo}
-              aria-label="redo"
               aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
               data-tip="⇧⌘Z"
-              data-tip-pos="top-right"
               className="tooltip"
             >
+              <FiCornerUpRight className="size-3" aria-hidden />
               redo
-            </TextButton>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={state.resetAll} disabled={state.untouched}>
+              reset all
+            </Button>
           </span>
-        </span>
+        </div>
+
+        {picked ? (
+          /* What can be done with the pick, spelled out — one strip, all of it clickable. */
+          <div className="border-wash rounded-xs bg-surface flex flex-wrap items-center gap-x-2 gap-y-2 border px-2.5 py-2">
+            <span className="text-label text-micro mr-auto font-mono uppercase tabular-nums">
+              {picked === 1 ? "one page picked" : `${pad(picked)} pages picked`}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => shift(-1)}
+              aria-keyshortcuts="Alt+ArrowLeft"
+              data-tip="alt ←"
+              className="tooltip"
+            >
+              <FiArrowLeft className="size-3" aria-hidden />
+              move earlier
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => shift(1)}
+              aria-keyshortcuts="Alt+ArrowRight"
+              data-tip="alt →"
+              className="tooltip"
+            >
+              move later
+              <FiArrowRight className="size-3" aria-hidden />
+            </Button>
+            {dealable ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => state.interleave(selection.ids)}
+                data-tip="one page from each file in turn"
+                className="tooltip"
+              >
+                <FiShuffle className="size-3" aria-hidden />
+                interleave
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => askRemove(selection.ids, picked === 1 ? "this page" : `these ${pad(picked)} pages`)}
+              aria-keyshortcuts="Delete Backspace"
+              data-tip="delete"
+              className="tooltip"
+            >
+              <FiTrash2 className="size-3" aria-hidden />
+              remove
+            </Button>
+            <Button variant="ghost" size="sm" onClick={state.clearPicked} aria-keyshortcuts="Escape">
+              clear
+            </Button>
+          </div>
+        ) : (
+          <p className="text-meta text-body font-sans normal-case">
+            Click a page to pick it, <Kbd>shift</Kbd>-click to take a run of them, <Kbd>{MOD}</Kbd>-click to add one
+            more. Drag a page to move it anywhere in the merge — into another file, too.
+          </p>
+        )}
       </div>
 
-      {slots.length === 0 ? (
-        <p className="text-meta font-sans text-body normal-case">
-          Every page has been taken out. Reset a file, or all of them, to put pages back — or undo.
-        </p>
-      ) : (
-        <ol
-          ref={list}
-          className="flex flex-wrap items-start gap-x-3 gap-y-5"
-          aria-label="pages in merge order"
-          onKeyDown={onKeyDown}
-          // The gaps between tiles take the drop too, landing where the rule was last drawn.
-          onDragOver={(e) => dragging && e.preventDefault()}
-          onDrop={onDrop}
-          onDragEnd={endDrag}
-        >
-          {runs.map((run) => {
-            const file = byKey.get(run.key);
-            if (!file) return null;
-            return (
-              <li key={run.slots[0]!.id} className="flex max-w-full min-w-0 flex-col gap-1.5">
-                <RunHead index={file.index} name={file.entry.file.name} />
-                <ol className="flex flex-wrap gap-2">
-                  {run.slots.map((slot, k) =>
-                    slot.kind === "page" ? (
-                      <li key={slot.id} className="relative">
-                        <PageTile
-                          id={slot.id}
-                          entry={file.entry}
-                          page={slot.ref.page}
-                          at={run.start + k}
-                          picked={selection.ids.has(slot.id)}
-                          lifted={dragging?.has(slot.id) ?? false}
-                          onPick={onPick}
-                          onDragStart={onDragStart}
-                          onDragOver={onDragOver}
-                        />
-                        {/* The drop line: a 1px periwinkle rule in the gap on the side the block would land. */}
-                        {dragging && over?.id === slot.id ? (
-                          <span
-                            className={cn(
-                              "bg-indigo pointer-events-none absolute inset-y-0 w-px",
-                              over.side === "before" ? "-left-[5px]" : "-right-[5px]",
-                            )}
-                            aria-hidden
+      {/* Only the pages scroll; the toolbar above them stays put. */}
+      <div className="lg:-mr-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
+        {slots.length === 0 ? (
+          <p className="text-meta text-body font-sans normal-case">
+            Every page has been taken out. Reset a file, or all of them, to put pages back — or undo.
+          </p>
+        ) : (
+          <ol
+            ref={list}
+            className="flex flex-wrap items-start gap-x-3 gap-y-5"
+            aria-label="pages in merge order"
+            onKeyDown={onKeyDown}
+            // The gaps between tiles take the drop too, landing where the rule was last drawn.
+            onDragOver={(e) => dragging && e.preventDefault()}
+            onDrop={onDrop}
+            onDragEnd={endDrag}
+          >
+            {runs.map((run) => {
+              const file = byKey.get(run.key);
+              if (!file) return null;
+              return (
+                <li key={run.slots[0]!.id} className="flex min-w-0 max-w-full flex-col gap-1.5">
+                  <RunHead index={file.index} name={file.entry.file.name} />
+                  <ol className="flex flex-wrap gap-2">
+                    {run.slots.map((slot, k) =>
+                      slot.kind === "page" ? (
+                        <li key={slot.id} className="group/tile relative">
+                          <PageTile
+                            id={slot.id}
+                            entry={file.entry}
+                            page={slot.ref.page}
+                            at={run.start + k}
+                            picked={selection.ids.has(slot.id)}
+                            lifted={dragging?.has(slot.id) ?? false}
+                            onPick={onPick}
+                            onDragStart={onDragStart}
+                            onDragOver={onDragOver}
                           />
-                        ) : null}
-                      </li>
-                    ) : (
-                      <li key={slot.id}>
-                        <FileTile slot={slot} onRetry={state.retryCounts} />
-                      </li>
-                    ),
-                  )}
-                </ol>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+
+                          {/*
+                           * The tile's own two controls, siblings of the tile so
+                           * they are real buttons rather than spans inside one.
+                           * Neither takes a tab stop: the keyboard picks with the
+                           * tile itself and removes with Delete or the strip
+                           * above, so 29 pages stay 29 stops.
+                           */}
+                          <TileCheck
+                            picked={selection.ids.has(slot.id)}
+                            at={run.start + k}
+                            onToggle={() => state.pick(slot.id, { mod: true })}
+                          />
+                          <TileDelete
+                            at={run.start + k}
+                            onClick={() => {
+                              const chosen = selection.ids;
+                              const many = chosen.size > 1 && chosen.has(slot.id);
+                              askRemove(
+                                many ? chosen : new Set([slot.id]),
+                                many ? `these ${pad(chosen.size)} pages` : "this page",
+                              );
+                            }}
+                          />
+
+                          {/* The drop line: a 1px periwinkle rule in the gap on the side the block would land. */}
+                          {dragging && over?.id === slot.id ? (
+                            <span
+                              className={cn(
+                                "bg-indigo pointer-events-none absolute inset-y-0 w-px",
+                                over.side === "before" ? "-left-[5px]" : "-right-[5px]",
+                              )}
+                              aria-hidden
+                            />
+                          ) : null}
+                        </li>
+                      ) : (
+                        <li key={slot.id}>
+                          <FileTile slot={slot} onRetry={state.retryCounts} />
+                        </li>
+                      ),
+                    )}
+                  </ol>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+
+      {confirming ? (
+        <ConfirmDialog
+          title={confirming.count === 1 ? "remove page" : "remove pages"}
+          confirmLabel={confirming.count === 1 ? "remove page" : `remove ${pad(confirming.count)} pages`}
+          onConfirm={() => state.removeIds(confirming.ids)}
+          onClose={() => setConfirming(null)}
+        >
+          {confirming.what === "this page" || confirming.count === 1
+            ? "This page comes out of the merged PDF. The file it came from is untouched, and undo puts the page back."
+            : `These ${confirming.count} pages come out of the merged PDF. The files they came from are untouched, and undo puts them back.`}
+        </ConfirmDialog>
+      ) : null}
 
       {/* What the pointer carries when several pages move: a count, not one page's picture. Off screen until then. */}
       <span
         ref={ghost}
-        className="border-indigo bg-panel-high text-ink pointer-events-none fixed -top-24 left-0 rounded-xs border px-2 py-1 font-mono text-micro uppercase tabular-nums"
+        className="border-indigo bg-panel-high text-ink rounded-xs text-micro pointer-events-none fixed -top-24 left-0 border px-2 py-1 font-mono uppercase tabular-nums"
         aria-hidden
       />
     </div>
@@ -328,7 +428,7 @@ function RunHead({ index, name }: { index: number; name: string }) {
   return (
     // w-0 + min-w-full: as wide as the run's tiles, never wider, so a one-page run's name truncates instead of widening it.
     <div className="flex w-0 min-w-full flex-col gap-1" title={name}>
-      <span className="flex min-w-0 items-baseline gap-2 font-mono text-meta">
+      <span className="text-meta flex min-w-0 items-baseline gap-2 font-mono">
         <span className="text-meta shrink-0 tabular-nums">{pad(index + 1)}</span>
         <span className="text-label min-w-0 truncate tracking-normal">{name}</span>
       </span>
@@ -341,7 +441,7 @@ const TILE = "w-[5.5rem]";
 
 /**
  * One output page. The page is never dimmed: being picked is the frame, the
- * tick and the numbers going to full ink, as on the export sheet. Its number
+ * tick in the corner and the numbers going to full ink, as on the export sheet. Its number
  * in the output is on the left of the foot, the page it is in its file on the
  * right. It drags (see `PageGrid`); alt+arrows move it from the keyboard.
  */
@@ -381,7 +481,7 @@ const PageTile = memo(function PageTile({
       // A shift-click picks a span; without this the browser also selects the text across it.
       onMouseDown={(e) => e.shiftKey && e.preventDefault()}
       className={cn(
-        "group relative block cursor-pointer overflow-hidden rounded-xs border text-left transition-colors duration-200",
+        "rounded-xs group relative block cursor-pointer overflow-hidden border text-left transition-colors duration-200",
         "focus-visible:outline-indigo focus-visible:outline-1 focus-visible:outline-offset-2",
         TILE,
         picked ? "border-indigo bg-surface-high" : "border-hairline-faint bg-surface hover:border-edge",
@@ -394,21 +494,7 @@ const PageTile = memo(function PageTile({
 
       <span
         className={cn(
-          "absolute top-1.5 left-1.5 flex size-3.5 items-center justify-center rounded-hairline border transition-[opacity,color] duration-200",
-          picked ? "border-indigo bg-indigo opacity-100" : "border-wash bg-paper/70 opacity-0 group-hover:opacity-100",
-        )}
-        aria-hidden
-      >
-        {picked ? (
-          <svg viewBox="0 0 10 10" className="text-paper size-2.5">
-            <path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
-          </svg>
-        ) : null}
-      </span>
-
-      <span
-        className={cn(
-          "border-hairline-faint flex items-baseline justify-between gap-1 border-t px-1.5 py-1 font-mono text-micro tabular-nums transition-colors duration-200",
+          "border-hairline-faint text-micro flex items-baseline justify-between gap-1 border-t px-1.5 py-1 font-mono tabular-nums transition-colors duration-200",
           picked ? "text-ink" : "text-meta",
         )}
       >
@@ -418,6 +504,62 @@ const PageTile = memo(function PageTile({
     </button>
   );
 });
+
+/**
+ * The tile's tick: a real checkbox over the page's top-left corner, lit when
+ * the page is picked and faint on approach when it is not. Clicking it adds
+ * the page to the pick or takes it out of it — the way to let a page go
+ * without losing the rest of the pick.
+ */
+function TileCheck({ picked, at, onToggle }: { picked: boolean; at: number; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={picked}
+      tabIndex={-1}
+      aria-label={`page ${at + 1} picked`}
+      onClick={onToggle}
+      className={cn(
+        "absolute left-0 top-0 flex size-7 cursor-pointer items-center justify-center transition-opacity duration-200",
+        picked ? "opacity-100" : "opacity-0 group-hover/tile:opacity-100 [@media(pointer:coarse)]:opacity-100",
+      )}
+    >
+      <span
+        className={cn(
+          "rounded-hairline flex size-3.5 items-center justify-center border transition-colors duration-200",
+          picked ? "border-indigo bg-indigo" : "border-wash bg-paper/80 hover:border-indigo",
+        )}
+      >
+        {picked ? (
+          <svg viewBox="0 0 10 10" className="text-paper size-2.5" aria-hidden>
+            <path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+/** Take this page out of the merge, from the corner it sits in. Asks first, because a page is easy to lose track of. */
+function TileDelete({ at, onClick }: { at: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={`remove page ${at + 1}`}
+      onClick={onClick}
+      className={cn(
+        "absolute right-0 top-0 flex size-7 cursor-pointer items-center justify-center opacity-0 transition-opacity duration-200",
+        "group-hover/tile:opacity-100 [@media(pointer:coarse)]:opacity-100",
+      )}
+    >
+      <span className="border-wash bg-paper/80 text-meta hover:border-indigo hover:text-indigo rounded-hairline flex size-3.5 items-center justify-center border transition-colors duration-200">
+        <FiX className="size-2.5" aria-hidden />
+      </span>
+    </button>
+  );
+}
 
 /** A PDF page: the server's drawing once this tile has been on screen, the page's number until then (or for good, without the server). */
 function PdfFace({ entry, page }: { entry: MergeEntry; page: number }) {
@@ -429,7 +571,9 @@ function PdfFace({ entry, page }: { entry: MergeEntry; page: number }) {
   useEffect(() => {
     const el = box.current;
     if (!el || seen) return;
-    const io = new IntersectionObserver((hits) => hits.some((h) => h.isIntersecting) && setSeen(true), { rootMargin: "200px" });
+    const io = new IntersectionObserver((hits) => hits.some((h) => h.isIntersecting) && setSeen(true), {
+      rootMargin: "200px",
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [seen]);
@@ -444,9 +588,15 @@ function PdfFace({ entry, page }: { entry: MergeEntry; page: number }) {
   return (
     <span ref={box} className="flex size-full items-center justify-center">
       {href ? (
-        <img src={href} alt="" onError={() => setHref(null)} className="max-h-full max-w-full bg-white object-contain" draggable={false} />
+        <img
+          src={href}
+          alt=""
+          onError={() => setHref(null)}
+          className="max-h-full max-w-full bg-white object-contain"
+          draggable={false}
+        />
       ) : (
-        <span className="text-meta font-mono text-small tabular-nums">{pad(page + 1)}</span>
+        <span className="text-meta text-small font-mono tabular-nums">{pad(page + 1)}</span>
       )}
     </span>
   );
@@ -483,7 +633,7 @@ function FileTile({ slot, onRetry }: { slot: Extract<Slot, { kind: "file" }>; on
   return (
     <span
       className={cn(
-        "border-hairline-faint flex aspect-[3/4] flex-col items-center justify-center gap-1 rounded-xs border px-2 text-center font-mono text-meta text-micro uppercase",
+        "border-hairline-faint rounded-xs text-meta text-micro flex aspect-[3/4] flex-col items-center justify-center gap-1 border px-2 text-center font-mono uppercase",
         TILE,
       )}
     >

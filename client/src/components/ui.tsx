@@ -1,4 +1,11 @@
-import { createContext, useContext, type ButtonHTMLAttributes, type ComponentProps, type InputHTMLAttributes, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  type ButtonHTMLAttributes,
+  type ComponentProps,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/cn";
 import { normaliseHex } from "@/lib/color";
 
@@ -21,7 +28,7 @@ export function TextButton({
       type="button"
       {...props}
       className={cn(
-        "relative cursor-pointer font-mono text-micro uppercase transition-colors duration-200",
+        "text-micro relative cursor-pointer font-mono uppercase transition-colors duration-200",
         "disabled:cursor-not-allowed disabled:opacity-35",
         active ? "text-ink" : "text-meta hover:text-indigo",
         className,
@@ -46,14 +53,19 @@ type ButtonLook = {
 export function buttonClass({ variant = "primary", size = "md" }: ButtonLook = {}, className?: string) {
   return cn(
     "inline-flex cursor-pointer items-center justify-center rounded-xs font-mono text-micro whitespace-nowrap uppercase",
-    size === "sm" ? "h-7 gap-1.5 px-2.5" : size === "lg" ? "h-14 w-full gap-3 px-6 text-small tracking-[0.16em]" : "h-9 gap-2 px-4",
+    size === "sm"
+      ? "h-7 gap-1.5 px-2.5"
+      : size === "lg"
+        ? "h-14 w-full gap-3 px-6 text-small tracking-[0.16em]"
+        : "h-9 gap-2 px-4",
     "transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo",
     "disabled:cursor-not-allowed disabled:opacity-35",
     variant === "primary" && "bg-ink text-paper font-bold hover:bg-indigo disabled:hover:bg-ink",
     variant === "outline" &&
       "border-edge text-ink border hover:border-indigo hover:text-indigo disabled:hover:border-edge disabled:hover:text-ink",
     variant === "ghost" && size === "md" && "px-3",
-    variant === "ghost" && "text-label hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
+    variant === "ghost" &&
+      "text-label hover:bg-hover-wash hover:text-indigo disabled:hover:bg-transparent disabled:hover:text-label",
     className,
   );
 }
@@ -85,7 +97,7 @@ export function IconButton({
       {...props}
       className={cn(
         "tooltip text-meta hover:text-indigo inline-flex cursor-pointer items-center justify-center transition-colors duration-200",
-        "disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-meta",
+        "disabled:hover:text-meta disabled:cursor-not-allowed disabled:opacity-35",
         circle ? "border-wash hover:border-indigo size-8 rounded-full border" : "size-4",
         className,
       )}
@@ -107,7 +119,7 @@ export function Chip({
       {...props}
       className={cn(
         "border-wash text-label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1",
-        "font-mono text-micro uppercase transition-colors duration-200",
+        "text-micro font-mono uppercase transition-colors duration-200",
         "hover:border-indigo hover:bg-indigo hover:text-paper",
         as === "button" && "cursor-pointer",
         className,
@@ -118,9 +130,7 @@ export function Chip({
 
 /** A surface that has risen off the ground. Fill and hairline, never a shadow. */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <div className={cn("border-wash rounded-card border bg-surface p-5", className)}>{children}</div>
-  );
+  return <div className={cn("border-wash rounded-card bg-surface border p-5", className)}>{children}</div>;
 }
 
 const Stacked = createContext(false);
@@ -136,10 +146,7 @@ export function Sections({ className, children, ...props }: ComponentProps<"div"
     <Stacked.Provider value>
       <div
         {...props}
-        className={cn(
-          "flex flex-col gap-7 [&>*+*]:border-t [&>*+*]:border-hairline-faint [&>*+*]:pt-7",
-          className,
-        )}
+        className={cn("[&>*+*]:border-hairline-faint flex flex-col gap-7 [&>*+*]:border-t [&>*+*]:pt-7", className)}
       >
         {children}
       </div>
@@ -162,7 +169,7 @@ export function Section({
   return (
     <section className={cn("flex flex-col gap-4", className)}>
       <header className="flex min-h-5 items-center justify-between gap-3">
-        <h2 className="text-meta font-mono text-micro uppercase">{title}</h2>
+        <h2 className="text-meta text-micro font-mono uppercase">{title}</h2>
         {aside}
       </header>
       {stacked ? null : <div className="border-hairline-faint border-t" />}
@@ -191,13 +198,20 @@ export function Field({
   return (
     <label className={cn("flex flex-col gap-2", className)}>
       <span className="flex min-h-4 items-center justify-between gap-2">
-        <span className={cn("font-mono text-micro uppercase transition-colors duration-200", changed ? "text-indigo" : "text-meta")}>
+        <span
+          className={cn(
+            "text-micro font-mono uppercase transition-colors duration-200",
+            changed ? "text-indigo" : "text-meta",
+          )}
+        >
           {label}
         </span>
         {action}
       </span>
       {children}
-      {hint ? <span className="text-meta font-mono text-micro normal-case tracking-normal opacity-80">{hint}</span> : null}
+      {hint ? (
+        <span className="text-meta text-micro font-mono normal-case tracking-normal opacity-80">{hint}</span>
+      ) : null}
     </label>
   );
 }
@@ -224,20 +238,34 @@ export function Select({ className, children, ...props }: ComponentProps<"select
   );
 }
 
-export function ColorInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+export function ColorInput({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
   return (
     <span
       className={cn(
-        "border-wash focus-within:border-indigo flex items-center gap-2.5 rounded-xs border bg-control px-2 py-1.5 transition-colors hover:border-edge",
+        "border-wash focus-within:border-indigo rounded-xs bg-control hover:border-edge flex items-center gap-2.5 border px-2 py-1.5 transition-colors",
         className,
       )}
     >
-      <input type="color" value={normaliseHex(value, { short: true }) ?? "#000000"} onChange={(e) => onChange(e.target.value)} className="size-5 shrink-0" aria-label="colour" />
+      <input
+        type="color"
+        value={normaliseHex(value, { short: true }) ?? "#000000"}
+        onChange={(e) => onChange(e.target.value)}
+        className="size-5 shrink-0"
+        aria-label="colour"
+      />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
-        className="text-ink min-w-0 flex-1 bg-transparent font-mono text-small tracking-[0.06em] uppercase outline-none"
+        className="text-ink text-small min-w-0 flex-1 bg-transparent font-mono uppercase tracking-[0.06em] outline-none"
         aria-label="colour value"
       />
     </span>
@@ -296,7 +324,12 @@ export function Segmented<T extends string>({
   return (
     <div className={cn("flex items-center gap-4", className)} role="group">
       {options.map((o) => (
-        <TextButton key={o.value} active={o.value === value} onClick={() => onChange(o.value)} aria-pressed={o.value === value}>
+        <TextButton
+          key={o.value}
+          active={o.value === value}
+          onClick={() => onChange(o.value)}
+          aria-pressed={o.value === value}
+        >
           {o.label}
         </TextButton>
       ))}
@@ -343,6 +376,65 @@ export function IconSegmented<T extends string>({
   );
 }
 
+/**
+ * The one switch that changes what a whole panel *is*, and so the one control
+ * that may not read as chrome: a bordered strip of tall cells, each with its
+ * glyph, its name and what it holds. The chosen cell takes the 7% fill and the
+ * periwinkle line along its top edge, exactly as the rail marks where you are.
+ * `Segmented` remains the quiet version, for a choice inside a section.
+ */
+export function ModeSwitch<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; count?: ReactNode; icon?: ReactNode }[];
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className={cn(segStrip, className)}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "rounded-xs text-micro relative flex h-9 cursor-pointer items-center gap-2 px-3.5 font-mono uppercase transition-colors duration-200 sm:px-4",
+              "focus-visible:outline-indigo focus-visible:outline-1 focus-visible:outline-offset-1",
+              on ? "text-ink bg-surface-high" : "text-meta hover:text-indigo hover:bg-hover-wash",
+            )}
+          >
+            {o.icon}
+            {o.label}
+            {o.count !== undefined ? (
+              <span className={cn("tabular-nums tracking-normal", on ? "text-indigo" : "text-meta")}>{o.count}</span>
+            ) : null}
+            {on ? <span className="bg-indigo absolute inset-x-2.5 top-0 h-px" aria-hidden /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A key on the keyboard, named inside a sentence of prose. */
+export function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="border-wash text-label rounded-hairline text-micro mx-px whitespace-nowrap border px-1.5 py-0.5 font-mono tracking-normal">
+      {children}
+    </kbd>
+  );
+}
+
 export const segStrip = "border-wash flex w-fit items-center gap-0.5 rounded-xs border bg-control p-0.5";
 
 export function segCell(on: boolean) {
@@ -353,41 +445,60 @@ export function segCell(on: boolean) {
   );
 }
 
-export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+export function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="group flex cursor-pointer items-center gap-2.5 font-mono text-meta text-micro uppercase"
+      className="text-meta text-micro group flex cursor-pointer items-center gap-2.5 font-mono uppercase"
     >
       <span
         className={cn(
-          "flex size-3.5 items-center justify-center rounded-hairline border transition-colors duration-200",
+          "rounded-hairline flex size-3.5 items-center justify-center border transition-colors duration-200",
           checked ? "border-indigo bg-indigo" : "border-hairline group-hover:border-indigo",
         )}
       >
         {checked ? (
           <svg viewBox="0 0 10 10" className="text-paper size-2.5" aria-hidden>
-            <path d="M1.5 5.2 4 7.5 8.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1.5 5.2 4 7.5 8.5 2.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         ) : null}
       </span>
-      <span className={cn("transition-colors duration-200", checked ? "text-ink" : "text-meta group-hover:text-indigo")}>{label}</span>
+      <span
+        className={cn("transition-colors duration-200", checked ? "text-ink" : "text-meta group-hover:text-indigo")}
+      >
+        {label}
+      </span>
     </button>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="text-meta font-mono text-micro uppercase">{children}</p>;
+  return <p className="text-meta text-micro font-mono uppercase">{children}</p>;
 }
 
 export function Stat({ label, value, accent }: { label: string; value: ReactNode; accent?: boolean }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-meta font-mono text-micro uppercase">{label}</span>
-      <span className={cn("font-mono text-body tabular-nums", accent ? "text-indigo" : "text-ink")}>{value}</span>
+      <span className="text-meta text-micro font-mono uppercase">{label}</span>
+      <span className={cn("text-body font-mono tabular-nums", accent ? "text-indigo" : "text-ink")}>{value}</span>
     </div>
   );
 }

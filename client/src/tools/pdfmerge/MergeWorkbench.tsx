@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiChevronDown, FiPlus } from "react-icons/fi";
+import { FiChevronDown, FiGrid, FiLayers, FiPlus } from "react-icons/fi";
 import {
   DEFAULT_ENGINE,
   DEFAULT_MERGE_OUTPUT,
@@ -13,7 +13,7 @@ import {
 } from "@tools/shared";
 import { Dropzone } from "@/components/Dropzone";
 import { EnginePicker } from "@/components/pdf/EnginePicker";
-import { Button, Empty, Section, Sections, Segmented, TextButton, Toggle } from "@/components/ui";
+import { Button, Empty, ModeSwitch, Prose, Section, TextButton, Toggle } from "@/components/ui";
 import { useHotkey } from "@/hooks/useHotkey";
 import { useJob } from "@/hooks/useJob";
 import { useToast } from "@/hooks/useToast";
@@ -34,10 +34,6 @@ import { usePageOrder } from "./usePageOrder";
 const FORMATS = "pdf · jpg · png · webp · avif · gif · heic · tiff";
 
 type View = "files" | "pages";
-const VIEWS: { value: View; label: string }[] = [
-  { value: "files", label: "files" },
-  { value: "pages", label: "pages" },
-];
 
 /**
  * The open merge job's id, per tab. A reload re-attaches to it while the
@@ -114,11 +110,11 @@ function planFor(
 }
 
 /**
- * Files on the left in the order they will be joined, the selected one's page
- * options and the output options under them, and that page drawn on the right
- * above the merge button and, once asked for, the merge itself. Only mounted
- * while the api answers, since every file starts uploading as soon as it is
- * added.
+ * The merge as a room: the files — or every one of their pages — on the left
+ * in the order they will be joined, and on the right the chosen file drawn,
+ * its page settings, what comes out, and the button that makes it. Only
+ * mounted while the api answers, since every file starts uploading as soon as
+ * it is added.
  *
  * Merging opens a job over the list's uploads and adds a `merge` task to it.
  * Merging again with the same files reuses the job; with a different set it
@@ -163,7 +159,12 @@ export function MergeWorkbench() {
   const add = useCallback(
     (list: File[]) => {
       const { added, refused } = files.add(list);
-      if (refused.length) toast(refused.length === 1 ? `${refused[0]} is not a pdf or an image` : `${refused.length} files skipped — not pdfs or images`);
+      if (refused.length)
+        toast(
+          refused.length === 1
+            ? `${refused[0]} is not a pdf or an image`
+            : `${refused.length} files skipped — not pdfs or images`,
+        );
       if (added[0]) setSelected((s) => s ?? added[0]!);
     },
     [files, toast],
@@ -190,7 +191,9 @@ export function MergeWorkbench() {
   // The selected PDF's pages, for its range box and the preview's caption.
   const focused = pageOrder.focused;
   const kept =
-    focused && typeof focused.count === "number" && !pageOrder.untouched ? { pages: focused.kept.length, of: focused.count } : null;
+    focused && typeof focused.count === "number" && !pageOrder.untouched
+      ? { pages: focused.kept.length, of: focused.count }
+      : null;
 
   // Page view keys: delete takes the picked pages out, escape lets go of them, mod+A picks every page.
   const picking = view === "pages" && pageOrder.selection.ids.size > 0;
@@ -259,12 +262,16 @@ export function MergeWorkbench() {
     try {
       const next = await pdfJobs.handoff(id, taskId);
       if (!rememberForCompress(next.id)) {
-        setHandoffError("This browser won't let the page remember the job, so Compress can't pick it up. Download the file and drop it there instead.");
+        setHandoffError(
+          "This browser won't let the page remember the job, so Compress can't pick it up. Download the file and drop it there instead.",
+        );
         return;
       }
       navigate("/pdf-compress");
     } catch (error) {
-      setHandoffError(error instanceof ApiError ? error.message : "The API could not be reached. Try again in a moment.");
+      setHandoffError(
+        error instanceof ApiError ? error.message : "The API could not be reached. Try again in a moment.",
+      );
     } finally {
       setHanding(null);
     }
@@ -286,7 +293,13 @@ export function MergeWorkbench() {
     try {
       const uploads = [...new Set(request.items.map((i) => i.upload))];
       let open: JobInfo | null = job.job;
-      if (!open || !sameSet(open.inputs.map((i) => i.id), uploads)) {
+      if (
+        !open ||
+        !sameSet(
+          open.inputs.map((i) => i.id),
+          uploads,
+        )
+      ) {
         open = await job.createJob({ tool: "merge", uploads });
         if (!open) return;
         remember(open.id);
@@ -327,15 +340,17 @@ export function MergeWorkbench() {
 
   if (restoring) {
     return (
-      <div className="border-wash rounded-card flex min-h-64 items-center justify-center border px-6 py-10">
-        <Empty>reopening your merge…</Empty>
+      <div className="mx-auto flex w-full max-w-3xl flex-col justify-center lg:min-h-0 lg:flex-1 lg:px-6 lg:py-6">
+        <div className="border-wash rounded-card flex min-h-64 items-center justify-center border px-6 py-10">
+          <Empty>reopening your merge…</Empty>
+        </div>
       </div>
     );
   }
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-col justify-center gap-8 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6 lg:py-6">
         {job.job ? (
           <Reopened info={job.job} onStartOver={startOver}>
             <MergeRun
@@ -367,124 +382,157 @@ export function MergeWorkbench() {
   }
 
   return (
-    <div
-      className={cn(
-        "grid items-start gap-10",
-        // The page view takes the wide column: the pages are where the work is.
-        view === "pages" ? "lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]" : "lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]",
-      )}
-    >
-      <Sections>
-        <Section
-          title={view === "pages" && outputPages !== null ? `pages · ${pad(outputPages)}` : `files · ${pad(entries.length)}`}
-          aside={
-            <span className="flex items-center gap-5">
-              <Segmented value={view} onChange={setView} options={VIEWS} />
-              <Button variant="outline" size="sm" onClick={() => picker.current?.click()}>
-                <FiPlus className="size-3" aria-hidden />
-                add
-              </Button>
-            </span>
-          }
-        >
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            accept={ACCEPT}
-            className="sr-only"
-            aria-label="add files"
-            onChange={(e) => {
-              add(Array.from(e.target.files ?? []));
-              e.target.value = "";
-            }}
+    /*
+     * The room, from a laptop up: the pages you are arranging on the left, the
+     * inspector on the right. Neither column scrolls the page — the grid
+     * scrolls inside its own pane, the chosen file's page settings scroll
+     * inside theirs, and what comes out of the merge, with the button that
+     * makes it, is always on screen at the foot of the inspector.
+     */
+    <div className="flex flex-col gap-8 lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-0 xl:grid-cols-[minmax(0,1fr)_23rem]">
+      <section className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:overflow-hidden lg:px-6 lg:py-5 xl:px-7">
+        {/*
+         * The one choice that changes what this whole pane is, at the size that
+         * choice deserves: whole files in an order, or every page of them.
+         */}
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <ModeSwitch
+            label="arrange"
+            value={view}
+            onChange={setView}
+            options={[
+              {
+                value: "files",
+                label: "files",
+                count: pad(entries.length),
+                icon: <FiLayers className="size-3.5" aria-hidden />,
+              },
+              {
+                value: "pages",
+                label: "pages",
+                count: outputPages === null ? undefined : pad(outputPages),
+                icon: <FiGrid className="size-3.5" aria-hidden />,
+              },
+            ]}
           />
-          {view === "pages" ? (
-            <PageGrid state={pageOrder} entries={entries} onFocusFile={setSelected} />
-          ) : (
-            <FileList
-              entries={entries}
-              selected={selected}
-              onSelect={setSelected}
-              onMove={move}
-              onMoveTo={moveTo}
-              onRemove={remove}
-              onRetry={files.retry}
+          <Button variant="outline" onClick={() => picker.current?.click()}>
+            <FiPlus className="size-3.5" aria-hidden />
+            add files
+          </Button>
+        </header>
+
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="sr-only"
+          aria-label="add files"
+          onChange={(e) => {
+            add(Array.from(e.target.files ?? []));
+            e.target.value = "";
+          }}
+        />
+
+        {view === "pages" ? (
+          <PageGrid state={pageOrder} entries={entries} onFocusFile={setSelected} />
+        ) : (
+          <div className="flex min-h-0 flex-col gap-4 lg:flex-1">
+            <Prose>
+              Each file goes in whole, top to bottom. Drag a row to move it, and choose one to set how its pages come
+              out. Switch to pages to take single pages out or reorder across files.
+            </Prose>
+            <div className="lg:-mr-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
+              <FileList
+                entries={entries}
+                selected={selected}
+                onSelect={setSelected}
+                onMove={move}
+                onMoveTo={moveTo}
+                onRemove={remove}
+                onRetry={files.retry}
+              />
+            </div>
+          </div>
+        )}
+
+        <Dropzone onFiles={add} accept={ACCEPT} label="drop more files here" className="shrink-0 py-4" />
+      </section>
+
+      <aside className="border-hairline-faint flex flex-col gap-5 lg:min-h-0 lg:overflow-hidden lg:border-l lg:px-6 lg:py-5 xl:px-7">
+        <PagePreview entry={entry} index={index} count={entries.length} kept={kept} compact />
+
+        {/* The part of the inspector that scrolls: how the chosen file's pages come out. */}
+        <div className="lg:-mr-2 lg:min-h-[9rem] lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
+          {entry ? (
+            <PageOptions
+              entry={entry}
+              images={images}
+              pages={focused}
+              onChange={(change) => entry && files.setLayout(entry.key, change)}
+              onApplyToAll={() => entry && files.layoutToAll(entry.key)}
             />
+          ) : (
+            <Section title="page">
+              <Prose>Choose a file to set the paper, the fit and the margin its pages come out on.</Prose>
+            </Section>
           )}
-          <Dropzone onFiles={add} accept={ACCEPT} label="drop more files here" className="py-5" />
-        </Section>
+        </div>
 
-        <PageOptions
-          entry={entry}
-          images={images}
-          pages={focused}
-          onChange={(change) => entry && files.setLayout(entry.key, change)}
-          onApplyToAll={() => entry && files.layoutToAll(entry.key)}
-        />
+        {/* Never scrolled away: what the merged file will be, and the button that makes it. */}
+        <div className="border-hairline-faint flex shrink-0 flex-col gap-5 border-t pt-5 lg:max-h-[58%] lg:min-h-0 lg:shrink">
+          <div className="flex flex-col gap-5 lg:-mr-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-2">
+            <OutputOptions
+              output={output}
+              fallbackTitle={defaultTitle(entries[0]?.file.name)}
+              onChange={(change) => setOutput((o) => ({ ...o, ...change }))}
+            />
 
-        <OutputOptions
-          output={output}
-          fallbackTitle={defaultTitle(entries[0]?.file.name)}
-          onChange={(change) => setOutput((o) => ({ ...o, ...change }))}
-        />
-      </Sections>
-
-      <div className="flex flex-col gap-6 lg:sticky lg:top-20">
-        <PagePreview
-          entry={entry}
-          index={index}
-          count={entries.length}
-          kept={kept}
-        />
-
-        <MergeBar
-          status={
-            stopped
-              ? `${pad(stopped)} ${stopped === 1 ? "upload" : "uploads"} stopped`
-              : waiting
-                ? `${pad(waiting)} ${waiting === 1 ? "file" : "files"} still uploading`
-                : plan.status
-          }
-          problem={!stopped && !waiting ? plan.problem : null}
-          disabled={!params || busy}
-          label={starting ? "starting…" : job.activeTask ? "merging…" : "merge"}
-          onMerge={() => params && void merge(params)}
-          // Once there is a current file, download is the action; merging again steps back to outline.
-          quiet={current && task?.state === "done"}
-          options={
             <MergeOptions
               engine={engine}
               onEngine={setEngine}
               compressAfter={compressAfter}
               onCompressAfter={setCompressAfter}
             />
-          }
-        />
 
-        {job.job ? (
-          <MergeRun
-            job={job.job}
-            task={task}
-            stale={task !== null && !current}
-            error={handoffError ?? job.error}
-            onDiscard={discard}
-            {...onwardProps(task)}
+            {job.job ? (
+              <MergeRun
+                job={job.job}
+                task={task}
+                stale={task !== null && !current}
+                error={handoffError ?? job.error}
+                onDiscard={discard}
+                {...onwardProps(task)}
+              />
+            ) : job.error ? (
+              <p className="text-meta text-body font-sans normal-case">{job.error}</p>
+            ) : null}
+          </div>
+
+          <MergeBar
+            status={
+              stopped
+                ? `${pad(stopped)} ${stopped === 1 ? "upload" : "uploads"} stopped`
+                : waiting
+                  ? `${pad(waiting)} ${waiting === 1 ? "file" : "files"} still uploading`
+                  : plan.status
+            }
+            problem={!stopped && !waiting ? plan.problem : null}
+            disabled={!params || busy}
+            label={starting ? "starting…" : job.activeTask ? "merging…" : "merge"}
+            onMerge={() => params && void merge(params)}
+            // Once there is a current file, download is the action; merging again steps back to outline.
+            quiet={current && task?.state === "done"}
           />
-        ) : job.error ? (
-          <p className="text-meta text-body font-sans normal-case">{job.error}</p>
-        ) : null}
-      </div>
+        </div>
+      </aside>
     </div>
   );
 }
 
 /**
- * The merge button and the line that says whether it can go yet.
- *
- * `options` is the seam for #18: the "compress on export" toggle and the
- * engine picker sit here, beside the button they change, and add `engine` to
- * the params built in `MergeWorkbench`.
+ * The merge button and the line that says whether it can go yet: the foot of
+ * the inspector, under a rule, where the column ends on every size.
  */
 function MergeBar({
   status,
@@ -492,7 +540,6 @@ function MergeBar({
   label,
   onMerge,
   quiet,
-  options,
   problem,
 }: {
   status: string;
@@ -502,14 +549,12 @@ function MergeBar({
   label: string;
   onMerge: () => void;
   quiet?: boolean;
-  options?: ReactNode;
 }) {
   return (
-    <div className="border-hairline-faint flex flex-col gap-4 border-t pt-5">
-      {options}
-      {problem ? <p className="text-prose font-sans text-body normal-case">{problem}</p> : null}
+    <div className={cn("border-hairline-faint flex shrink-0 flex-col gap-3 border-t pt-4 lg:border-0 lg:pt-0")}>
+      {problem ? <p className="text-prose text-body font-sans normal-case">{problem}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-meta font-mono text-micro uppercase tabular-nums" aria-live="polite">
+        <p className="text-meta text-micro font-mono uppercase tabular-nums" aria-live="polite">
           {status}
         </p>
         <Button variant={quiet ? "outline" : "primary"} disabled={disabled} onClick={onMerge}>
@@ -521,9 +566,9 @@ function MergeBar({
 }
 
 /**
- * What goes in MergeBar's options slot (#18): whether the merged file goes on
- * to Compress, and the engine that joins the files, folded to one line since
- * MuPDF is right for nearly every merge.
+ * How the merge is made (#18): whether the merged file goes on to Compress,
+ * and the engine that joins the files, folded to one line since MuPDF is right
+ * for nearly every merge. It sits with the output settings, above the button.
  */
 function MergeOptions({
   engine,
@@ -559,7 +604,10 @@ function MergeOptions({
           </span>
           <FiChevronDown
             aria-hidden
-            className={cn("text-meta group-hover:text-indigo size-3.5 transition-[transform,color] duration-200", open && "rotate-180")}
+            className={cn(
+              "text-meta group-hover:text-indigo size-3.5 transition-[transform,color] duration-200",
+              open && "rotate-180",
+            )}
           />
         </button>
         {open ? <EnginePicker tool="merge" value={engine} onChange={onEngine} /> : null}
@@ -573,7 +621,7 @@ function Reopened({ info, onStartOver, children }: { info: JobInfo; onStartOver:
   return (
     <div className="border-wash rounded-card flex flex-col gap-6 border px-6 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-meta font-mono text-micro uppercase">your last merge · {pad(info.inputs.length)} files</h2>
+        <h2 className="text-meta text-micro font-mono uppercase">your last merge · {pad(info.inputs.length)} files</h2>
         <TextButton onClick={onStartOver}>start a new merge</TextButton>
       </div>
       <ol className="flex flex-col gap-1">

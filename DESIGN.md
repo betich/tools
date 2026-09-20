@@ -112,6 +112,16 @@ components:
     width: "16px"
   icon-button-hover:
     textColor: "{colors.periwinkle}"
+  mode-switch:
+    backgroundColor: "{colors.control}"
+    textColor: "{colors.meta}"
+    typography: "{typography.meta}"
+    rounded: "{rounded.xs}"
+    padding: "2px"
+    height: "36px"
+  mode-switch-active:
+    backgroundColor: "{colors.surface-high}"
+    textColor: "{colors.ink}"
   chip:
     backgroundColor: "transparent"
     textColor: "{colors.label}"
@@ -306,6 +316,8 @@ Touch gets its own sizes where it needs them: the layer's resize handle goes fro
 **The Always-Reachable Rule.** Navigation is fixed at both ends of the viewport. On a 3000px editor page the next tool is one tap away from anywhere — two on a phone, where the rail folds the tools into a menu.
 
 **The Work-Order Rule.** When columns stack, they stack in the order the work happens: set up, look, adjust.
+
+**The One-Screen Rule.** A tool that is a room shows every one of its panels at once. From `lg` up the page does not scroll: the work scrolls inside its own pane, and inside the inspector exactly one region scrolls — the settings for the thing you have chosen. What the work produces, and the button that makes it, sit at the foot of the inspector under a rule and are never scrolled away. The merge editor and pdf merge both keep it; a phone is a column, and there the order is the Work-Order Rule's.
 
 ## Elevation & Depth
 
@@ -516,6 +528,8 @@ Selection is indigo at 50% with full ink on top. The caret is periwinkle. Scroll
 - **Do** keep text at the meta step (0.64 ink) or higher; use the lower steps for hairlines, bars and fills only.
 - **Do** say plainly when the server is unreachable, and keep both tools working without it. A panel that needs the API says so in its own body, in meta, and the editor carries on around it.
 - **Do** take the undo snapshot on gesture start, so a drag is one step.
+- **Do** keep the two registers apart: a sentence of prose says how something works, a control with an edge around it does it. A line that mixes an instruction with a row of actions reads as neither.
+- **Do** give the one choice that changes what a whole pane *is* a switch at that scale — the mode switch, not a pair of text buttons.
 
 ### Don't:
 
