@@ -76,7 +76,7 @@ export function IconButton({
   label,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { circle?: boolean; label: string }) {
+}: ComponentProps<"button"> & { circle?: boolean; label: string }) {
   return (
     <button
       type="button"

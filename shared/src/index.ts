@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./merge";
 export * from "./render";
+export * from "./spans";
 export * from "./defaults";
 export * from "./overrides";
 export * from "./pdf";

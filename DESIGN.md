@@ -407,6 +407,16 @@ A full-bleed surface, portalled above the chrome, that replaces "render everythi
 
 **A severed column says so.** When the template asks for a column the sheet does not have, an edge-bordered block names the tokens in prose and offers `MATCH COLUMNS`. There is no warning colour: the block is ink, the icon is ink, and the button is the only way out.
 
+### Colour runs (mail merge)
+
+A line of type often carries two colours — `Intania 90 **NANO**` — and the renderer has always read `[[#FFE19B]]NANO[[/]]` for it. The markers stay (they are what the renderer reads and what a shared project holds), but nobody has to type them.
+
+- **The action follows the selection.** Under the text field sits one small button: `COLOUR THESE WORDS` with a selection, `START A COLOUR` without, and — when the caret is inside a run — that run's swatch and hex, with `TAKE THE COLOUR OFF` beside it. Pressing it opens a picker: the hex field, then the colours the document already wears, because a second run almost always wants one of them. Dragging the picker is one undo step; the swatches are one each.
+- **Every run is listed** under `COLOURED RUNS`, in the order they appear: the swatch, the words, the hex, and a close glyph. Pressing a row selects those words in the field, so the strip is also how a run is found in a long line. A marker left unclosed says `· TO THE END` rather than being hidden.
+- **Column chips insert at the caret**, not at the end of the text.
+- **The docs are a press away.** A `?` on the `TEXT` label opens a panel-high popover: the two things text can carry, each drawn as it will read — markers in hairline grey, tokens in periwinkle, and the coloured run actually wearing its colour — then the four rules that catch people out (nesting, eight-digit transparency, case leaving markers alone, markers never reaching the picture). It carries no tooltip of its own, since the panel is the explanation.
+- The arithmetic lives in `shared/src/spans.ts` (`findSpans`, `spanAt`, `colourSelection`, `recolour`, `clearSpan`) under `bun test`, beside the renderer that draws the runs. Every edit hands back the selection to restore, because an edit that loses the cursor fights the person making it.
+
 ### Row editor (mail merge)
 
 A panel-high popover that docks beside the left pane, over the edge of the stage, so the poster it is changing stays in view; below `md` it is a sheet across the foot of the screen under the pinned stage. Every keystroke is drawn on the canvas as a draft. A changed field turns its label periwinkle, takes a periwinkle border, and shows `WAS` and the old value struck through, with a put-back glyph. `↵` applies, shift-`↵` breaks the line, escape discards, and a click outside keeps what was typed, because the timeline is the safety net. The header's arrows apply and move to the neighbouring row. Delete row is two taps.

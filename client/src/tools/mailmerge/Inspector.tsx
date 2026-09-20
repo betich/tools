@@ -12,7 +12,6 @@ import {
 } from "@tools/shared";
 import {
   Button,
-  Chip,
   ColorInput,
   Empty,
   Field,
@@ -31,6 +30,7 @@ import {
 import { cn } from "@/lib/cn";
 import { pad } from "@/lib/format";
 import { FontPicker } from "./FontPicker";
+import { TextContent } from "./TextContent";
 import { OwnMark } from "./OwnMark";
 
 /** Row mode: which row this layer is being laid out for, and how to put it back. */
@@ -63,6 +63,7 @@ const DEFAULT_GRADIENT: Fill = {
 export function Inspector({
   layer,
   fields,
+  palette,
   canvas,
   onChange,
   onPreview,
@@ -72,6 +73,8 @@ export function Inspector({
   row?: RowContext | null;
   layer: TextLayer | null;
   fields: string[];
+  /** Colours already used in this document, offered beside the run picker. */
+  palette: string[];
   /** The page the layer is aligned against. */
   canvas: { width: number; height: number };
   onChange: (patch: Partial<TextLayer>) => void;
@@ -117,25 +120,14 @@ export function Inspector({
     <Sections>
       {row ? <RowHeader row={row} /> : null}
       <Section title="content">
-        <Field label="text" hint="wrap a column name in angle brackets to merge it">
-          <textarea
-            value={layer.text}
-            onChange={(e) => onChange({ text: e.target.value })}
-            rows={3}
-            spellCheck={false}
-            className="border-wash text-ink hover:border-edge focus:border-indigo w-full resize-y rounded-xs border bg-control px-2.5 py-2 font-mono text-small tracking-normal transition-colors duration-200 focus:outline-none"
-          />
-        </Field>
-
-        {fields.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {fields.map((field) => (
-              <Chip key={field} as="button" onClick={() => onChange({ text: `${layer.text}<${field}>` })}>
-                &lt;{field}&gt;
-              </Chip>
-            ))}
-          </div>
-        ) : null}
+        <TextContent
+          text={layer.text}
+          fields={fields}
+          palette={palette}
+          onChange={(text) => onChange({ text })}
+          onPreview={(text) => live({ text })}
+          onSnapshot={onSnapshot}
+        />
 
         <Field label="case">
           <IconSegmented
@@ -183,10 +175,20 @@ export function Inspector({
 
         <div className="grid grid-cols-2 gap-x-3 gap-y-4">
           <Field label="align">
-            <IconSegmented label="text align" value={layer.align} onChange={(align) => onChange({ align })} options={ALIGNS} />
+            <IconSegmented
+              label="text align"
+              value={layer.align}
+              onChange={(align) => onChange({ align })}
+              options={ALIGNS}
+            />
           </Field>
           <Field label="vertical">
-            <IconSegmented label="vertical align" value={layer.vAlign} onChange={(vAlign) => onChange({ vAlign })} options={VALIGNS} />
+            <IconSegmented
+              label="vertical align"
+              value={layer.vAlign}
+              onChange={(vAlign) => onChange({ vAlign })}
+              options={VALIGNS}
+            />
           </Field>
         </div>
 
@@ -200,7 +202,9 @@ export function Inspector({
       <Section title="fill">
         <Segmented
           value={fill.type}
-          onChange={(type) => onChange({ fill: type === "solid" ? { type: "solid", color: "#111827" } : DEFAULT_GRADIENT })}
+          onChange={(type) =>
+            onChange({ fill: type === "solid" ? { type: "solid", color: "#111827" } : DEFAULT_GRADIENT })
+          }
           options={[
             { value: "solid", label: "solid" },
             { value: "linear", label: "gradient" },
@@ -214,7 +218,13 @@ export function Inspector({
         ) : (
           <div className="flex flex-col gap-3">
             <Field label={`angle · ${fill.angle}°`}>
-              <Slider onCommitStart={onSnapshot} min={0} max={360} value={fill.angle} onChange={(angle) => live({ fill: { ...fill, angle } })} />
+              <Slider
+                onCommitStart={onSnapshot}
+                min={0}
+                max={360}
+                value={fill.angle}
+                onChange={(angle) => live({ fill: { ...fill, angle } })}
+              />
             </Field>
             {fill.stops.map((stop, i) => (
               <Field key={i} label={`stop ${i + 1} · ${Math.round(stop.offset * 100)}%`}>
@@ -227,12 +237,14 @@ export function Inspector({
                     className="flex-1"
                   />
                   <Slider
-            onCommitStart={onSnapshot}
+                    onCommitStart={onSnapshot}
                     min={0}
                     max={100}
                     value={Math.round(stop.offset * 100)}
                     onChange={(v) =>
-                      live({ fill: { ...fill, stops: fill.stops.map((s, j) => (j === i ? { ...s, offset: v / 100 } : s)) } })
+                      live({
+                        fill: { ...fill, stops: fill.stops.map((s, j) => (j === i ? { ...s, offset: v / 100 } : s)) },
+                      })
                     }
                     className="w-20"
                   />
@@ -241,13 +253,14 @@ export function Inspector({
             ))}
             <div className="flex items-center gap-4">
               <TextButton
-                onClick={() =>
-                  onChange({ fill: { ...fill, stops: [...fill.stops, { offset: 1, color: "#4845DA" }] } })
-                }
+                onClick={() => onChange({ fill: { ...fill, stops: [...fill.stops, { offset: 1, color: "#4845DA" }] } })}
               >
                 add stop
               </TextButton>
-              <TextButton disabled={fill.stops.length <= 2} onClick={() => onChange({ fill: { ...fill, stops: fill.stops.slice(0, -1) } })}>
+              <TextButton
+                disabled={fill.stops.length <= 2}
+                onClick={() => onChange({ fill: { ...fill, stops: fill.stops.slice(0, -1) } })}
+              >
                 remove
               </TextButton>
             </div>
@@ -269,10 +282,19 @@ export function Inspector({
         {layer.stroke ? (
           <div className="flex flex-col gap-3">
             <Field label="colour">
-              <ColorInput value={layer.stroke.color} onChange={(color) => onChange({ stroke: { ...layer.stroke!, color } })} />
+              <ColorInput
+                value={layer.stroke.color}
+                onChange={(color) => onChange({ stroke: { ...layer.stroke!, color } })}
+              />
             </Field>
             <Field label={`width · ${layer.stroke.width}px`}>
-              <Slider onCommitStart={onSnapshot} min={0} max={40} value={layer.stroke.width} onChange={(width) => live({ stroke: { ...layer.stroke!, width } })} />
+              <Slider
+                onCommitStart={onSnapshot}
+                min={0}
+                max={40}
+                value={layer.stroke.width}
+                onChange={(width) => live({ stroke: { ...layer.stroke!, width } })}
+              />
             </Field>
           </div>
         ) : (
@@ -284,7 +306,11 @@ export function Inspector({
         title="drop shadow"
         aside={
           <TextButton
-            onClick={() => onChange({ shadow: layer.shadow ? null : { color: "rgba(17,24,39,0.35)", blur: 12, offsetX: 0, offsetY: 6 } })}
+            onClick={() =>
+              onChange({
+                shadow: layer.shadow ? null : { color: "rgba(17,24,39,0.35)", blur: 12, offsetX: 0, offsetY: 6 },
+              })
+            }
             active={Boolean(layer.shadow)}
           >
             {layer.shadow ? "on" : "off"}
@@ -294,17 +320,32 @@ export function Inspector({
         {layer.shadow ? (
           <div className="flex flex-col gap-3">
             <Field label="colour" hint="rgba is allowed here">
-              <ColorInput value={layer.shadow.color} onChange={(color) => onChange({ shadow: { ...layer.shadow!, color } })} />
+              <ColorInput
+                value={layer.shadow.color}
+                onChange={(color) => onChange({ shadow: { ...layer.shadow!, color } })}
+              />
             </Field>
             <Field label={`blur · ${layer.shadow.blur}px`}>
-              <Slider onCommitStart={onSnapshot} min={0} max={80} value={layer.shadow.blur} onChange={(blur) => live({ shadow: { ...layer.shadow!, blur } })} />
+              <Slider
+                onCommitStart={onSnapshot}
+                min={0}
+                max={80}
+                value={layer.shadow.blur}
+                onChange={(blur) => live({ shadow: { ...layer.shadow!, blur } })}
+              />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="offset x">
-                <NumberInput value={layer.shadow.offsetX} onChange={(e) => onChange({ shadow: { ...layer.shadow!, offsetX: Number(e.target.value) || 0 } })} />
+                <NumberInput
+                  value={layer.shadow.offsetX}
+                  onChange={(e) => onChange({ shadow: { ...layer.shadow!, offsetX: Number(e.target.value) || 0 } })}
+                />
               </Field>
               <Field label="offset y">
-                <NumberInput value={layer.shadow.offsetY} onChange={(e) => onChange({ shadow: { ...layer.shadow!, offsetY: Number(e.target.value) || 0 } })} />
+                <NumberInput
+                  value={layer.shadow.offsetY}
+                  onChange={(e) => onChange({ shadow: { ...layer.shadow!, offsetY: Number(e.target.value) || 0 } })}
+                />
               </Field>
             </div>
           </div>
@@ -318,24 +359,52 @@ export function Inspector({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="x" {...own("x", "x")}>
-            <NumberInput className={ownInput("x")} value={Math.round(layer.x)} onChange={(e) => onChange({ x: Number(e.target.value) || 0 })} />
+            <NumberInput
+              className={ownInput("x")}
+              value={Math.round(layer.x)}
+              onChange={(e) => onChange({ x: Number(e.target.value) || 0 })}
+            />
           </Field>
           <Field label="y" {...own("y", "y")}>
-            <NumberInput className={ownInput("y")} value={Math.round(layer.y)} onChange={(e) => onChange({ y: Number(e.target.value) || 0 })} />
+            <NumberInput
+              className={ownInput("y")}
+              value={Math.round(layer.y)}
+              onChange={(e) => onChange({ y: Number(e.target.value) || 0 })}
+            />
           </Field>
           <Field label="width" {...own("width", "width")}>
-            <NumberInput className={ownInput("width")} value={Math.round(layer.width)} onChange={(e) => onChange({ width: Math.max(1, Number(e.target.value) || 1) })} />
+            <NumberInput
+              className={ownInput("width")}
+              value={Math.round(layer.width)}
+              onChange={(e) => onChange({ width: Math.max(1, Number(e.target.value) || 1) })}
+            />
           </Field>
           <Field label="height" {...own("height", "height")}>
-            <NumberInput className={ownInput("height")} value={Math.round(layer.height)} onChange={(e) => onChange({ height: Math.max(1, Number(e.target.value) || 1) })} />
+            <NumberInput
+              className={ownInput("height")}
+              value={Math.round(layer.height)}
+              onChange={(e) => onChange({ height: Math.max(1, Number(e.target.value) || 1) })}
+            />
           </Field>
         </div>
 
         <Field label={`rotation · ${layer.rotation}°`} {...own("rotation", "rotation")}>
-          <Slider onCommitStart={onSnapshot} min={-180} max={180} value={layer.rotation} onChange={(rotation) => live({ rotation })} />
+          <Slider
+            onCommitStart={onSnapshot}
+            min={-180}
+            max={180}
+            value={layer.rotation}
+            onChange={(rotation) => live({ rotation })}
+          />
         </Field>
         <Field label={`opacity · ${Math.round(layer.opacity * 100)}%`}>
-          <Slider onCommitStart={onSnapshot} min={0} max={100} value={Math.round(layer.opacity * 100)} onChange={(v) => live({ opacity: v / 100 })} />
+          <Slider
+            onCommitStart={onSnapshot}
+            min={0}
+            max={100}
+            value={Math.round(layer.opacity * 100)}
+            onChange={(v) => live({ opacity: v / 100 })}
+          />
         </Field>
       </Section>
     </Sections>
@@ -358,16 +427,16 @@ function RowHeader({ row }: { row: RowContext }) {
   return (
     <section className="flex flex-col gap-3.5">
       <header className="flex min-h-5 items-center justify-between gap-3">
-        <h2 className="text-indigo flex min-w-0 items-center gap-2 font-mono text-micro uppercase">
+        <h2 className="text-indigo text-micro flex min-w-0 items-center gap-2 font-mono uppercase">
           <OwnMark title="" />
           <span className="shrink-0 tabular-nums">row {pad(row.index + 1)}</span>
-          <span className="text-ink min-w-0 truncate tracking-normal normal-case">{row.title}</span>
+          <span className="text-ink min-w-0 truncate normal-case tracking-normal">{row.title}</span>
         </h2>
         <TextButton onClick={row.onExit} className="shrink-0">
           done
         </TextButton>
       </header>
-      <p className="text-prose font-sans text-body normal-case">
+      <p className="text-prose text-body font-sans normal-case">
         Position, size, rotation and type size are this row's own. Everything else changes the main design.
       </p>
       {row.changes > 0 ? (
@@ -384,7 +453,7 @@ function RowHeader({ row }: { row: RowContext }) {
           {armed ? `revert ${row.changes} ${row.changes === 1 ? "change" : "changes"}?` : "revert to main design"}
         </Button>
       ) : (
-        <p className="text-meta font-mono text-micro uppercase">matches the main design</p>
+        <p className="text-meta text-micro font-mono uppercase">matches the main design</p>
       )}
     </section>
   );
@@ -397,7 +466,9 @@ function RowHeader({ row }: { row: RowContext }) {
    the edge they sit on; the vertical ones sit the lines inside a faint box,
    which is what separates them from the align-to-page moves below. */
 
-const caseGlyph = (text: string) => <span className="font-mono text-label leading-none tracking-normal normal-case">{text}</span>;
+const caseGlyph = (text: string) => (
+  <span className="text-label font-mono normal-case leading-none tracking-normal">{text}</span>
+);
 
 const CASES: { value: TextCase; label: string; icon: ReactNode }[] = [
   { value: "none", label: "as typed", icon: <FiType className="size-3.5" aria-hidden /> },
@@ -446,7 +517,12 @@ function VAlignGlyph({ at }: { at: VAlign }) {
    A button reads as active when the layer is already flush that way, which
    turns the cluster into a readout as well as a control. */
 
-type Move = { key: string; label: string; axis: "x" | "y"; value: (c: { width: number; height: number }, l: TextLayer) => number };
+type Move = {
+  key: string;
+  label: string;
+  axis: "x" | "y";
+  value: (c: { width: number; height: number }, l: TextLayer) => number;
+};
 
 const MOVES: Move[] = [
   { key: "left", label: "align left", axis: "x", value: () => 0 },

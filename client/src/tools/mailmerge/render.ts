@@ -1,7 +1,22 @@
-import { opaqueGround, renderDoc, type Ctx2D, type ExportFormat, type MergeDoc, type MergeRow } from "@tools/shared";
+import {
+  findSpans,
+  normalise,
+  opaqueGround,
+  renderDoc,
+  type Ctx2D,
+  type ExportFormat,
+  type Layer,
+  type MergeDoc,
+  type MergeRow,
+} from "@tools/shared";
 
 /** Draw the doc onto a canvas at 1:1 document pixels. */
-export function paint(canvas: HTMLCanvasElement, doc: MergeDoc, row: MergeRow | null, base: HTMLImageElement | null): void {
+export function paint(
+  canvas: HTMLCanvasElement,
+  doc: MergeDoc,
+  row: MergeRow | null,
+  base: HTMLImageElement | null,
+): void {
   const { width, height } = doc.canvas;
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;
@@ -86,4 +101,23 @@ function resample(source: HTMLCanvasElement, maxEdge: number, ground?: string): 
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, 0, 0, out.width, out.height);
   return out;
+}
+
+/**
+ * Every colour already in the document — each layer's fill (both stops of a
+ * gradient), its outline, its shadow, and the colour runs already in its
+ * text. The picker offers these before anything else, because a second run
+ * almost always wants a colour the poster is already wearing.
+ */
+export function paletteOf(layers: readonly Layer[]): string[] {
+  const out: string[] = [];
+  for (const layer of layers) {
+    if (layer.kind !== "text") continue;
+    if (layer.fill.type === "solid") out.push(layer.fill.color);
+    else out.push(...layer.fill.stops.map((s) => s.color));
+    if (layer.stroke) out.push(layer.stroke.color);
+    if (layer.shadow) out.push(layer.shadow.color);
+    out.push(...findSpans(layer.text).map((s) => s.color));
+  }
+  return [...new Set(out.map((c) => normalise(c)))].slice(0, 10);
 }
