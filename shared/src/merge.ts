@@ -59,4 +59,33 @@ export function fileNameFor(pattern: string, row: MergeRow, index: number, ext: 
 
 export const extensionFor = (format: ExportFormat) => (format === "jpeg" ? "jpg" : format);
 
+/**
+ * The names a set of rows is saved under, with collisions numbered:
+ * `merge.png`, `merge-2.png`, `merge-3.png`.
+ *
+ * Two rows earn the same name whenever the pattern resolves to the same text —
+ * a pattern whose token names no column in the sheet resolves to the same text
+ * for *every* row. A ZIP will happily hold thirty-six entries called
+ * `merge.png`, and unzipping leaves one file, so the names must be made unique
+ * before the archive is built. Both the browser's export and the server's
+ * batch go through here, so a set downloaded either way lands the same.
+ */
+export function uniqueNames(names: string[]): string[] {
+  const taken = new Set<string>();
+  return names.map((name) => {
+    if (!taken.has(name)) {
+      taken.add(name);
+      return name;
+    }
+    const dot = name.lastIndexOf(".");
+    const stem = dot === -1 ? name : name.slice(0, dot);
+    const ext = dot === -1 ? "" : name.slice(dot);
+    let n = 2;
+    while (taken.has(`${stem}-${n}${ext}`)) n++;
+    const out = `${stem}-${n}${ext}`;
+    taken.add(out);
+    return out;
+  });
+}
+
 export const emptyData: MergeData = { fields: [], rows: [] };

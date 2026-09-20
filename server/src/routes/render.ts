@@ -1,6 +1,15 @@
 import { Elysia, t } from "elysia";
 import { zipSync } from "fflate";
-import { docForRow, extensionFor, fileNameFor, pdfFromJpegs, type MergeData, type MergeDoc, type MergeRow } from "@tools/shared";
+import {
+  docForRow,
+  extensionFor,
+  fileNameFor,
+  pdfFromJpegs,
+  uniqueNames,
+  type MergeData,
+  type MergeDoc,
+  type MergeRow,
+} from "@tools/shared";
 import { env } from "../env";
 import { docProblem, rateLimit, refuse, withRenderSlot } from "../lib/limits";
 import { prepareFonts, renderRow, resolveImage } from "../lib/render";
@@ -84,7 +93,9 @@ export const render = new Elysia({ prefix: "/api/render" })
 
         const files: Record<string, Uint8Array> = {};
         const pages: Uint8Array[] = [];
-        const taken = new Set<string>();
+        // Named up front, so a pattern that gives every row the same name is
+        // numbered here exactly as the browser's own export numbers it.
+        const names = uniqueNames(rows.map((row, i) => fileNameFor(pattern, row, i, extensionFor(format))));
         let bytes = 0;
         for (let i = 0; i < rows.length; i++) {
           // Nobody is waiting for the file any more; stop spending the CPU on it.
@@ -97,7 +108,7 @@ export const render = new Elysia({ prefix: "/api/render" })
           if (single) pages.push(out);
           else {
             const file = format === "pdf" ? pdfFromJpegs([{ jpeg: out, width, height }], doc.name) : out;
-            files[unique(fileNameFor(pattern, row, i, extensionFor(format)), taken)] = file;
+            files[names[i]!] = file;
           }
           await breathe();
         }
@@ -117,21 +128,6 @@ export const render = new Elysia({ prefix: "/api/render" })
     },
     { body: batchBody, beforeHandle: rateLimit("batch", 10) },
   );
-
-function unique(name: string, taken: Set<string>): string {
-  if (!taken.has(name)) {
-    taken.add(name);
-    return name;
-  }
-  const dot = name.lastIndexOf(".");
-  const stem = dot === -1 ? name : name.slice(0, dot);
-  const ext = dot === -1 ? "" : name.slice(dot);
-  let n = 2;
-  while (taken.has(`${stem}-${n}${ext}`)) n++;
-  const out = `${stem}-${n}${ext}`;
-  taken.add(out);
-  return out;
-}
 
 function safe(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "merge";

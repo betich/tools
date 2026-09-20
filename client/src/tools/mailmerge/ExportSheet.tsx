@@ -8,6 +8,7 @@ import {
   fileNameFor,
   hasOverrides,
   pdfFromJpegs,
+  uniqueNames,
   type ExportFormat,
   type MergeData,
   type MergeDoc,
@@ -112,10 +113,15 @@ export function ExportSheet({
     });
 
   const ext = extensionFor(format);
+  // Numbered where two rows earn the same name, before anything is zipped: a
+  // ZIP holds same-named entries happily and unzipping leaves one file.
   const names = useMemo(
-    () => rows.map((row, i) => fileNameFor(namePattern, row ?? {}, i, ext)),
+    () => uniqueNames(rows.map((row, i) => fileNameFor(namePattern, row ?? {}, i, ext))),
     [rows, namePattern, ext],
   );
+  // The pattern names nothing that varies, so every file would be the same
+  // name and the set would only be told apart by its numbers.
+  const sameName = rows.length > 1 && new Set(rows.map((row, i) => fileNameFor(namePattern, row ?? {}, i, ext))).size === 1;
 
   const run = useCallback(async () => {
     const picks = [...selected].sort((a, b) => a - b);
@@ -283,7 +289,14 @@ export function ExportSheet({
               <Slider min={40} max={100} value={quality} onChange={setQuality} disabled={format === "png"} />
             </Field>
 
-            <Field label="file name" hint="tokens work here too">
+            <Field
+              label="file name"
+              hint={
+                sameName
+                  ? `every row is named ${names[0]} — add a token, such as <${data.fields[0] ?? "name"}>, to tell them apart`
+                  : "tokens work here too"
+              }
+            >
               <Input value={namePattern} onChange={(e) => onNamePattern(e.target.value)} spellCheck={false} />
             </Field>
           </div>
