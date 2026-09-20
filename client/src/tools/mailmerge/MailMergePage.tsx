@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { emptyData, hasOverrides, newDoc, revert, strandedKeys, type ExportFormat, type MergeData, type MergeDoc, type MergeRow, type PdfLayout } from "@tools/shared";
+import {
+  emptyData,
+  hasOverrides,
+  newDoc,
+  revert,
+  strandedKeys,
+  type ExportFormat,
+  type MergeData,
+  type MergeDoc,
+  type MergeRow,
+  type PdfLayout,
+} from "@tools/shared";
 import { Shell } from "@/components/Shell";
 import { FiDownload, FiLink, FiLock, FiSave, FiShare2 } from "react-icons/fi";
 import { Button, Sections } from "@/components/ui";
@@ -20,13 +31,13 @@ import { RowEditor } from "./RowEditor";
 import { addRow, changeRow, record, reloadSheet, remapTokens, removeRow, rollback, rowTitle, severed } from "./rows";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { Inspector } from "./Inspector";
+import { paletteOf } from "./render";
 import { ensureDocFonts, loadGoogleFont } from "./fonts";
 import { PasswordGate, UnlockDialog } from "./ShareMenu";
 import { ShareDialog } from "./ShareDialog";
 import { forget, remember, unlockFor } from "./unlocks";
 import { parseSheet, sampleData } from "./sheet";
 import { useMerge } from "./useMerge";
-
 
 export function MailMergePage() {
   const { slug, id: routeId } = useParams();
@@ -204,19 +215,22 @@ export function MailMergePage() {
   // ── export ───────────────────────────────────────────────────────────────
   const rows = data.rows;
 
-  const exportAllServer = useCallback(async (format: ExportFormat, quality: number, pdf: PdfLayout) => {
-    if (rows.length === 0) return;
-    setBusy(`rendering ${rows.length} on the server`);
-    try {
-      const blob = await api.renderBatch(doc, data, namePattern, { format, quality, pdf });
-      download(blob, `${doc.name || "merge"}.${format === "pdf" && pdf === "single" ? "pdf" : "zip"}`);
-      toast("rendered on the server");
-    } catch (error) {
-      toast(error instanceof Error ? error.message : "server render failed");
-    } finally {
-      setBusy(null);
-    }
-  }, [data, doc, namePattern, rows.length, toast]);
+  const exportAllServer = useCallback(
+    async (format: ExportFormat, quality: number, pdf: PdfLayout) => {
+      if (rows.length === 0) return;
+      setBusy(`rendering ${rows.length} on the server`);
+      try {
+        const blob = await api.renderBatch(doc, data, namePattern, { format, quality, pdf });
+        download(blob, `${doc.name || "merge"}.${format === "pdf" && pdf === "single" ? "pdf" : "zip"}`);
+        toast("rendered on the server");
+      } catch (error) {
+        toast(error instanceof Error ? error.message : "server render failed");
+      } finally {
+        setBusy(null);
+      }
+    },
+    [data, doc, namePattern, rows.length, toast],
+  );
 
   // ── data ─────────────────────────────────────────────────────────────────
   /**
@@ -444,7 +458,8 @@ export function MailMergePage() {
           // A remembered password that no longer works is dropped, not retried.
           forget(id);
           setGate({ error: password ? "wrong password" : null, target: { kind: "project", id } });
-        } else if (error instanceof ApiError && error.status === 429) setGate({ error: refusal(error), target: { kind: "project", id } });
+        } else if (error instanceof ApiError && error.status === 429)
+          setGate({ error: refusal(error), target: { kind: "project", id } });
         else toast(refusal(error) ?? "could not open that project");
         // Nothing opened, so the next change of address is not a visit.
         if (!password) pushNext.current = false;
@@ -532,8 +547,9 @@ export function MailMergePage() {
   // The row editor owns the arrows while it is open.
   useHotkey("ArrowLeft", () => merge.step(-1), { enabled: !editing });
   useHotkey("ArrowRight", () => merge.step(1), { enabled: !editing });
-  useHotkey("Escape", () => merge.setRowMode(false), { enabled: merge.rowMode && !editing && !exporting && !sharing && !reconciling });
-
+  useHotkey("Escape", () => merge.setRowMode(false), {
+    enabled: merge.rowMode && !editing && !exporting && !sharing && !reconciling,
+  });
 
   // What the gate is guarding, narrowed once for the two ways it is shown.
   const slugAt = gate?.target.kind === "share" ? gate.target.slug : "";
@@ -548,16 +564,18 @@ export function MailMergePage() {
        */}
       <header className="border-hairline-faint mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b pb-4 lg:mb-0 lg:shrink-0 lg:px-6 lg:py-2.5 xl:px-7">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h1 className="text-ink shrink-0 font-mono text-title font-bold uppercase">mail merge</h1>
-          <span className="text-meta font-mono text-small" aria-hidden>
+          <h1 className="text-ink text-title shrink-0 font-mono font-bold uppercase">mail merge</h1>
+          <span className="text-meta text-small font-mono" aria-hidden>
             /
           </span>
-          <span className="text-label min-w-0 truncate font-mono text-small tracking-normal">{doc.name || "untitled"}</span>
+          <span className="text-label text-small min-w-0 truncate font-mono tracking-normal">
+            {doc.name || "untitled"}
+          </span>
           {shareSlug ? (
             <button
               type="button"
               onClick={() => setSharing(true)}
-              className="text-meta hover:text-indigo flex shrink-0 cursor-pointer items-center gap-1.5 self-center font-mono text-micro uppercase transition-colors duration-200"
+              className="text-meta hover:text-indigo text-micro flex shrink-0 cursor-pointer items-center gap-1.5 self-center font-mono uppercase transition-colors duration-200"
             >
               {shareProtected ? <FiLock className="size-3" aria-hidden /> : <FiLink className="size-3" aria-hidden />}
               {shareProtected ? "locked" : "shared"}
@@ -567,7 +585,7 @@ export function MailMergePage() {
 
         <div className="flex items-center gap-2">
           {busy ? (
-            <span className="text-indigo mr-2 font-mono text-micro uppercase" aria-live="polite">
+            <span className="text-indigo text-micro mr-2 font-mono uppercase" aria-live="polite">
               {busy}…
             </span>
           ) : null}
@@ -777,7 +795,10 @@ export function MailMergePage() {
                     index: currentIndex,
                     title: rowTitle(data.rows[currentIndex], titleFields) || "empty row",
                     own: selectedId ? doc.overrides?.[merge.editKey]?.[selectedId] : undefined,
-                    changes: Object.values(doc.overrides?.[merge.editKey] ?? {}).reduce((n, ov) => n + Object.keys(ov).length, 0),
+                    changes: Object.values(doc.overrides?.[merge.editKey] ?? {}).reduce(
+                      (n, ov) => n + Object.keys(ov).length,
+                      0,
+                    ),
                     onRevertField: (field) => selectedId && merge.revertRow(merge.editKey!, selectedId, field),
                     onRevertRow: () => {
                       merge.revertRow(merge.editKey!);
@@ -789,6 +810,7 @@ export function MailMergePage() {
             }
             layer={selected}
             fields={data.fields}
+            palette={paletteOf(doc.layers)}
             canvas={doc.canvas}
             onChange={(patch) => selectedId && merge.updateLayer(selectedId, patch)}
             onPreview={(patch) => selectedId && merge.previewLayer(selectedId, patch)}

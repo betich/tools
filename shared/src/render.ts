@@ -1,3 +1,4 @@
+import { SPAN } from "./spans";
 import { resolve } from "./merge";
 import type { Fill, Fit, MergeDoc, MergeRow, TextCase, TextLayer } from "./types";
 
@@ -99,10 +100,9 @@ export function fitRect(iw: number, ih: number, cw: number, ch: number, fit: Fit
  * `[[#FFE19B]]NANO[[/]]` paints that span in its own colour while inheriting
  * every other property of the layer. It exists because one line of type often
  * carries two colours — "Intania 90 **NANO**" — and splitting that into two
- * layers would break centring the moment the text changes length.
+ * layers would break centring the moment the text changes length. The editor's
+ * half of this — finding and changing the runs — lives in `spans.ts`.
  */
-const SPAN = /\[\[(#[0-9a-fA-F]{3,8}|\/)\]\]/g;
-
 type Token = { text: string; color?: string; newline?: boolean };
 
 export function stripSpans(text: string): string {
