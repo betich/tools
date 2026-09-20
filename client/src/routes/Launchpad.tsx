@@ -84,16 +84,18 @@ function Door({ tool, delay, down }: { tool: ClientTool; delay: number; down: bo
           aria-hidden
         />
 
-        <h2 className="text-ink group-hover:text-indigo relative text-hero font-mono font-bold uppercase transition-colors duration-300">
+        <h2 className="text-ink group-hover:text-indigo text-hero relative font-mono font-bold uppercase transition-colors duration-300">
           {tool.name}
         </h2>
 
-        <div className="relative flex min-h-0 flex-1 items-center justify-center pt-6 pb-10" aria-hidden>
+        <div className="relative flex min-h-0 flex-1 items-center justify-center pb-10 pt-6" aria-hidden>
           {ART[tool.id] ?? null}
         </div>
 
         <div className="border-hairline-faint relative flex items-center justify-between gap-4 border-t pt-3.5">
-          <span className="text-meta text-micro font-mono uppercase">{down ? `${tool.tagline} · api offline` : tool.tagline}</span>
+          <span className="text-meta text-micro font-mono uppercase">
+            {down ? `${tool.tagline} · api offline` : tool.tagline}
+          </span>
           <span className="text-meta group-hover:text-indigo text-micro flex items-center gap-2 font-mono uppercase transition-colors duration-300">
             open
             <FiArrowRight
@@ -118,6 +120,7 @@ const ART: Partial<Record<string, ReactNode>> = {
   "mail-merge": <StackArt />,
   "pdf-compress": <ShrinkArt />,
   "pdf-merge": <JoinArt />,
+  media2media: <FilmArt />,
 };
 
 /**
@@ -191,7 +194,7 @@ function CompareArt() {
             EASE,
           )}
         >
-          <span className="border-indigo bg-panel absolute top-1/2 left-1/2 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border">
+          <span className="border-indigo bg-panel absolute left-1/2 top-1/2 flex size-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border">
             <svg viewBox="0 0 12 8" className="text-indigo w-3" fill="currentColor">
               <path d="M0 4 3.5 0.5v7zM12 4 8.5 0.5v7z" />
             </svg>
@@ -199,8 +202,8 @@ function CompareArt() {
         </div>
       </div>
 
-      <span className="text-meta absolute -bottom-6 left-0 font-mono text-micro uppercase">original</span>
-      <span className="text-meta absolute right-0 -bottom-6 font-mono text-micro uppercase">webp</span>
+      <span className="text-meta text-micro absolute -bottom-6 left-0 font-mono uppercase">original</span>
+      <span className="text-meta text-micro absolute -bottom-6 right-0 font-mono uppercase">webp</span>
     </div>
   );
 }
@@ -212,9 +215,24 @@ function CompareArt() {
  */
 function StackArt() {
   const cards = [
-    { name: "katherine johnson", role: "orbital mechanics", rest: "-translate-x-6 -translate-y-5 -rotate-6", fan: "group-hover:-translate-x-[118%] group-hover:translate-y-2 group-hover:-rotate-[9deg]" },
-    { name: "grace hopper", role: "compiler pioneer", rest: "-translate-x-2 -translate-y-2 -rotate-2", fan: "group-hover:-translate-y-4 group-hover:rotate-0" },
-    { name: "ada lovelace", role: "first programmer", rest: "translate-x-3 translate-y-1 rotate-3", fan: "group-hover:translate-x-[118%] group-hover:translate-y-2 group-hover:rotate-[9deg]" },
+    {
+      name: "katherine johnson",
+      role: "orbital mechanics",
+      rest: "-translate-x-6 -translate-y-5 -rotate-6",
+      fan: "group-hover:-translate-x-[118%] group-hover:translate-y-2 group-hover:-rotate-[9deg]",
+    },
+    {
+      name: "grace hopper",
+      role: "compiler pioneer",
+      rest: "-translate-x-2 -translate-y-2 -rotate-2",
+      fan: "group-hover:-translate-y-4 group-hover:rotate-0",
+    },
+    {
+      name: "ada lovelace",
+      role: "first programmer",
+      rest: "translate-x-3 translate-y-1 rotate-3",
+      fan: "group-hover:translate-x-[118%] group-hover:translate-y-2 group-hover:rotate-[9deg]",
+    },
   ];
 
   return (
@@ -233,10 +251,10 @@ function StackArt() {
           {/* the base artwork, the same on every card */}
           <span className="border-hairline-faint block flex-1 rounded-[3px] border bg-[repeating-linear-gradient(135deg,rgba(246,245,255,0.07)_0_1px,transparent_1px_7px)]" />
           {/* the merged row */}
-          <span className="text-ink block truncate font-mono text-[clamp(0.55rem,1.05vw,0.8rem)] leading-tight font-bold tracking-normal uppercase">
+          <span className="text-ink block truncate font-mono text-[clamp(0.55rem,1.05vw,0.8rem)] font-bold uppercase leading-tight tracking-normal">
             {card.name}
           </span>
-          <span className="text-meta block truncate font-mono text-[clamp(0.45rem,0.8vw,0.625rem)] leading-tight tracking-[0.12em] uppercase">
+          <span className="text-meta block truncate font-mono text-[clamp(0.45rem,0.8vw,0.625rem)] uppercase leading-tight tracking-[0.12em]">
             {card.role}
           </span>
         </div>
@@ -260,15 +278,28 @@ function Frame({ children }: { children: ReactNode }) {
 
 /** One line of type on a drawn page: a bar of ink at the given width. */
 function Line({ w, strong = false }: { w: string; strong?: boolean }) {
-  return <span className={cn("block shrink-0 rounded-[1px]", strong ? "bg-ink/40 h-[1.1cqw]" : "bg-ink/16 h-[0.55cqw]")} style={{ width: w }} />;
+  return (
+    <span
+      className={cn("block shrink-0 rounded-[1px]", strong ? "bg-ink/40 h-[1.1cqw]" : "bg-ink/16 h-[0.55cqw]")}
+      style={{ width: w }}
+    />
+  );
 }
 
 /** Two labels in one place, the second taking over on approach. */
 function Swap({ from, to, toClass }: { from: ReactNode; to: ReactNode; toClass?: string }) {
   return (
     <span className="grid">
-      <span className={cn("[grid-area:1/1] transition-opacity duration-700 group-hover:opacity-0", EASE)}>{from}</span>
-      <span className={cn("[grid-area:1/1] opacity-0 transition-opacity duration-700 group-hover:opacity-100", EASE, toClass)}>{to}</span>
+      <span className={cn("transition-opacity duration-700 [grid-area:1/1] group-hover:opacity-0", EASE)}>{from}</span>
+      <span
+        className={cn(
+          "opacity-0 transition-opacity duration-700 [grid-area:1/1] group-hover:opacity-100",
+          EASE,
+          toClass,
+        )}
+      >
+        {to}
+      </span>
     </span>
   );
 }
@@ -298,7 +329,11 @@ function ShrinkArt() {
   const bar = (after: boolean) => (
     <span className="flex w-full">
       <span
-        className={cn("border-wash bg-surface rounded-hairline flex h-[2.4cqw] gap-px overflow-hidden border", grows, EASE)}
+        className={cn(
+          "border-wash bg-surface rounded-hairline flex h-[2.4cqw] gap-px overflow-hidden border",
+          grows,
+          EASE,
+        )}
         style={grow(was, after ? now : was)}
       >
         {parts.map((p) => (
@@ -332,7 +367,7 @@ function ShrinkArt() {
           <Line w="38%" />
           <span
             className={cn(
-              "border-hairline-faint mt-[0.8cqw] mb-[0.6cqw] block h-[40%] shrink-0 rounded-[3px] border transition-colors duration-700",
+              "border-hairline-faint mb-[0.6cqw] mt-[0.8cqw] block h-[40%] shrink-0 rounded-[3px] border transition-colors duration-700",
               "bg-[repeating-linear-gradient(135deg,rgba(246,245,255,0.09)_0_1px,transparent_1px_6px)]",
               "group-hover:border-indigo/70",
               EASE,
@@ -349,14 +384,14 @@ function ShrinkArt() {
         <div className="flex w-[44cqw] flex-col">
           <span className={cn(label, "mb-[1.4cqw]")}>before</span>
           {bar(false)}
-          <span className={cn(label, "mt-[3.4cqw] mb-[1.4cqw]")}>after</span>
+          <span className={cn(label, "mb-[1.4cqw] mt-[3.4cqw]")}>after</span>
           {bar(true)}
 
           <span className="border-hairline-faint mt-[4.4cqw] flex items-baseline justify-between gap-[2cqw] border-t pt-[2.4cqw]">
-            <span className="text-ink font-mono text-[5.4cqw] leading-none font-bold tracking-normal tabular-nums">
+            <span className="text-ink font-mono text-[5.4cqw] font-bold tabular-nums leading-none tracking-normal">
               <Swap from={mb(was)} to={mb(now)} />
             </span>
-            <span className="font-mono text-[max(7px,1.9cqw)] leading-none tracking-normal tabular-nums">
+            <span className="font-mono text-[max(7px,1.9cqw)] tabular-nums leading-none tracking-normal">
               <Swap
                 from={<span className="text-meta uppercase tracking-[0.18em]">original</span>}
                 to={`−${Math.round((1 - now / was) * 100)}%`}
@@ -406,7 +441,12 @@ function JoinArt() {
   return (
     <Frame>
       <div className="flex size-full items-center justify-center">
-        <div className={cn("relative flex items-start gap-[10cqw] transition-[gap] duration-700 group-hover:gap-[1.2cqw]", EASE)}>
+        <div
+          className={cn(
+            "relative flex items-start gap-[10cqw] transition-[gap] duration-700 group-hover:gap-[1.2cqw]",
+            EASE,
+          )}
+        >
           {files.map((file) => (
             <div key={file.name} className="flex flex-col">
               <div className="flex gap-[1.2cqw]">
@@ -428,13 +468,13 @@ function JoinArt() {
 
           <span
             className={cn(
-              "pointer-events-none absolute top-[calc(21.2cqw+2.4cqw)] left-1/2 flex -translate-x-1/2 flex-col opacity-0 transition-opacity duration-700 group-hover:opacity-100",
+              "pointer-events-none absolute left-1/2 top-[calc(21.2cqw+2.4cqw)] flex -translate-x-1/2 flex-col opacity-0 transition-opacity duration-700 group-hover:opacity-100",
               EASE,
             )}
             style={{ width: joined }}
           >
             <span className="border-indigo block h-[1.4cqw] border-x border-b" />
-            <span className="text-indigo mt-[1.4cqw] text-center font-mono text-[max(7px,1.8cqw)] leading-none tracking-normal whitespace-nowrap">
+            <span className="text-indigo mt-[1.4cqw] whitespace-nowrap text-center font-mono text-[max(7px,1.8cqw)] leading-none tracking-normal">
               merged.pdf · {String(total).padStart(2, "0")} pages
             </span>
           </span>
@@ -466,7 +506,12 @@ function Page({ kind, own, merged }: { kind: "text" | "image" | "table"; own: nu
           <span className="flex-1" />
         </>
       )}
-      <span className={cn("self-center font-mono text-[max(6px,1.5cqw)] leading-none tracking-normal tabular-nums", kind === "image" && "mt-[0.3cqw]")}>
+      <span
+        className={cn(
+          "self-center font-mono text-[max(6px,1.5cqw)] tabular-nums leading-none tracking-normal",
+          kind === "image" && "mt-[0.3cqw]",
+        )}
+      >
         {own === merged ? (
           <span className="text-meta">{n(own)}</span>
         ) : (
@@ -474,6 +519,137 @@ function Page({ kind, own, merged }: { kind: "text" | "image" | "table"; own: nu
         )}
       </span>
     </span>
+  );
+}
+
+/**
+ * media2media's own act, drawn once: a clip laid out as film, every frame a
+ * step of the same throw, and a range under it. At rest the whole video is
+ * held — eight frames at thirty. On approach the range closes onto the top of
+ * the arc, the frames outside it fall away, and what is left is the loop the
+ * gif keeps.
+ */
+function FilmArt() {
+  const FRAMES = 8;
+  // The kept range, inclusive — a quarter off each end, which is also where
+  // the handles land.
+  const IN = 2;
+  const OUT = 5;
+  const kept = Array.from({ length: OUT - IN + 1 }, (_, i) => IN + i);
+
+  // One throw across the shot, sampled once per frame, so the strip reads as
+  // motion standing still and the kept range is the top of the arc.
+  const at = (i: number) => {
+    const t = i / (FRAMES - 1);
+    return { x: 14 + t * 72, y: 74 - Math.sin(t * Math.PI) * 48 };
+  };
+
+  const sprockets = (
+    <span className="flex justify-between" aria-hidden>
+      {Array.from({ length: FRAMES * 2 }, (_, i) => (
+        <span key={i} className="bg-ink/14 block size-[0.8cqw] rounded-[1px]" />
+      ))}
+    </span>
+  );
+
+  const label = "text-meta font-mono text-[max(7px,1.9cqw)] leading-none tracking-[0.18em] uppercase";
+
+  return (
+    <Frame>
+      <div className="flex size-full flex-col justify-center">
+        {/* the clip as film */}
+        <div className="border-wash bg-panel rounded-sm border px-[1.4cqw] py-[1.1cqw]">
+          {sprockets}
+          <div className="my-[1.1cqw] flex gap-[0.7cqw]">
+            {Array.from({ length: FRAMES }, (_, i) => {
+              const inCut = i >= IN && i <= OUT;
+              const ball = at(i);
+              return (
+                <span
+                  key={i}
+                  className={cn(
+                    "border-hairline-faint bg-surface block aspect-[4/3] flex-1 overflow-hidden rounded-[2px] border",
+                    "transition-[opacity,border-color] duration-700",
+                    inCut ? "group-hover:border-indigo/70" : "group-hover:opacity-20",
+                    EASE,
+                  )}
+                >
+                  <svg viewBox="0 0 100 100" className="size-full">
+                    <line x1="0" y1="86" x2="100" y2="86" stroke="#F6F5FF" strokeOpacity="0.14" strokeWidth="3" />
+                    <circle
+                      cx={ball.x}
+                      cy={ball.y}
+                      r="13"
+                      className={cn(
+                        "fill-ink/55 transition-[fill] duration-700",
+                        inCut && "group-hover:fill-indigo",
+                        EASE,
+                      )}
+                    />
+                  </svg>
+                </span>
+              );
+            })}
+          </div>
+          {sprockets}
+        </div>
+
+        {/* the range under it, closing onto what the gif keeps */}
+        <span className="border-wash bg-surface rounded-hairline relative mt-[2.6cqw] block h-[1.8cqw] border">
+          <span
+            className={cn(
+              "bg-indigo/20 border-indigo absolute inset-y-[-0.6cqw] left-0 right-0 border-x transition-[left,right] duration-700",
+              "group-hover:left-[25%] group-hover:right-[25%]",
+              EASE,
+            )}
+          />
+        </span>
+
+        {/* what comes out: the kept frames laid over one another, looping */}
+        <div className="mt-[5cqw] flex items-stretch gap-[4cqw]">
+          <span
+            className={cn(
+              "border-wash bg-panel block aspect-[16/9] w-[48cqw] shrink-0 overflow-hidden rounded-sm border transition-colors duration-700",
+              "group-hover:border-indigo/70",
+              EASE,
+            )}
+          >
+            <svg viewBox="0 0 160 90" className="size-full">
+              <line x1="0" y1="78" x2="160" y2="78" stroke="#F6F5FF" strokeOpacity="0.14" strokeWidth="1.5" />
+              {kept.map((i, n) => {
+                // The loop fills the shot it plays in: the kept frames laid
+                // across the whole width, each a step behind the last.
+                const t = n / (kept.length - 1);
+                const last = n === kept.length - 1;
+                return (
+                  <circle
+                    key={i}
+                    cx={26 + t * 108}
+                    cy={62 - Math.sin((0.22 + t * 0.56) * Math.PI) * 40}
+                    r="9"
+                    className={cn("fill-ink transition-[fill] duration-700", last && "group-hover:fill-indigo", EASE)}
+                    fillOpacity={0.14 + (n / (kept.length - 1)) * 0.56}
+                  />
+                );
+              })}
+            </svg>
+          </span>
+
+          {/* the readout: the format it was, the format it is */}
+          <span className="flex min-w-0 flex-1 flex-col justify-between py-[0.4cqw]">
+            <span className={label}>
+              <Swap from="mp4 · 30 fps" to={<span className="text-indigo">gif · 12 fps</span>} />
+            </span>
+            <span className="font-mono text-[9cqw] font-bold leading-none tracking-normal">
+              <Swap from={<span className="text-ink">MP4</span>} to="GIF" toClass="text-indigo" />
+            </span>
+            <span className={cn(label, "tabular-nums")}>
+              <Swap from="08 frames" to={<span className="text-indigo">04 frames · loops</span>} />
+            </span>
+          </span>
+        </div>
+      </div>
+    </Frame>
   );
 }
 
